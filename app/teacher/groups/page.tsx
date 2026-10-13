@@ -11,6 +11,8 @@ import { Grade, Student, SubTeacher } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
+import { Modal } from "@/components/ui/Modal";
+import { Download, ExternalLink, Copy, Check } from "lucide-react";
 import { GroupsList } from "../_components/GroupsList";
 import { CreateGroupModal } from "../_components/CreateGroupModal";
 import { EditGroupModal } from "../_components/EditGroupModal";
@@ -43,6 +45,25 @@ export default function GroupsPage() {
   const showToast = (message: string, type: "success" | "error" = "success") =>
     setToast({ message, type });
 
+  const [calendarSyncInfo, setCalendarSyncInfo] = useState<{
+    feedHttpUrl: string;
+    webcalUrl: string;
+    googleCalendarUrl: string;
+  } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const getCalendarUrls = (teacherId: string, sig: string) => {
+    let apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+    // إذا كان الرابط localhost والمستخدم فاتح من الموبايل أو أي جهاز، نحوله إلى host الصفحة الحالية
+    if (typeof window !== "undefined" && apiHost.includes("localhost") && window.location.hostname !== "localhost") {
+      apiHost = apiHost.replace("localhost", window.location.hostname);
+    }
+    const feedHttpUrl = `${apiHost}/public/calendar/${teacherId}.ics?sig=${sig}`;
+    const webcalUrl = feedHttpUrl.replace(/^https?:\/\//i, "webcal://");
+    const googleCalendarUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`;
+    return { feedHttpUrl, webcalUrl, googleCalendarUrl };
+  };
+
   const handleExportCalendar = async () => {
     if (groupsInYear.length === 0 && groups.length === 0) {
       showToast("لا توجد مجموعات لمزامنتها مع التقويم.", "error");
@@ -61,12 +82,24 @@ export default function GroupsPage() {
         throw new Error("فشل تجهيز رابط مزامنة التقويم");
       }
       const { teacherId, sig } = await res.json();
-      const feedHttpUrl = `${base}/public/calendar/${teacherId}.ics?sig=${sig}`;
-      const webcalUrl = feedHttpUrl.replace(/^https?:\/\//i, "webcal://");
+      const urls = getCalendarUrls(teacherId, sig);
+      setCalendarSyncInfo(urls);
 
-      // يفتح تطبيق التقويم المثبت على الجهاز مباشرة (Windows Calendar / Outlook / Apple Calendar / Phone Calendar)
-      window.location.href = webcalUrl;
-      showToast("جاري فتح تطبيق التقويم على جهازك لربط المواعيد تلقائياً...");
+      // تنزيل ملف .ics وتوجيه المستخدم لتطبيق التقويم
+      const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        // على iPhone/iPad: بروتوكول webcal:// يفتح مباشرة تطبيق التقويم ويطلب الاشتراك
+        window.location.href = urls.webcalUrl;
+      } else {
+        // على Android والأجهزة الأخرى: تنزيل ملف .ics مباشرة (النقر عليه يفتحه فوراً في تقويم سامسونج أو Google Calendar)
+        const downloadLink = document.createElement("a");
+        downloadLink.href = urls.feedHttpUrl;
+        downloadLink.setAttribute("download", "schedule.ics");
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
+      showToast("تم تجهيز مواعيد المجموعات للتقويم بنجاح!");
     } catch (err: unknown) {
       showToast(getErrorMessage(err, "حدث خطأ أثناء مزامنة التقويم."), "error");
     } finally {
@@ -295,6 +328,110 @@ export default function GroupsPage() {
             onConfirm={handleConfirmDelete}
             onClose={() => setDeletingGroup(null)}
           />
+
+          {calendarSyncInfo && (
+            <Modal
+              isOpen={!!calendarSyncInfo}
+              onClose={() => setCalendarSyncInfo(null)}
+              title="مزامنة مواعيد المجموعات مع التقويم"
+              maxWidth="520px"
+            >
+              <div className="space-y-4 text-right" dir="rtl">
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  اختر الطريقة الأنسب لجهازك لإضافة جميع مواعيد حصصك الأسبوعية بتنبيهاتها:
+                </p>
+
+                {/* الخيار الأول: تحميل ملف التقويم */}
+                <div className="p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-violet-500/40 transition">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-semibold text-sm text-white flex items-center gap-2">
+                      <Download size={16} className="text-violet-400" />
+                      تنزيل ملف التقويم (.ics)
+                    </span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300">
+                      موصى به للموبايل
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-3">
+                    نزّل الملف وافتحه مباشرة ليقوم تطبيق التقويم (سامسونج، هواوي، جوجل) بإضافة كل المواعيد فوراً.
+                  </p>
+                  <a
+                    href={calendarSyncInfo.feedHttpUrl}
+                    download="schedule.ics"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition"
+                  >
+                    <Download size={14} />
+                    تحميل الملف وفتحه في التقويم
+                  </a>
+                </div>
+
+                {/* الخيار الثاني: الاشتراك المباشر عبر webcal */}
+                <div className="p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-violet-500/40 transition">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-semibold text-sm text-white flex items-center gap-2">
+                      <CalendarCheck size={16} className="text-emerald-400" />
+                      اشتراك مباشر (تطبيق التقويم)
+                    </span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                      iPhone / Apple Calendar
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-3">
+                    يفتح تطبيق التقويم الافتراضي مباشرة لمزامنة المواعيد بشكل حيّ.
+                  </p>
+                  <a
+                    href={calendarSyncInfo.webcalUrl}
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
+                  >
+                    <ExternalLink size={14} />
+                    فتح في تطبيق التقويم (Webcal)
+                  </a>
+                </div>
+
+                {/* الخيار الثالث: تقويم جوجل */}
+                <div className="p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-violet-500/40 transition">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-semibold text-sm text-white flex items-center gap-2">
+                      <ExternalLink size={16} className="text-blue-400" />
+                      إضافة إلى Google Calendar
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-3">
+                    إضافة المواعيد مباشرة إلى حساب تقويم Google في المتصفح.
+                  </p>
+                  <a
+                    href={calendarSyncInfo.googleCalendarUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+                  >
+                    <ExternalLink size={14} />
+                    فتح في Google Calendar
+                  </a>
+                </div>
+
+                {/* نسخ الرابط يدوياً */}
+                <div className="pt-2 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(calendarSyncInfo.feedHttpUrl);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                      showToast("تم نسخ رابط التقويم إلى الحافظة");
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
+                  >
+                    {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    <span>{copiedLink ? "تم النسخ!" : "نسخ رابط التقويم يدوياً"}</span>
+                  </button>
+                  <Button variant="secondary" size="sm" onClick={() => setCalendarSyncInfo(null)}>
+                    إغلاق
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
 
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
