@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@import './styles/variables.css';
+@import './styles/base.css';
+@import './styles/layout.css';
+@import './styles/components.css';
+@import './styles/auth.css';
+@import './styles/stats.css';
+@import './styles/reports.css';
+@import './styles/attendance.css';
+@import './styles/bills.css';
+@import './styles/print.css';
+@import './styles/admin.css';
+
+@keyframes slideUp {
+  from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);     opacity: 1; }
+}
+
+@keyframes scanline {
+  0%, 100% { transform: translateY(-100%); }
+  50% { transform: translateY(100%); }
+}
+
+/* ══════════════════════════════
+   Message display fixes
+   ══════════════════════════════ */
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+.word-break-break-word {
+  word-break: break-word;
+}
+
+/* ══════════════════════════════
+   Print / PDF styles
+   ══════════════════════════════ */
+@media print {
+  /* إخفاء كل شيء ما عدا صفحات الامتحان */
+  body > *:not(#exam-print-root) {
+    display: none !important;
+  }
+
+  #exam-print-root {
+    display: block !important;
+    position: static !important;
+    left: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .exam-form-page {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 15mm 16mm 12mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+  }
+
+  .exam-form-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}

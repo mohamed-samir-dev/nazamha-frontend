@@ -1,0 +1,11 @@
+/* attendance styles */
+
+/* Responsive table font sizes */
+@media (max-width: 768px) {
+  .attendance-table th {
+    font-size: 0.72rem;
+  }
+  .attendance-table td {
+    font-size: 0.82rem;
+  }
+}
