@@ -37,3 +37,37 @@
 .page a:focus-visible, .page select:focus-visible, .refresh:focus-visible { outline: 2px solid #14b8a6; outline-offset: 3px; }
 @media(max-width: 850px) { .columns { grid-template-columns: 1fr; gap: 16px; } .page { padding: 16px; } .period { gap: 16px; padding: 16px; } .auto { margin-inline-start: 0; } .empty { min-height: 220px; } }
 @media(max-width: 420px) { .header h1 { font-size: 25px; } .periodFields { width: 100%; } .periodFields label { flex: 1; } .camera, .result, .manual { padding: 14px; } .camera > div > div:first-child { min-height: 240px !important; } }
+
+/* Keep controls usable on narrow phones and short landscape screens. */
+.page { min-width: 0; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.resultPanel { scroll-margin-top: 88px; }
+.resultPanel:focus { outline: none; }
+.header > div, .periodFields, .periodFields label { min-width: 0; }
+.back { flex-shrink: 0; min-height: 44px; }
+.periodFields select { min-height: 44px; }
+.manual > div { flex-wrap: wrap; }
+.manual > div > div { min-width: 140px; }
+.manual input { min-height: 44px; font-size: 16px; }
+.manual button, .refresh { min-height: 44px; }
+@media (max-width: 850px) {
+  .page { padding: 12px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  .header { gap: 10px; margin-bottom: 18px; }
+  .header p { font-size: 12px; line-height: 1.8; }
+  .period { margin-bottom: 16px; }
+  .periodFields { width: 100%; }
+  .periodFields label { flex: 1; }
+  .periodFields select { width: 100%; min-width: 0; font-size: 16px; }
+  .panelHeading { padding: 14px; }
+  .camera > div > div:first-child { min-height: clamp(180px, 32svh, 260px) !important; }
+  .resultPanel { overflow: visible; }
+  .result [data-payment-review] { overflow: clip; }
+  .result [data-payment-actions] { position: sticky; bottom: 0; z-index: 2; background: var(--bg-secondary, #111827); padding-bottom: max(12px, env(safe-area-inset-bottom)); box-shadow: 0 -6px 18px rgba(0,0,0,.15); border-radius: 0 0 16px 16px; }
+  .result [data-payment-actions] button { min-height: 46px; flex: 1; white-space: normal; }
+}
+@media (max-width: 360px) {
+  .page { padding-inline: 8px; }
+  .header h1 { font-size: 23px; }
+  .back { padding: 8px 10px; }
+  .manual > div > div, .manual > div > button { flex-basis: 100%; width: 100%; }
+  .auto { font-size: 10px; padding-inline: 8px; }
+}
