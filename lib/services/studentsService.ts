@@ -2,6 +2,23 @@ import { StudentsRepository, StudentsPage } from "@/lib/repositories/studentsRep
 import { Student } from "@/lib/types";
 
 export const StudentsService = {
+  async getAllMatchingStudents(filters: { search?: string; grade_id?: string; group_id?: string; sub_teacher_id?: string } = {}): Promise<Student[]> {
+    const firstPage = await StudentsRepository.getStudentsPaginated({ ...filters, page: 1, limit: 500 });
+    const rows = new Map<string, Student>();
+    firstPage.students.forEach(student => rows.set(student.id, student));
+
+    if (firstPage.total > 500) {
+      const totalPages = Math.ceil(firstPage.total / 500);
+      const remainingPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+      const otherPages = await Promise.all(
+        remainingPages.map(page => StudentsRepository.getStudentsPaginated({ ...filters, page, limit: 500 }))
+      );
+      for (const res of otherPages) {
+        res.students.forEach(student => rows.set(student.id, student));
+      }
+    }
+    return [...rows.values()];
+  },
   async getStudentByQR(raw: string): Promise<Student> {
     return StudentsRepository.getStudentByQR(raw);
   },
@@ -25,8 +42,8 @@ export const StudentsService = {
     return StudentsRepository.addStudent(studentData);
   },
 
-  async bulkAddStudents(students: Parameters<typeof StudentsRepository.bulkAddStudents>[0]): Promise<{ inserted: number; students: Student[] }> {
-    return StudentsRepository.bulkAddStudents(students);
+  async bulkAddStudents(students: Parameters<typeof StudentsRepository.bulkAddStudents>[0], idempotencyKey?: string): Promise<{ inserted: number; students: Student[] }> {
+    return StudentsRepository.bulkAddStudents(students, idempotencyKey);
   },
 
   async updateStudent(id: string, updates: Partial<Student>): Promise<Student> {

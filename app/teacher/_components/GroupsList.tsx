@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
+import { printInPlace } from "@/lib/printInPlace";
 import { useState, useMemo } from "react";
 import { FiSearch, FiX, FiTrash2, FiGrid, FiPrinter, FiChevronDown } from "react-icons/fi";
 import { MdOutlineCalendarMonth } from "react-icons/md";
@@ -107,7 +108,7 @@ export function GroupsList({
   const totalStudents = filtered.reduce((s, g) => s + (studentCountMap.get(g.id) || 0), 0);
   const totalRevenue = filtered.reduce((s, g) => s + (g.monthly_price ?? 0) * (studentCountMap.get(g.id) || 0), 0);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const date = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
     let printTotal = 0;
     let printRevenue = 0;
@@ -197,19 +198,11 @@ export function GroupsList({
       </div>
     </body></html>`;
 
-    const printWindow = window.open("", "_blank", "width=900,height=700");
-    if (!printWindow) {
-      alert("يرجى السماح بالنوافذ المنبثقة لهذا الموقع لتتمكن من الطباعة");
-      return;
+    try {
+      await printInPlace({ html });
+    } catch {
+      alert("تعذر تجهيز مستند الطباعة. يرجى المحاولة مرة أخرى.");
     }
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-      printWindow.onafterprint = () => printWindow.close();
-    };
   };
 
   // ── Toolbar ──
@@ -220,7 +213,7 @@ export function GroupsList({
         <div style={{ position: "relative", flex: "1 1 160px", minWidth: "140px" }}>
           <FiSearch size={14} style={{ position: "absolute", right: "0.7rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
           <input
-            type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            type="text" value={search} onChange={(e) => { setSearch(e.target.value); onSelectAll([]); }}
             placeholder="بحث بالاسم أو الكود..."
             style={{
               width: "100%", padding: "0.5rem 2.1rem 0.5rem 0.75rem",
@@ -236,7 +229,7 @@ export function GroupsList({
           )}
         </div>
 
-        <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)}
+        <select value={filterGrade} onChange={(e) => { setFilterGrade(e.target.value); onSelectAll([]); }}
           style={{
             flex: "1 1 120px", minWidth: "110px",
             padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.04)",
@@ -248,7 +241,7 @@ export function GroupsList({
           {activeGrades.map((g) => <option key={g.id} value={g.id}>{g.name.replace("الصف ", "")}</option>)}
         </select>
 
-        <select value={filterDay} onChange={(e) => setFilterDay(e.target.value)}
+        <select value={filterDay} onChange={(e) => { setFilterDay(e.target.value); onSelectAll([]); }}
           style={{
             flex: "1 1 110px", minWidth: "100px",
             padding: "0.5rem 0.75rem", background: "rgba(255,255,255,0.04)",

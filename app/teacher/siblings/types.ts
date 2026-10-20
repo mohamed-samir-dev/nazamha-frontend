@@ -3,6 +3,7 @@ import { Student } from "@/lib/types";
 export interface SiblingFamily {
   familyId: string;
   familyName?: string;
+  parentPhone?: string | null;
   members: Student[];
 }
 

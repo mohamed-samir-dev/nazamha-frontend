@@ -1,7 +1,11 @@
 import { examsRepository } from "@/lib/repositories/examsRepository";
+import { api } from "@/lib/apiClient";
 import { Exam, ExamGrade } from "@/lib/types";
 
 export const examsService = {
+  getReportSummary(): Promise<Record<string, { average: number | null; latest: Exam & { score: number | null } }>> {
+    return api.get("/exams/report-summary");
+  },
   async findOrCreateByBank(bank: { bank_id: string; group_id: string; title: string; max_score?: number; exam_date?: string }, teacherId?: string): Promise<Exam> {
     const result = await examsRepository.findOrCreateByBank(bank);
     if (teacherId) examsRepository.invalidateAllGradesCache(teacherId);

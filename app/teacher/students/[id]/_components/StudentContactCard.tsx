@@ -54,6 +54,7 @@ export function StudentContactCard({ student, onSaved }: Props) {
         });
         onSaved({ ...updated, sibling_family_id: null, sibling_family_name: null });
       } else {
+        if (familyChanged && form.sibling_family_id) await StudentsService.transferFamily(student.id, form.sibling_family_id);
         const selectedFamily = families.find((f) => f.familyId === form.sibling_family_id);
         const updated = await StudentsService.updateStudent(student.id, {
           parent_phone: form.parent_phone,
@@ -67,6 +68,8 @@ export function StudentContactCard({ student, onSaved }: Props) {
         onSaved(updated);
       }
       setEditing(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "فشل حفظ البيانات");
     } finally {
       setSaving(false);
     }

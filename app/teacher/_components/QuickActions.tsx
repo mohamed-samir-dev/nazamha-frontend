@@ -27,7 +27,7 @@ export function QuickActions({ hasAttendance, onAddStudent }: QuickActionsProps)
           <UserPlus size={15} />
           <span>إضافة طالب</span>
         </button>
-        <Link href="/teacher/groups" className={btnCls}>
+        <Link href="/teacher/groups?action=new" className={btnCls}>
           <Users size={15} />
           <span>إضافة مجموعة</span>
         </Link>

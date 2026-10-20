@@ -9,4 +9,4 @@ export const SCAN_COOLDOWN_MS = 3000;
 export const SCANNER_DIV_ID  = "payment-qr-reader";
 
 export interface DueMonth  { sub: MonthlySubscription; label: string; isOld: boolean; isExempt?: boolean; }
-export interface PaidEntry { name: string; time: string; amount: number; }
+export type PaidEntry = import("@/lib/services/subscriptionsService").PaymentReceipt;

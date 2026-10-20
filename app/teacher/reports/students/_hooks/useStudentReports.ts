@@ -13,7 +13,7 @@ import { examsService } from "@/lib/services/examsService";
 import { Student, Group, Grade, AttendanceRecord, BookDef, Exam } from "@/lib/types";
 import { appCache } from "@/lib/appCache";
 import { getGroupSessionDates } from "../../../attendance/_utils/sessionDates";
-import { buildMessage } from "../_utils/reportHelpers";
+import { buildMessage, countMembershipAttendance } from "../_utils/reportHelpers";
 
 const ALL_TIME_ATT_KEY = "allTimeAttendanceMap";
 const SUBS_SUMMARY_KEY = "subscriptions:summary";
@@ -39,7 +39,7 @@ export function useStudentReports() {
   const [teacherId, setTeacherId] = useState<string | null>(null);
   const [subsSummary, setSubsSummary] = useState<SubscriptionSummaryEntry[]>([]);
   const [teacherBooks, setTeacherBooks] = useState<BookDef[]>([]);
-  const [allExamGrades, setAllExamGrades] = useState<Map<string, (Exam & { score: number | null })[]>>(new Map());
+  const [examAverages, setExamAverages] = useState<Map<string, number | null>>(new Map());
   const [latestExamMapState, setLatestExamMapState] = useState<Map<string, (Exam & { score: number | null }) | null>>(new Map());
   const [whatsappTemplate, setWhatsappTemplate] = useState(
     "مرحباً ولي أمر الطالب [اسم_الطالب]،\nنود إعلامكم بتقرير الطالب كالتالي:\nأيام الحضور: [الحضور]\nأيام الغياب: [الغياب]\nحالة الدفع: [حالة_الدفع]\nشكراً لتعاونكم."
@@ -54,8 +54,6 @@ export function useStudentReports() {
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [page, setPage] = useState(1);
-  const isInitialMount = useRef(true);
-  const lastFetchedRef = useRef<{ month: number; year: number } | null>(null);
 
   const resetPage = () => setPage(1);
   const handleSetSearchQuery = (v: string) => { resetPage(); setSearchQuery(v); };
@@ -67,35 +65,34 @@ export function useStudentReports() {
 
   const monthNum = selectedMonthIndex + 1;
 
-  // Re-fetch attendance when month/year changes
+  // A previous month request must never overwrite the currently selected month.
   useEffect(() => {
-    if (isInitialMount.current) { isInitialMount.current = false; return; }
-    if (lastFetchedRef.current?.month === monthNum && lastFetchedRef.current?.year === selectedYear) return;
-    lastFetchedRef.current = { month: monthNum, year: selectedYear };
+    let cancelled = false;
+    setAttendanceRecords([]);
     AttendanceService.getAttendanceRecords(monthNum, selectedYear)
-      .then((data) => setAttendanceRecords(data || []))
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      .then(data => { if (!cancelled) setAttendanceRecords(data || []); })
+      .catch(() => { if (!cancelled) setToast({message:"تعذر تحميل الحضور للشهر المحدد",type:"error"}); });
+    return () => { cancelled = true; };
   }, [monthNum, selectedYear]);
 
   // Initial load
   useEffect(() => {
+    let cancelled = false;
     async function loadData() {
       try {
         const currentUser = await AuthService.getUser();
-        if (!currentUser) return;
+        if (!currentUser || cancelled) return;
         setTeacherId(currentUser.id);
         const cacheKey = `${ALL_TIME_ATT_KEY}:${currentUser.id}`;
 
         // Clear subscription cache to get fresh data
         appCache.invalidate(SUBS_SUMMARY_KEY);
 
-        const [teacher, studentsData, groupsData, gradesData, attendanceData, summaryData] = await Promise.all([
+        const [teacher, studentsData, groupsData, gradesData, summaryData] = await Promise.all([
           TeachersService.getTeacherProfile(currentUser.id),
           StudentsService.getStudentsByTeacherId(),
           GroupsService.getGroupsByTeacherId(),
           GradesService.getGradesByTeacherId(currentUser.id),
-          AttendanceService.getAttendanceRecords(monthNum, selectedYear),
           SubscriptionsService.getSubscriptionsSummary(),
         ]);
 
@@ -108,38 +105,28 @@ export function useStudentReports() {
           }
           appCache.set(cacheKey, allTimeMap, 5 * 60 * 1000);
         }
+        if (cancelled) return;
         setAllTimeAttendanceMapState(allTimeMap);
 
-        const examGradesData = await examsService.getAllStudentsExamGrades(currentUser.id).catch(() => ({}));
-        const examMap = new Map<string, (Exam & { score: number | null })[]>();
-        const latestExamMap = new Map<string, (Exam & { score: number | null }) | null>();
-        for (const [sid, exams] of Object.entries(examGradesData)) {
-          examMap.set(sid, exams);
-          if (exams.length === 0) {
-            latestExamMap.set(sid, null);
-          } else {
-            const sorted = [...exams].sort((a, b) => (b.exam_date || "").localeCompare(a.exam_date || ""));
-            latestExamMap.set(sid, sorted[0]);
-          }
-        }
-        setAllExamGrades(examMap);
-        setLatestExamMapState(latestExamMap);
+        const examSummary = await examsService.getReportSummary();
+        if (cancelled) return;
+        setExamAverages(new Map(Object.entries(examSummary).map(([id, row])=>[id,row.average])));
+        setLatestExamMapState(new Map(Object.entries(examSummary).map(([id,row])=>[id,row.latest])));
 
         setWhatsappTemplate(teacher?.whatsapp_template || "مرحباً ولي أمر الطالب [اسم_الطالب]،\nنود إعلامكم بتقرير الطالب كالتالي:\nأيام الحضور: [الحضور]\nأيام الغياب: [الغياب]\nحالة الدفع: [حالة_الدفع]\nشكراً لتعاونكم.");
         setStudents(studentsData || []);
         setGroups(groupsData || []);
         setGrades(gradesData || []);
-        setAttendanceRecords(attendanceData || []);
         setSubsSummary(summaryData || []);
         setTeacherBooks(teacher?.books || []);
-        lastFetchedRef.current = { month: monthNum, year: selectedYear };
       } catch {
-        setToast({ message: "حدث خطأ أثناء تحميل البيانات.", type: "error" });
+        if (!cancelled) setToast({ message: "حدث خطأ أثناء تحميل البيانات.", type: "error" });
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     loadData();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -233,15 +220,14 @@ export function useStudentReports() {
 
   const attendanceMap = useMemo(() => {
     const map = new Map<string, { present: number; absent: number; total: number }>();
+    const groupMap = new Map(groups.map(group=>[group.id,group]));
     for (const s of students) {
-      const grp = groups.find((g) => g.id === s.group_id);
+      const grp = groupMap.get(s.group_id || "");
       const dates = grp ? (groupSessionDatesMap.get(grp.id) ?? []) : [];
       const joinDate = s.group_join_date?.slice(0, 10) ?? null;
       const relevantDates = joinDate ? dates.filter((d) => d >= joinDate) : dates;
       const att = attendanceDatesMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
-      const present = [...att.presentDates].filter((d) => relevantDates.includes(d)).length;
-      const absent = [...att.absentDates].filter((d) => relevantDates.includes(d)).length;
-      map.set(s.id, { present, absent, total: relevantDates.length });
+      map.set(s.id, countMembershipAttendance(relevantDates, att.presentDates, att.absentDates));
     }
     return map;
   }, [students, groups, groupSessionDatesMap, attendanceDatesMap]);
@@ -392,7 +378,7 @@ export function useStudentReports() {
     sendWhatsApp,
     sendAllWhatsApp,
     getStudentLastExam,
-    allExamGrades,
+    examAverages,
     studentSubsInfo,
   };
 }

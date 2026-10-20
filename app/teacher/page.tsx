@@ -24,6 +24,7 @@ export default function DashboardOverview() {
  const [unpaidLoading,setUnpaidLoading]=useState(false);
  const [unpaidError,setUnpaidError]=useState<string|null>(null);
  const [unpaidPage,setUnpaidPage]=useState(1);
+ const [unpaidRetry,setUnpaidRetry]=useState(0);
  const [unpaidTotal,setUnpaidTotal]=useState(0);
  const [toast,setToast]=useState<{message:string;type:"success"|"error"}|null>(null);
  const [now,setNow]=useState(()=>new Date());
@@ -40,7 +41,7 @@ export default function DashboardOverview() {
      .catch(()=>{if(!cancelled)setUnpaidError("تعذر تحميل الطلاب، أعد فتح القائمة للمحاولة");})
      .finally(()=>{if(!cancelled)setUnpaidLoading(false);});
    return()=>{cancelled=true;};
- },[showUnpaidModal,unpaidPage,clock.month,clock.year,Boolean(data?.totals)]);
+ },[showUnpaidModal,unpaidPage,unpaidRetry,clock.month,clock.year,Boolean(data?.totals)]);
  const currentMonthName=arabicMonths[clock.month-1];
  useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),60_000);return()=>clearInterval(timer)},[]);
  useEffect(()=>{
@@ -74,11 +75,11 @@ export default function DashboardOverview() {
    <div><h1 className="text-[1.75rem] font-bold mb-1 bg-linear-to-l from-slate-400 to-white bg-clip-text text-transparent">لوحة التحكم</h1><p className="text-sm text-slate-500">نظرة عامة وإدارة المجموعات التعليمية</p></div>
    <button type="button" onClick={handleRefresh} disabled={refreshing} className="btn btn-secondary disabled:opacity-60" aria-busy={refreshing}>{refreshing ? "جاري التحديث…" : "تحديث"}</button>
   </div>
-  <QuickActions hasAttendance={hasAttendance} onAddStudent={()=>router.push("/teacher/students")}/>
+  <QuickActions hasAttendance={hasAttendance} onAddStudent={()=>router.push("/teacher/students?action=new")}/>
   <StatsGrid totalStudents={data?.totals?.totalStudents ?? students.length} paidThisMonth={paidThisMonth} totalGroups={groups.length} totalBooksDelivered={totalBooksDelivered} currentMonthName={currentMonthName} unpaidCount={unpaidCount} onUnpaidClick={()=>{setUnpaidRows([]);setUnpaidPage(1);setUnpaidTotal(0);setUnpaidLoading(true);setShowUnpaidModal(true);}}/>
   <div className="mt-8"><p className="text-sm font-semibold text-slate-400 mb-4">مجموعات اليوم ({sessions.length})</p><TodaySessions groups={sessions} students={students} hasAttendance={hasAttendance} todayArabic={clock.day}/></div>
   <div className="mt-6"><RecentActivity groups={groups} attendance={attendance}/></div>
   {toast&&<Toast message={toast.message} type={toast.type} onClose={()=>setToast(null)}/>}
-  <UnpaidStudentsModal isOpen={showUnpaidModal} onClose={()=>setShowUnpaidModal(false)} students={unpaidStudents} loading={Boolean(data?.totals) && unpaidLoading} error={unpaidError} hasMore={unpaidRows.length<unpaidTotal} onLoadMore={()=>setUnpaidPage(page=>page+1)} currentMonthName={currentMonthName}/>
+  <UnpaidStudentsModal isOpen={showUnpaidModal} onClose={()=>setShowUnpaidModal(false)} students={unpaidStudents} loading={Boolean(data?.totals) && unpaidLoading} error={unpaidError} hasMore={unpaidRows.length<unpaidTotal} onLoadMore={()=>{if(unpaidError)setUnpaidRetry(value=>value+1);else setUnpaidPage(page=>page+1);}} currentMonthName={currentMonthName}/>
  </div>;
 }

@@ -1,5 +1,5 @@
 import { api as apiClient } from "@/lib/apiClient";
-import { MonthlySubscription, SubscriptionStatus } from "@/lib/types";
+import { MonthlySubscription, SubscriptionStatus, Student } from "@/lib/types";
 import { notifyFinancialChange } from "@/lib/financialEvents";
 import { appCache } from "@/lib/appCache";
 
@@ -13,14 +13,22 @@ export interface SubscriptionSummaryEntry {
   dueEntries: { month: number; year: number }[];
 }
 
+export interface PaymentReceipt { id: string; name: string; code: string; amount: number; months: { month: number; year: number }[]; created_at: string }
 export const SubscriptionsService = {
+  async lookupPaymentStudent(code: string): Promise<{ student: Student; subscriptions: MonthlySubscription[] }> { return apiClient.get(`/subscriptions/lookup?qr=${encodeURIComponent(code)}`); },
+  async pay(studentId: string, items: { id: string; amount: number; discount: number }[], key: string, autoPeriod?: {month: number; year: number}): Promise<{ receipt: PaymentReceipt; student: Student; subscriptions: MonthlySubscription[] }> {
+    const result = await apiClient.post<{ receipt: PaymentReceipt; student: Student; subscriptions: MonthlySubscription[] }>(`/subscriptions/student/${studentId}/pay`, { items, ...(autoPeriod ? {autoPeriod} : {}) }, key);
+    appCache.invalidate(SUBS_ALL_KEY); appCache.invalidate(SUBS_SUMMARY_KEY); notifyFinancialChange();
+    return result;
+  },
+  async recentPayments(): Promise<PaymentReceipt[]> { return apiClient.get("/subscriptions/payments/recent"); },
   async getStudentSubscriptions(studentId: string): Promise<MonthlySubscription[]> {
     return apiClient.get(`/subscriptions/student/${studentId}`);
   },
 
-  async getBatchSubscriptions(studentIds: string[]): Promise<Record<string, MonthlySubscription[]>> {
+  async getBatchSubscriptions(studentIds: string[], allPeriods = false): Promise<Record<string, MonthlySubscription[]>> {
     if (studentIds.length === 0) return {};
-    return apiClient.get(`/subscriptions/batch?studentIds=${studentIds.join(",")}`);
+    return apiClient.get(`/subscriptions/batch?studentIds=${studentIds.join(",")}${allPeriods ? "&allPeriods=1" : ""}`);
   },
 
   async getAllTeacherSubscriptions(year?: number): Promise<MonthlySubscription[]> {

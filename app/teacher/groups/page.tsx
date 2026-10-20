@@ -136,6 +136,12 @@ export default function GroupsPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("action") === "new") {
+      setShowCreateModal(true);
+    }
+  }, []);
+
   const handleDeleteGroup = (groupId: string) => {
     const group = groups.find((g) => g.id === groupId);
     if (group) setDeletingGroup(group);
@@ -144,10 +150,7 @@ export default function GroupsPage() {
   const handleConfirmDelete = async (groupId: string, deleteStudents: boolean) => {
     try {
       if (deleteStudents) {
-        const groupStudentIds = students.filter((s) => s.group_id === groupId).map((s) => s.id);
-        if (groupStudentIds.length > 0)
-          await StudentsService.deleteStudents(groupStudentIds);
-        await GroupsService.deleteGroup(groupId);
+        await GroupsService.deleteGroup(groupId, true);
         setStudents((prev) => prev.filter((s) => s.group_id !== groupId));
         showToast("تم حذف المجموعة وجميع طلابها بنجاح.");
       } else {

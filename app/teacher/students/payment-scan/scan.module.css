@@ -1,0 +1,39 @@
+.page { max-width: 1200px; margin: 0 auto; padding: 24px; color: var(--text-primary); }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 26px; }
+.eyebrow { display: flex; gap: 7px; align-items: center; color: #14b8a6; font-size: 12px; font-weight: 700; }
+.header h1 { font-size: 30px; margin: 8px 0 4px; font-weight: 800; }
+.header p, .period p { color: var(--text-secondary); font-size: 13px; margin: 5px 0 0; }
+.back { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border: 1px solid var(--border-color); border-radius: 12px; color: var(--text-secondary); text-decoration: none; font-size: 13px; }
+.back[aria-disabled=true] { opacity: .5; cursor: not-allowed; }
+.period { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding: 20px 24px; background: var(--bg-card, #141c2b); border: 1px solid var(--border-color); border-radius: 18px; margin-bottom: 24px; }
+.period strong { font-size: 14px; }
+.periodFields { display: flex; gap: 12px; }
+.periodFields label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 11px; }
+.periodFields select { padding: 10px 14px; min-width: 115px; color: var(--text-primary); background: var(--bg-secondary, #111827); border: 1px solid var(--border-color); border-radius: 10px; font: inherit; font-size: 14px; }
+.auto { margin-inline-start: auto; display: flex; gap: 7px; align-items: center; font-size: 11px; color: #14b8a6; background: rgba(20,184,166,.08); padding: 9px 12px; border-radius: 10px; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.panel { min-width: 0; border: 1px solid var(--border-color); border-radius: 20px; background: var(--bg-card, #141c2b); overflow: hidden; }
+.panelHeading { padding: 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
+.panelHeading > span { display: flex; gap: 9px; align-items: center; font-size: 14px; font-weight: 700; }
+.panelHeading small { font-size: 11px; color: var(--text-secondary); }
+.panelHeading .live { color: #14b8a6; }
+.camera { padding: 20px 20px 12px; }
+.camera > div > div:first-child { min-height: 300px !important; max-height: 380px !important; }
+.hint { display: flex; gap: 9px; align-items: flex-start; padding: 0 22px 20px; color: #14b8a6; }
+.hint svg { flex-shrink: 0; margin-top: 4px; }
+.hint p { color: var(--text-secondary); font-size: 12px; line-height: 1.9; margin: 0; }
+.manual { padding: 20px; border-top: 1px solid var(--border-color); }
+.manual h2 { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 8px; font-weight: 700; }
+.manual p { font-size: 12px; color: var(--text-secondary); margin: 0 0 14px; line-height: 1.8; }
+.result { padding: 20px; display: grid; gap: 16px; }
+.empty { min-height: 350px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; }
+.empty > div { display: grid; place-items: center; height: 90px; width: 90px; border-radius: 24px; background: rgba(20,184,166,.06); border: 1px dashed rgba(20,184,166,.3); color: #14b8a6; }
+.empty h2, .success h2 { font-size: 18px; margin: 0; font-weight: 700; }
+.empty p, .success p { font-size: 13px; color: var(--text-secondary); line-height: 1.9; margin: 0; }
+.success { display: grid; justify-items: center; gap: 12px; padding: 32px 12px; text-align: center; color: #14b8a6; }
+.warning { margin: 0; border: 1px solid rgba(245,158,11,.3); border-radius: 12px; padding: 12px; background: rgba(245,158,11,.08); color: #fbbf24; font-size: 13px; line-height: 1.8; }
+.refresh { padding: 11px; border: 1px solid var(--border-color); border-radius: 10px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.page button:disabled, .page select:disabled { opacity: .5; cursor: not-allowed; }
+.page a:focus-visible, .page select:focus-visible, .refresh:focus-visible { outline: 2px solid #14b8a6; outline-offset: 3px; }
+@media(max-width: 850px) { .columns { grid-template-columns: 1fr; gap: 16px; } .page { padding: 16px; } .period { gap: 16px; padding: 16px; } .auto { margin-inline-start: 0; } .empty { min-height: 220px; } }
+@media(max-width: 420px) { .header h1 { font-size: 25px; } .periodFields { width: 100%; } .periodFields label { flex: 1; } .camera, .result, .manual { padding: 14px; } .camera > div > div:first-child { min-height: 240px !important; } }

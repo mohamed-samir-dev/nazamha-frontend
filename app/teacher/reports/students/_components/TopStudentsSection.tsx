@@ -3,7 +3,6 @@
 import { Trophy, CheckCircle2, CreditCard, Users, ClipboardList } from "lucide-react";
 import { RiMedalLine } from "react-icons/ri";
 import { Student, Grade, Group, Exam } from "@/lib/types";
-import { getExamAvgPct } from "./reportUtils";
 
 interface Props {
   students: Student[];
@@ -13,7 +12,7 @@ interface Props {
   isStudentPaid: (id: string) => boolean;
   getLastExam: (id: string) => (Exam & { score: number | null }) | null;
   studentSubsInfo: Map<string, { lastPaidMonth: string; arrears: number; hasAllPaid: boolean }>;
-  allExamGrades: Map<string, (Exam & { score: number | null })[]>;
+  examAverages: Map<string, number | null>;
 }
 
 const RANK_MEDALS = ["🥇", "🥈", "🥉"];
@@ -39,7 +38,7 @@ function initials(name: string) {
   return p.length >= 2 ? p[0][0] + p[1][0] : p[0].slice(0, 2);
 }
 
-export default function TopStudentsSection({ students, grades, groups, getAttendance, getLastExam, studentSubsInfo, allExamGrades }: Props) {
+export default function TopStudentsSection({ students, grades, groups, getAttendance, getLastExam, studentSubsInfo, examAverages }: Props) {
   const top = students
     .map((s) => {
       const att = getAttendance(s.id);
@@ -47,8 +46,7 @@ export default function TopStudentsSection({ students, grades, groups, getAttend
       const pct = total > 0 ? Math.round((att.present / total) * 100) : 0;
       const subsInfo = studentSubsInfo.get(s.id) ?? { hasAllPaid: true, lastPaidMonth: "—", arrears: 0 };
       const allPaid = subsInfo.hasAllPaid;
-      const exams = allExamGrades.get(s.id) || [];
-      const examAvg = getExamAvgPct(exams);
+      const examAvg = examAverages.get(s.id) ?? null;
       const lastExam = getLastExam(s.id);
       return { s, pct, total, allPaid, examAvg, lastExam };
     })

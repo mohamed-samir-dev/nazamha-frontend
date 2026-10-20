@@ -5,13 +5,26 @@ const ENABLE_LOGS = process.env.NEXT_PUBLIC_ENABLE_API_LOGS === 'true';
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 let csrfToken: string | null = null;
+let pendingCsrf: Promise<string> | null = null;
+async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
+  try { return await fetch(url, options); }
+  catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    throw new Error("تعذر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.");
+  }
+}
 
 async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
-  const res = await fetch(`${BASE_URL.replace(/\/api$/, "")}/api/csrf-token`, { credentials: "include" });
-  const data = await res.json();
-  csrfToken = data.csrfToken;
-  return csrfToken!;
+  if (pendingCsrf) return pendingCsrf;
+  pendingCsrf = (async () => {
+    const res = await apiFetch(`${BASE_URL.replace(/\/api$/, "")}/api/csrf-token`, { credentials: "include" });
+    if (!res.ok) throw new Error("تعذر تجهيز الاتصال الآمن بالخادم.");
+    const data = await res.json();
+    csrfToken = data.csrfToken;
+    return csrfToken!;
+  })().finally(() => { pendingCsrf = null; });
+  return pendingCsrf;
 }
 
 /**
@@ -54,7 +67,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const generation = appCache.generation();
   const method = (options.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(MUTATING.has(method) ? { "Idempotency-Key": crypto.randomUUID() } : {}),
     ...(options.headers as Record<string, string>),
   };
@@ -77,12 +90,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const ensureCurrentAccount = () => { if (generation !== appCache.generation()) throw new Error("تم تغيير الحساب؛ تجاهل الاستجابة القديمة"); };
   const invalidateMutation = () => {
     ensureCurrentAccount();
+    if (MUTATING.has(method)) { readRevision++; pendingReads.clear(); }
     if (MUTATING.has(method) && !path.startsWith("/auth/")) {
       const resource = path.split("/")[1]?.split("?")[0];
+      if (typeof window !== "undefined" && ["students", "groups", "teachers"].includes(resource)) {
+        try { localStorage.setItem("students-data-revision", `${Date.now()}:${Math.random()}`); } catch { /* Storage may be unavailable. */ }
+      }
       const namespaces: Record<string, string[]> = {
         students: ["students:", "subscriptions:"], groups: ["groups:", "students:", "subscriptions:"],
         grades: ["grades:"], subscriptions: ["subscriptions:", "students:"], bills: ["bills:"],
         exams: ["examGrades:"], teachers: ["teacher:", "subscriptions:"],
+        attendance: ["allTimeAttendanceMap:"],
       };
       for (const prefix of namespaces[resource] || []) appCache.invalidatePrefix(prefix);
       if (typeof window !== "undefined" && ["students", "groups", "grades", "subscriptions", "bills", "books", "salaries", "teacher-expenses", "attendance", "teachers"].includes(resource)) {
@@ -90,12 +108,31 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       }
     }
   };
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const send = () => apiFetch(`${BASE_URL}${path}`, {
     ...options,
     headers,
     credentials: "include",
     cache: cachePolicy,
   });
+  // These endpoints persist an idempotency receipt in the same transaction.
+  // Reuse its key if a response is lost; never create a second student on retry.
+  const retrySafeStudentWrite = (method === "POST" && path === "/students") ||
+    (method === "PATCH" && /^\/students\/[a-f\d]{24}$/i.test(path));
+  let res: Response;
+  let retried = false;
+  try {
+    res = await send();
+  } catch (error) {
+    if (!retrySafeStudentWrite) throw error;
+    ensureCurrentAccount();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    retried = true;
+    res = await send();
+  }
+  if (retrySafeStudentWrite && !retried && [502, 503, 504].includes(res.status)) {
+    ensureCurrentAccount();
+    res = await send();
+  }
 
   if (ENABLE_LOGS) {
     console.log(`📥 API Response ${method} ${path}:`, res.status, res.statusText);
@@ -108,7 +145,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (res.status === 403 && forbiddenBody?.error_code === "EBADCSRFTOKEN" && MUTATING.has(method)) {
       csrfToken = null;
       const retryHeaders = { ...headers, "x-csrf-token": await getCsrfToken().catch(() => "") };
-      const retry = await fetch(`${BASE_URL}${path}`, { ...options, headers: retryHeaders, credentials: "include", cache: "no-store" });
+      const retry = await apiFetch(`${BASE_URL}${path}`, { ...options, headers: retryHeaders, credentials: "include", cache: "no-store" });
       ensureCurrentAccount();
       if (retry.ok) {
         invalidateMutation();
@@ -195,10 +232,24 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data;
 }
 
+// Deduplicate concurrent reads only. Writes and account changes isolate new reads.
+const pendingReads = new Map<string, Promise<unknown>>();
+let readRevision = 0;
+function getOnce<T>(path: string): Promise<T> {
+  const key = `${appCache.generation()}:${readRevision}:${path}`;
+  const existing = pendingReads.get(key);
+  if (existing) return existing as Promise<T>;
+  const pending = request<T>(path).finally(() => {
+    if (pendingReads.get(key) === pending) pendingReads.delete(key);
+  });
+  pendingReads.set(key, pending);
+  return pending;
+}
+
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  get: <T>(path: string) => getOnce<T>(path),
+  post: <T>(path: string, body: unknown, idempotencyKey?: string) =>
+    request<T>(path, { method: "POST", body: JSON.stringify(body), ...(idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {}) }),
   put: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>

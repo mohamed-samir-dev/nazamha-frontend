@@ -6,18 +6,19 @@ import { SCANNER_DIV_ID } from "./types";
 interface Props {
   scanning: boolean;
   isStarting: boolean;
+  disabled?: boolean;
   onStart: () => void;
   onStop: () => void;
 }
 
-export function ScannerView({ scanning, isStarting, onStart, onStop }: Props) {
+export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = false }: Props) {
   return (
     <div className="flex flex-col gap-2">
       {/* Viewfinder */}
       <div
         className="relative rounded-xl sm:rounded-2xl overflow-hidden bg-black/40 border border-[var(--border-color)] flex items-center justify-center transition-all duration-300"
         style={{ 
-          minHeight: scanning ? 200 : 240,
+          minHeight: scanning ? 200 : 140,
           maxHeight: scanning ? 280 : undefined,
         }}
       >
@@ -65,7 +66,7 @@ export function ScannerView({ scanning, isStarting, onStart, onStop }: Props) {
             : "bg-teal-500 text-white shadow-[0_4px_14px_rgba(20,184,166,0.3)] hover:bg-teal-600 hover:-translate-y-px active:translate-y-0"
         }`}
         onClick={scanning ? onStop : onStart}
-        disabled={isStarting}
+        disabled={isStarting || disabled}
       >
         {scanning
           ? <><CameraOff size={16} /> إيقاف الكاميرا</>

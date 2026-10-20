@@ -3,6 +3,12 @@ import { Student, MonthlySubscription, AttendanceRecord } from "@/lib/types";
 export const DEFAULT_TEMPLATE =
   "مرحباً ولي أمر الطالب [اسم_الطالب]،\nنود إعلامكم بتقرير الطالب كالتالي:\nأيام الحضور: [الحضور]\nأيام الغياب: [الغياب]\nحالة الدفع: [حالة_الدفع]\nشكراً لتعاونكم.";
 
+/** Persisted attendance remains valid after the student moves to another group. */
+export function countMembershipAttendance(currentSessionDates: string[], presentDates: Set<string>, absentDates: Set<string>) {
+  const sessions = new Set([...currentSessionDates, ...presentDates, ...absentDates]);
+  return { present: presentDates.size, absent: absentDates.size, total: sessions.size };
+}
+
 /** تحويل رقم الهاتف لصيغة واتساب الدولية */
 export function formatPhone(raw: string): string {
   let p = raw.replace(/\D/g, "");

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { getStudentQRValue } from "@/lib/utils/qrParser";
+import { getStudentReportLink } from "@/lib/services/studentReportLink";
+import { preparePrintInPlace } from "@/lib/printInPlace";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight } from "lucide-react";
 import { FiPhone, FiTrash2 } from "react-icons/fi";
@@ -17,8 +18,6 @@ import { Button } from "@/components/ui/Button";
 import { SubscriptionsService } from "@/lib/services/subscriptionsService";
 import { StudentsService } from "@/lib/services/studentsService";
 import { SuspendModal } from "@/components/features/SuspendModal";
-import { api } from "@/lib/apiClient";
-import { printHtml } from "@/lib/printHtml";
 
 interface Props {
   student: Student;
@@ -34,6 +33,33 @@ interface Props {
 const arabicMonths = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
 export function StudentHeader({ student, group, grade, subs, onDelete, onAddPayment, onStudentUpdate, onNavigateToBooks }: Props) {
+  const [reportLink, setReportLink] = useState("");
+  const [reportLinkError, setReportLinkError] = useState(false);
+  const preparedReport = useRef<ReturnType<typeof preparePrintInPlace> | null>(null);
+  const [printRevision, setPrintRevision] = useState(0);
+  const [printing, setPrinting] = useState(false);
+  const printInProgress = useRef(false);
+  useEffect(() => {
+    const invalidate = () => { if (!printInProgress.current) setPrintRevision(value => value + 1); };
+    window.addEventListener("financial-data-changed", invalidate);
+    window.addEventListener("focus", invalidate);
+    return () => {
+      window.removeEventListener("financial-data-changed", invalidate);
+      window.removeEventListener("focus", invalidate);
+    };
+  }, []);
+  useEffect(() => {
+    if (!reportLink) return;
+    const prepared = preparePrintInPlace({ url: reportLink, readySelector: ".report-sheet" });
+    preparedReport.current = prepared;
+    return () => { prepared.dispose(); if (preparedReport.current === prepared) preparedReport.current = null; };
+  }, [reportLink, student, subs, printRevision]);
+  useEffect(() => {
+    let active = true;
+    setReportLink(""); setReportLinkError(false);
+    getStudentReportLink(student.id).then(link => { if (active) setReportLink(link); }).catch(() => { if (active) setReportLinkError(true); });
+    return () => { active = false; };
+  }, [student.id]);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [suspendLoading, setSuspendLoading] = useState(false);
   const isSuspended = student.is_suspended === true && (
@@ -54,14 +80,18 @@ export function StudentHeader({ student, group, grade, subs, onDelete, onAddPaym
       const updated = await StudentsService.suspendStudent(student.id, suspended_until, reason || undefined);
       onStudentUpdate?.(updated);
       setShowSuspendModal(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "تعذر إيقاف الطالب");
     } finally {
       setSuspendLoading(false);
     }
   };
 
   const handleUnsuspend = async () => {
-    const updated = await StudentsService.unsuspendStudent(student.id);
-    onStudentUpdate?.(updated);
+    try {
+      const updated = await StudentsService.unsuspendStudent(student.id);
+      onStudentUpdate?.(updated);
+    } catch (error) { window.alert(error instanceof Error ? error.message : "تعذر رفع الإيقاف"); }
   };
 
 const dueSubs = subs.filter((s) => s.status !== "not_due");
@@ -81,7 +111,9 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
 
   const handleWhatsApp = () => {
     if (!student.parent_phone) return;
-    window.open(`https://wa.me/2${student.parent_phone.replace(/^0/, "")}`, "_blank");
+    const digits = student.parent_phone.replace(/\D/g, "");
+    const phone = /^01\d{9}$/.test(digits) ? `20${digits.slice(1)}` : digits.replace(/^00/, "");
+    window.open(`https://wa.me/${phone}`, "_blank", "noopener,noreferrer");
   };
 
   const handleCall = () => {
@@ -89,36 +121,11 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
     window.location.href = `tel:${student.parent_phone}`;
   };
 
-  const handlePrintReceipt = () => {
-    const lastSub = subs.filter((s) => s.status === "paid").sort((a, b) => b.year - a.year || b.month - a.month)[0];
-    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>إيصال دفع</title>
-    <style>body{font-family:Arial,sans-serif;padding:30px;direction:rtl;color:#111}
-    .header{text-align:center;border-bottom:2px solid #14b8a6;padding-bottom:16px;margin-bottom:20px}
-    .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
-    .label{color:#64748b;font-weight:600}.value{font-weight:700}
-    .footer{text-align:center;margin-top:24px;font-size:12px;color:#94a3b8}
-    .print-btn{display:none;margin:20px auto;padding:12px 28px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
-    @media(max-width:768px){.print-btn{display:block}}
-    @media print{.print-btn{display:none!important}}</style></head>
-    <body>
-    <div class="header"><h2 style="color:#0f766e;margin:0">إيصال دفع</h2><p style="color:#64748b;margin:4px 0">${new Date().toLocaleDateString("ar-EG")}</p></div>
-    <div class="row"><span class="label">اسم الطالب</span><span class="value">${student.name}</span></div>
-    <div class="row"><span class="label">الكود</span><span class="value">${student.center_student_code || student.code || "—"}</span></div>
-    <div class="row"><span class="label">المرحلة</span><span class="value">${grade?.name || "—"}</span></div>
-    <div class="row"><span class="label">المجموعة</span><span class="value">${group?.name || "—"}</span></div>
-    ${lastSub ? `<div class="row"><span class="label">آخر دفعة</span><span class="value">${arabicMonths[lastSub.month - 1]} ${lastSub.year}</span></div>
-    <div class="row"><span class="label">المبلغ</span><span class="value" style="color:#10b981">${lastSub.amount} جنيه</span></div>` : ""}
-    <div class="row"><span class="label">إجمالي الأشهر المدفوعة</span><span class="value" style="color:#10b981">${totalPaid} شهر</span></div>
-    <div class="footer">Student Tracker — تم الإنشاء تلقائياً</div>
-    <button class="print-btn" onclick="window.print()">🖨 طباعة الإيصال</button>
-    <script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`;
-    printHtml(html);
-  };
 
   const quickActions = [
     { icon: <FiPhone size={15} />,     label: "اتصال",        color: "#a5b4fc", bg: "rgba(99,102,241,0.1)",  border: "rgba(99,102,241,0.25)", onClick: handleCall,         disabled: !student.parent_phone },
     { icon: <FaWhatsapp size={16} />,  label: "واتساب",       color: "#25D366", bg: "rgba(37,211,102,0.1)", border: "rgba(37,211,102,0.25)", onClick: handleWhatsApp,     disabled: !student.parent_phone },
-    { icon: <MdMenuBook size={16} />,  label: "تسليم كتاب",  color: "#f59e0b", bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.25)", onClick: onNavigateToBooks,  disabled: false },
+    { icon: <MdMenuBook size={16} />,  label: "عرض الكتب",  color: "#f59e0b", bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.25)", onClick: onNavigateToBooks,  disabled: false },
     isSuspended
       ? { icon: <MdLockOpen size={16} />, label: "رفع الإيقاف", color: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.25)", onClick: handleUnsuspend, disabled: false }
       : { icon: <MdBlock size={16} />,    label: "إيقاف الطالب", color: "#ef4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.25)", onClick: () => setShowSuspendModal(true), disabled: false },
@@ -132,13 +139,15 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
           <Button variant="secondary" size="sm" leftIcon={<ArrowRight size={16} />}>رجوع</Button>
         </Link>
         <div style={{ marginRight: "auto", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <Button variant="secondary" size="sm" onClick={async () => {
+          <Button variant="secondary" size="sm" disabled={!reportLink || printing} onClick={async () => {
+            setPrinting(true);
+            printInProgress.current = true;
             try {
-              const link = await api.post<{ share_url: string }>(`/students/${student.id}/share-token`, { ttl_hours: 168 });
-              await navigator.clipboard.writeText(link.share_url);
-              window.alert("تم نسخ رابط التقرير، صالح لمدة 7 أيام");
-            } catch { window.alert("تعذر إنشاء أو نسخ رابط المشاركة"); }
-          }}>مشاركة التقرير لمدة 7 أيام</Button>
+              const prepared = preparedReport.current ?? preparePrintInPlace({ url: reportLink, readySelector: ".report-sheet" });
+              await prepared.print();
+            } catch (error) { window.alert(error instanceof Error ? error.message : "تعذر تجهيز التقرير للطباعة."); }
+            finally { preparedReport.current = null; printInProgress.current = false; setPrinting(false); }
+          }}>{printing ? "جاري تجهيز الطباعة…" : "طباعة التقرير الشهري"}</Button>
           {onDelete && (
             <Button variant="secondary" size="sm" leftIcon={<FiTrash2 size={15} />} onClick={onDelete}
               style={{ background: "rgba(239,68,68,0.1)", borderColor: "rgba(239,68,68,0.25)", color: "#ef4444" }}>
@@ -159,14 +168,17 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
         <div className="student-hero-top">
 
           {/* QR Code */}
-          <div className="student-hero-qr">
-            <QRCodeSVG
+          <div className="student-hero-qr" style={{ width: 156, height: "auto", minWidth: 156, flexDirection: "column", padding: 10, gap: 4 }}>
+            {reportLink ? <QRCodeSVG
               value={
-                getStudentQRValue(student)
+                reportLink
               }
-              size={72}
+              size={132}
               level="M"
-            />
+              marginSize={4}
+              style={{ flexShrink: 0 }}
+            /> : <span role="status">{reportLinkError ? "تعذر تحميل رابط التقرير" : "جاري تجهيز التقرير…"}</span>}
+            <small style={{ display: "block", fontSize: 10, marginTop: 6, color: "#334155", textAlign: "center" }}>تقرير الشهر · الرابط صالح 7 أيام</small>
           </div>
 
           {/* Info */}

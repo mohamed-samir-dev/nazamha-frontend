@@ -21,12 +21,15 @@ interface Props {
   onGroupChange: (v: string) => void;
   onApplyFilters: (gradeId?: string, groupId?: string) => void;
   onPrint: () => void;
+  selectedCount?: number;
+  preparingPrint?: boolean;
+  disabled?: boolean;
 }
 
 export function StudentsFilters({
   grades, groups, studentGradeIds, hasCenterMode, subTeachers,
   searchQuery, filterGradeId, filterSubTeacherId, activeFilter,
-  onSearchChange, onGradeChange, onSubTeacherChange, onGroupChange, onApplyFilters, onPrint,
+  onSearchChange, onGradeChange, onSubTeacherChange, onGroupChange, onApplyFilters, onPrint, selectedCount = 0, preparingPrint = false, disabled = false,
 }: Props) {
   const filteredGroupsForSelect = groups
     .filter((g) => g.grade_id === filterGradeId)
@@ -47,10 +50,10 @@ export function StudentsFilters({
         <select
           className="form-input"
           value={filterGradeId}
-          onChange={(e) => { onApplyFilters(e.target.value, "all"); onGradeChange(e.target.value); }}
+          onChange={(e) => { onApplyFilters(e.target.value, "all"); }}
         >
           <option value="all">كل السنين</option>
-          {grades.filter((g) => studentGradeIds.has(g.id)).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       </div>
 
@@ -90,8 +93,8 @@ export function StudentsFilters({
         </select>
       </div>
 
-      <Button variant="secondary" onClick={onPrint} leftIcon={<Printer size={16} />} style={{ whiteSpace: "nowrap" }}>
-        طباعة
+      <Button variant="secondary" disabled={preparingPrint || disabled} onClick={onPrint} leftIcon={<Printer size={16} />} style={{ whiteSpace: "nowrap" }}>
+        {preparingPrint ? "جاري تجهيز الطباعة…" : selectedCount > 0 ? `طباعة المحدد (${selectedCount})` : "طباعة كل النتائج"}
       </Button>
     </div>
   );

@@ -32,6 +32,7 @@ export const StudentsRepository = {
     search?: string;
     group_id?: string;
     grade_id?: string;
+    sub_teacher_id?: string;
   }): Promise<StudentsPage> {
     const q = new URLSearchParams();
     q.set("page", String(params.page));
@@ -39,6 +40,7 @@ export const StudentsRepository = {
     if (params.search) q.set("search", params.search);
     if (params.group_id && params.group_id !== "all") q.set("group_id", params.group_id);
     if (params.grade_id && params.grade_id !== "all") q.set("grade_id", params.grade_id);
+    if (params.sub_teacher_id) q.set("sub_teacher_id", params.sub_teacher_id);
     return api.get<StudentsPage>(`/students?${q.toString()}`);
   },
 
@@ -64,8 +66,8 @@ export const StudentsRepository = {
     custom_monthly_price?: number | null;
     subscription_start_month?: number;
     subscription_start_year?: number;
-  }[]): Promise<{ inserted: number; students: Student[] }> {
-    const result = await api.post<{ inserted: number; students: Student[] }>("/students/bulk", { students });
+  }[], idempotencyKey?: string): Promise<{ inserted: number; students: Student[] }> {
+    const result = await api.post<{ inserted: number; students: Student[] }>("/students/bulk", { students }, idempotencyKey);
     appCache.invalidatePrefix("students:me");
     return result;
   },

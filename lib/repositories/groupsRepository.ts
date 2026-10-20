@@ -47,8 +47,8 @@ export const GroupsRepository = {
     return result;
   },
 
-  async deleteGroup(id: string): Promise<void> {
-    await api.delete(`/groups/${id}`);
+  async deleteGroup(id: string, deleteStudents = false): Promise<void> {
+    await api.delete(`/groups/${id}`, { deleteStudents });
     appCache.invalidate(GROUPS_KEY);
   },
 

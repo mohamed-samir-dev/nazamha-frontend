@@ -168,6 +168,10 @@ export function CreateGroupModal({
     const targetMinutes = timeToMinutes(groupTime);
     if (targetMinutes !== null) {
       const conflict = groups.find((g) => {
+        // في وضع السنتر، لا يعتبر تعارضاً إذا كان المعلم الفرعي مختلفاً (قاعات منفصلة)
+        if (hasCenterMode && groupSubTeacherId && g.sub_teacher_id && g.sub_teacher_id !== groupSubTeacherId) {
+          return false;
+        }
         const em = timeToMinutes(g.time);
         if (em === null) return false;
         const existingDays = splitDays(g.day_of_week || "");

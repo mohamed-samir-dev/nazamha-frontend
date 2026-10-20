@@ -14,12 +14,19 @@ interface Props {
 export function StudentBooksCard({ student }: Props) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
     BooksService.getStudentBooks(student.id)
-      .then(setRows)
-      .finally(() => setLoading(false));
-  }, [student.id]);
+      .then(data => { if (active) setRows(data); })
+      .catch(() => { if (active) setError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [student.id, attempt]);
 
   if (loading) return (
     <div className="glass-panel panel-content" style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-muted)" }}>
@@ -27,6 +34,7 @@ export function StudentBooksCard({ student }: Props) {
     </div>
   );
 
+  if (error) return <div role="alert"><p>تعذر تحميل الكتب.</p><button type="button" className="btn btn-secondary" onClick={() => setAttempt(value => value + 1)}>إعادة المحاولة</button></div>;
   const purchased = rows.filter((r) => r.purchased);
 
   if (purchased.length === 0) return (

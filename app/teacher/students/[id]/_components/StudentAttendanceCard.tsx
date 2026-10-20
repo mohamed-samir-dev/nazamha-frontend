@@ -20,13 +20,19 @@ const MONTHS_AR = [
 export function StudentAttendanceCard({ studentId }: { studentId: string }) {
   const [summary, setSummary] = useState<MonthSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
     apiClient.get(`/attendance/summary/${studentId}`)
-      .then((data) => setSummary(data as MonthSummary[]))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [studentId]);
+      .then((data) => { if (active) setSummary(data as MonthSummary[]); })
+      .catch(() => { if (active) setError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [studentId, attempt]);
 
   const totalPresent = summary.reduce((s, m) => s + m.present, 0);
   const totalAbsent  = summary.reduce((s, m) => s + m.absent, 0);
@@ -34,6 +40,7 @@ export function StudentAttendanceCard({ studentId }: { studentId: string }) {
   const overallPct = totalSessions > 0 ? Math.round((totalPresent / totalSessions) * 100) : 0;
 
   if (loading) return <div style={{ padding: "2rem", display: "flex", justifyContent: "center" }}><Spinner /></div>;
+  if (error) return <div role="alert"><p>تعذر تحميل سجل الحضور والغياب.</p><button type="button" className="btn btn-secondary" onClick={() => setAttempt(value => value + 1)}>إعادة المحاولة</button></div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>

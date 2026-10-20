@@ -162,7 +162,7 @@ export const BooksService = {
   },
   getStudentBooks: (studentId: string) => api.get<StudentBookRow[]>(`/books/student/${studentId}`),
   getReport: () => api.get<BooksReport>("/books/report"),
-  getStudentBookCounts: () => api.get<Record<string, string[]>>("/books/sales-count"),
+  getStudentBookCounts: (ids?: string[]) => api.get<Record<string, string[]>>(`/books/sales-count${ids ? `?student_ids=${ids.join(",")}` : ""}`),
   markSalePaid: async (saleId: string) => {
     const result = await api.patch(`/books/sales/${saleId}/mark-paid`, {});
     notifyFinancialChange();

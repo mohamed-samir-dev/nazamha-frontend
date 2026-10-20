@@ -30,8 +30,8 @@ export const GroupsService = {
     return GroupsRepository.toggleCancelSession(groupId, date);
   },
 
-  async deleteGroup(id: string): Promise<void> {
-    return GroupsRepository.deleteGroup(id);
+  async deleteGroup(id: string, deleteStudents = false): Promise<void> {
+    return GroupsRepository.deleteGroup(id, deleteStudents);
   },
 
   async deleteGroupsBulk(ids: string[]): Promise<void> {

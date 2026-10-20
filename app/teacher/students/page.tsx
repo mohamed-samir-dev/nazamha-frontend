@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Fragment, useMemo } from "react";
-import { CheckSquare, Square, AlertCircle, Printer, CreditCard, ChevronDown, ChevronUp, UserX, User, Trash2, Users, BookOpen, RefreshCw } from "lucide-react";
+import { CheckSquare, Square, AlertCircle, Printer, CreditCard, ChevronDown, ChevronUp, UserX, User, Trash2, Users, BookOpen } from "lucide-react";
 
 import { Student, Group, Grade, Book, BookDef, MonthlySubscription, SubTeacher } from "@/lib/types";
 import { StudentsService } from "@/lib/services/studentsService";
@@ -17,14 +17,13 @@ import { Button } from "@/components/ui/Button";
 import { Toast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Spinner";
 import { StudentTableRow } from "@/components/features/StudentTableRow";
-import { StudentProfileModal } from "@/components/features/StudentProfileModal";
 
-import { printHtml } from "@/lib/printHtml";
+import { printInPlace } from "@/lib/printInPlace";
 import { AddStudentForm } from "./_components/AddStudentForm";
 import { StudentsFilters } from "./_components/StudentsFilters";
 import { BulkActionBar } from "./_components/BulkActionBar";
 import { ConfirmDeleteDialog } from "./_components/ConfirmDeleteDialog";
-import { PaymentScanModal } from "./_components/PaymentScanModal";
+import Link from "next/link";
 
 const PAGE_SIZE = 20;
 
@@ -35,13 +34,39 @@ interface PendingConfirm {
 
 export default function StudentsManagement() {
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const t = OfflineCache.loadTeacher();
+    return (t?.id ?? (t as any)?._id) || null;
+  });
   const [actionLoading, setActionLoading] = useState(false);
+  const [activePrintType, setActivePrintType] = useState<"payments" | "list" | null>(null);
+  const printPending = useRef(false);
+  const runPrint = async (type: "payments" | "list", action: () => Promise<void>) => {
+    if (printPending.current) return;
+    printPending.current = true;
+    setActivePrintType(type);
+    try { await action(); }
+    catch (error) { showToast(error instanceof Error ? error.message : "تعذر تجهيز الطباعة.", "error"); }
+    finally { printPending.current = false; setActivePrintType(null); }
+  };
 
   const { groups } = useGroups();
   const [students, setStudents] = useState<Student[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
+  const [grades, setGrades] = useState<Grade[]>(() => {
+    if (typeof window === "undefined") return [];
+    const t = OfflineCache.loadTeacher();
+    const currentUserId = (t?.id ?? (t as any)?._id) as string;
+    return currentUserId ? OfflineCache.loadGrades(currentUserId) : [];
+  });
   const [teacherBooks, setTeacherBooks] = useState<BookDef[]>([]);
+  const [defaultMonthlyPrice, setDefaultMonthlyPrice] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const t = OfflineCache.loadTeacher();
+    return Number(t?.monthly_price) || 0;
+  });
+  const pendingGroupIds = useRef(new Set<string>());
+  const [groupUpdatingIds, setGroupUpdatingIds] = useState(new Set<string>());
   const [hasCenterMode, setHasCenterMode] = useState(false);
   const [subTeachers, setSubTeachers] = useState<SubTeacher[]>([]);
   const [activeMonths, setActiveMonths] = useState<number[]>([9,10,11,12,1,2,3,4,5]);
@@ -51,23 +76,21 @@ export default function StudentsManagement() {
   const [filterGradeId, setFilterGradeId] = useState("all");
   const [filterSubTeacherId, setFilterSubTeacherId] = useState("all");
   const [activeFilter, setActiveFilter] = useState("all");
-  const [groupPages, setGroupPages] = useState<Map<string, number>>(new Map());
   const [currentPage, setCurrentPage] = useState(1);
   const [totalStudents, setTotalStudents] = useState(0);
   const [searchInput, setSearchInput] = useState("");
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [showPaymentScan, setShowPaymentScan] = useState(false);
+
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [subsMap, setSubsMap] = useState<Map<string, MonthlySubscription[]> | null>(null);
   const [bookCountsMap, setBookCountsMap] = useState<Record<string, string[]>>({});
 
   const [suspendToast, setSuspendToast] = useState<{ students: { id: string; name: string }[] } | null>(null);
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
-  const [showRefreshHint, setShowRefreshHint] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const loadedQuery = useRef<string | null>(null);
   // نستخدم ref عشان نجمع تغييرات الفلتر ونبعت request واحد بس
   const pendingFilters = useRef<{ gradeId?: string; groupId?: string } | null>(null);
   const filterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -105,7 +128,23 @@ export default function StudentsManagement() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  useEffect(() => { setSelectedIds(new Set()); }, [currentPage, searchQuery]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("action") === "new") {
+      setTimeout(() => {
+        const formEl = document.querySelector(".panel-title, input[placeholder*='الاسم الكامل']");
+        if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+  }, []);
+
   const { data: dashData } = useDashboard();
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => { if (event.key === "students-data-revision") setRefreshKey(k => k + 1); };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // Initial load: groups, grades, teacher profile (static data)
   useEffect(() => {
@@ -118,21 +157,20 @@ export default function StudentsManagement() {
         const currentUserId = (teacherRaw.id ?? teacherRaw._id) as string;
         setUserId(currentUserId);
 
-        const [gradesData, teacherProfile, bookCounts, allBooks] = await Promise.all([
+        const [gradesData, teacherProfile, allBooks] = await Promise.all([
           GradesService.getGradesByTeacherId(currentUserId),
           // استخدم بيانات الـ teacher من الـ context مباشرة بدل طلب جديد
           dashData?.teacher
             ? Promise.resolve(dashData.teacher)
             : TeachersService.getTeacherProfile(currentUserId),
-          BooksService.getStudentBookCounts().catch(() => ({} as Record<string, string[]>)),
           BooksService.getBooks().catch(() => [] as Book[]),
         ]);
         if (cancelled) return;
-        setBookCountsMap(bookCounts);
         setGrades(gradesData);
         OfflineCache.saveGrades(gradesData, currentUserId);
         setTeacherBooks(allBooks.map((b: Book) => ({ id: b.id, name: b.name, price: b.price, grade_id: b.grade_id ?? undefined })));
 
+        setDefaultMonthlyPrice(Number(teacherProfile?.monthly_price) || 0);
         const centerMode = teacherProfile?.is_center_mode || false;
         setHasCenterMode(centerMode);
         if (teacherProfile?.academic_year?.active_months?.length) {
@@ -149,15 +187,18 @@ export default function StudentsManagement() {
     loadStaticData();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashData]);
+  }, [dashData?.teacher?.id]);
 
   // Load students page whenever filters or page changes
   useEffect(() => {
-    if (!userId) return;
+    const effectiveUserId = userId || (dashData?.teacher?.id ?? (dashData?.teacher as any)?._id) || (OfflineCache.loadTeacher()?.id ?? (OfflineCache.loadTeacher() as any)?._id);
+    if (!effectiveUserId) return;
+    if (!userId) setUserId(effectiveUserId);
     let cancelled = false;
     async function loadStudentsPage() {
-      setLoading(true);
-      setSubsMap(null);
+      const queryKey = JSON.stringify([effectiveUserId, currentPage, searchQuery, activeFilter, filterGradeId, filterSubTeacherId]);
+      // Refresh confirmed changes in the background; keep mounted rows and their data.
+      if (loadedQuery.current !== queryKey) setLoading(true);
       try {
         const result = await StudentsService.getStudentsPaginated({
           page: currentPage,
@@ -165,6 +206,7 @@ export default function StudentsManagement() {
           search: searchQuery || undefined,
           group_id: activeFilter !== "all" ? (activeFilter === "none" ? "none" : activeFilter) : undefined,
           grade_id: filterGradeId !== "all" ? filterGradeId : undefined,
+          sub_teacher_id: filterSubTeacherId !== "all" ? filterSubTeacherId : undefined,
         });
         if (cancelled) return;
         const mapped = result.students.map((s) => ({
@@ -172,12 +214,16 @@ export default function StudentsManagement() {
           months: Array.isArray(s.months) && s.months.length === 12 ? s.months : Array(12).fill(false),
           received_books: Array.isArray(s.received_books) ? s.received_books : [],
         }));
+        const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+        if (currentPage > lastPage) { setCurrentPage(lastPage); return; }
         setStudents(mapped);
+        loadedQuery.current = queryKey;
         setTotalStudents(result.total);
         setLoading(false);
 
         const ids = mapped.map((s) => s.id).filter(Boolean);
         if (ids.length === 0) { setSubsMap(new Map()); return; }
+        BooksService.getStudentBookCounts(ids).then(data => { if (!cancelled) setBookCountsMap(data); }).catch(() => { if (!cancelled) showToast("تعذر تحميل الكتب المستلمة.", "error"); });
         SubscriptionsService.getBatchSubscriptions(ids)
           .then((data) => {
             if (cancelled) return;
@@ -196,22 +242,14 @@ export default function StudentsManagement() {
     return () => { cancelled = true; };
   // filterSubTeacherId مش هنا عمداً — filtering بتاعته client-side بس
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchQuery, activeFilter, filterGradeId, userId, refreshKey]);
+  }, [currentPage, searchQuery, activeFilter, filterGradeId, filterSubTeacherId, userId, refreshKey]);
 
   const studentGradeIds = useMemo(() => new Set(
     students.map((s) => s.grade_id || groups.find((g) => g.id === s.group_id)?.grade_id).filter(Boolean) as string[]
   ), [students, groups]);
 
   // Filtering is now server-side; client only filters by sub_teacher (center mode)
-  const filteredStudents = useMemo(() =>
-    hasCenterMode && filterSubTeacherId !== "all"
-      ? students.filter((s) => {
-          const studentSubTId = groups.find((g) => g.id === s.group_id)?.sub_teacher_id;
-          return studentSubTId === filterSubTeacherId;
-        })
-      : students,
-    [students, hasCenterMode, filterSubTeacherId, groups]
-  );
+  const filteredStudents = students;
 
   // نجمع تغييرات الفلتر في timer واحد عشان لو اتغيرت السنة والمجموعة مع بعض يبعتوا request واحد بس
   const applyFilters = useCallback((gradeId?: string, groupId?: string) => {
@@ -223,7 +261,6 @@ export default function StudentsManagement() {
       if (f.gradeId !== undefined) setFilterGradeId(f.gradeId);
       if (f.groupId !== undefined) setActiveFilter(f.groupId);
       setCurrentPage(1);
-      setGroupPages(new Map());
       setSelectedIds(new Set());
       pendingFilters.current = null;
     }, 0);
@@ -232,7 +269,6 @@ export default function StudentsManagement() {
   const handleFilterChange = useCallback((setter: (v: string) => void) => (v: string) => {
     setter(v);
     setCurrentPage(1);
-    setGroupPages(new Map());
     setSelectedIds(new Set());
   }, []);
 
@@ -249,8 +285,6 @@ export default function StudentsManagement() {
     return Array.from(map.entries()).map(([key, val]) => ({ key, ...val }));
   }, [filteredStudents, groups]);
 
-  const getGroupPage = (_key: string) => 1;
-  const setGroupPage = (_key: string, _page: number) => {};
 
   const visibleStudents = useMemo(() =>
     groupedStudents.flatMap(({ key, students: gs }) => {
@@ -261,9 +295,9 @@ export default function StudentsManagement() {
   );
 
   // ─── Add Student ──────────────────────────────────────────────────────────
-  const handleAddStudent = async (data: { name: string; gradeId: string; groupId: string; parentPhone: string; subTeacherId: string; customMonthlyPrice: number | null; subscriptionStartMonth: number; subscriptionStartYear: number; join_family_id?: string; create_new_family?: boolean }) => {
-    if (!data.name || !userId) { showToast("يرجى إدخال اسم الطالب.", "error"); return; }
-    if (!data.gradeId) { showToast("يرجى اختيار السنة الدراسية.", "error"); return; }
+  const handleAddStudent = async (data: { name: string; gradeId: string; groupId: string; parentPhone: string; subTeacherId: string; customMonthlyPrice: number | null; subscriptionStartMonth: number; subscriptionStartYear: number; join_family_id?: string; create_new_family?: boolean; center_student_code?: string }) => {
+    if (!data.name || !userId) { showToast("يرجى إدخال اسم الطالب.", "error"); return false; }
+    if (!data.gradeId) { showToast("يرجى اختيار السنة الدراسية.", "error"); return false; }
     setActionLoading(true);
     try {
       const response = await StudentsService.addStudentWithGeneratedCode({
@@ -274,6 +308,7 @@ export default function StudentsManagement() {
         months: Array(12).fill(false),
         received_books: [],
         parent_phone: data.parentPhone,
+        center_student_code: data.center_student_code,
         custom_monthly_price: data.customMonthlyPrice,
         subscription_start_month: data.subscriptionStartMonth,
         subscription_start_year: data.subscriptionStartYear,
@@ -292,7 +327,17 @@ export default function StudentsManagement() {
         newMap.set(newStudent.id, _subscriptions ?? []);
         return newMap;
       });
-      setStudents((prev) => prev.some((s) => s.id === newStudent.id) ? prev : [...prev, newStudent]);
+      const matchesSearch = !searchQuery || newStudent.name.toLowerCase().includes(searchQuery.toLowerCase()) || (newStudent.code || "").toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesFilters = matchesSearch && (filterGradeId === "all" || newStudent.grade_id === filterGradeId)
+        && (activeFilter === "all" || (newStudent.group_id || "none") === activeFilter)
+        && (filterSubTeacherId === "all" || groups.find(g => g.id === newStudent.group_id)?.sub_teacher_id === filterSubTeacherId);
+      if (matchesFilters) {
+        setTotalStudents(total => total + 1);
+        if (currentPage === 1) setStudents(previous => [...previous, newStudent]
+          .sort((a, b) => (a.code || "").localeCompare(b.code || "", "en") || a.id.localeCompare(b.id)).slice(0, PAGE_SIZE));
+      }
+      setCurrentPage(1);
+      setRefreshKey(k => k + 1);
       // لو الفلتر مش على الـ grade بتاع الطالب الجديد، ارجع للـ all عشان يظهر
       if (filterGradeId !== "all" && newStudent.grade_id && filterGradeId !== newStudent.grade_id) {
         setFilterGradeId("all");
@@ -302,9 +347,10 @@ export default function StudentsManagement() {
       }
       const familyMsg = data.join_family_id ? " — تم ربطه بالعائلة تلقائياً ✅" : "";
       showToast(`تم إضافة الطالب بنجاح.${familyMsg}`);
-      setShowRefreshHint(true);
+      return true;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "فشل إضافة الطالب.", "error");
+      return false;
     } finally {
       setActionLoading(false);
     }
@@ -353,51 +399,77 @@ export default function StudentsManagement() {
     try {
       if (ids.length === 1) await StudentsService.deleteStudent(ids[0]);
       else await StudentsService.deleteStudents(ids);
-      setStudents((prev) => prev.filter((s) => !ids.includes(s.id)));
+      setRefreshKey(k => k + 1);
       showToast(ids.length === 1 ? "تم حذف الطالب بنجاح." : `تم حذف ${ids.length} طالب بنجاح.`);
-    } catch {
-      showToast("فشل الحذف من قاعدة البيانات.", "error");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "فشل الحذف من قاعدة البيانات.", "error");
     }
   }, [pendingConfirm]);
 
-  const handleToggleBook = useCallback(async (student: Student, bookId: string) => {
-    const prev = student.received_books || [];
-    const updated = prev.includes(bookId) ? prev.filter((id) => id !== bookId) : [...prev, bookId];
-    setStudents((s) => s.map((x) => x.id === student.id ? { ...x, received_books: updated } : x));
+  const handleBulkMoveGroup = async (targetGroupId: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const newGroupId = targetGroupId === "none" ? null : targetGroupId;
+    setActionLoading(true);
     try {
-      await StudentsService.updateStudent(student.id, { received_books: updated });
-    } catch {
-      setStudents((s) => s.map((x) => x.id === student.id ? { ...x, received_books: prev } : x));
-      showToast("حدث خطأ أثناء تعديل حالة الكتاب.", "error");
+      await Promise.all(ids.map(id => StudentsService.updateStudent(id, { group_id: newGroupId })));
+      setStudents(prev => prev.map(s => ids.includes(s.id) ? { ...s, group_id: newGroupId } : s));
+      setSelectedIds(new Set());
+      setRefreshKey(k => k + 1);
+      const targetGroup = groups.find(g => g.id === newGroupId);
+      showToast(`تم نقل ${ids.length} طالب إلى ${targetGroup ? targetGroup.name : "بدون مجموعة"} بنجاح.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "فشل نقل الطلاب.", "error");
+    } finally {
+      setActionLoading(false);
     }
-  }, []);
-
-  const handleChangeGroup = useCallback(async (studentId: string, newGroupId: string) => {
-    const targetGroupId = newGroupId === "" ? null : newGroupId;
-    setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, group_id: targetGroupId } : s));
-    try {
-      const updated = await StudentsService.updateStudent(studentId, { group_id: targetGroupId });
-      setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, ...updated } : s));
-      showToast("تم النقل بنجاح.");
-    } catch {
-      showToast("فشل نقل الطالب.", "error");
-    }
-  }, []);
-
-  const handleSaveStudentProfile = async (studentId: string, updates: Partial<Student>) => {
-    const updated = await StudentsService.updateStudent(studentId, updates);
-    setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, ...updated } : s));
-    showToast("تم تحديث بيانات الطالب بنجاح!");
   };
 
+
+  const handleChangeGroup = useCallback(async (studentId: string, newGroupId: string) => {
+    if (pendingGroupIds.current.has(studentId)) return;
+    pendingGroupIds.current.add(studentId);
+    setGroupUpdatingIds(new Set(pendingGroupIds.current));
+    const targetGroupId = newGroupId === "" ? null : newGroupId;
+
+    try {
+      const response = await StudentsService.updateStudent(studentId, { group_id: targetGroupId });
+      const { _subscriptions, ...updated } = response as Student & { _subscriptions?: MonthlySubscription[] };
+      setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, ...updated } : s));
+      const freshSubs = _subscriptions ?? await SubscriptionsService.getStudentSubscriptions(studentId).catch(() => null);
+      if (freshSubs) setSubsMap(prev => new Map(prev ?? []).set(studentId, freshSubs));
+      else showToast("تم النقل، لكن تعذر تحديث سجل الاشتراك.", "error");
+      if (activeFilter !== "all" || filterSubTeacherId !== "all") setRefreshKey(k => k + 1);
+      if (freshSubs) showToast("تم النقل بنجاح.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "فشل نقل الطالب.", "error");
+    } finally {
+      pendingGroupIds.current.delete(studentId);
+      setGroupUpdatingIds(new Set(pendingGroupIds.current));
+    }
+  }, [activeFilter, filterSubTeacherId]);
+
+
   // ─── Selection ────────────────────────────────────────────────────────────
-  const toggleSelectStudent = (id: string) => {
+  const toggleSelectStudent = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
+
+  const handleSubsChanged = useCallback((studentId: string, updatedSubs: MonthlySubscription[]) => {
+    setSubsMap(prev => {
+      const newMap = new Map(prev ?? []);
+      newMap.set(studentId, updatedSubs);
+      return newMap;
+    });
+  }, []);
+
+  const handleStudentUpdate = useCallback((studentId: string, updated: Partial<Student>) => {
+    setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, ...updated } : s));
+  }, []);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === visibleStudents.length) setSelectedIds(new Set());
@@ -406,31 +478,60 @@ export default function StudentsManagement() {
 
   const allSelected = visibleStudents.length > 0 && selectedIds.size === visibleStudents.length;
 
+  const getPrintStudents = async () => selectedIds.size > 0
+    ? students.filter(s => selectedIds.has(s.id))
+    : !loading && totalStudents === students.length ? students
+    : StudentsService.getAllMatchingStudents({ search: searchQuery || undefined, grade_id: filterGradeId === "all" ? undefined : filterGradeId, group_id: activeFilter === "all" ? undefined : activeFilter, sub_teacher_id: filterSubTeacherId === "all" ? undefined : filterSubTeacherId });
+
   // ─── Print Payment Report ─────────────────────────────────────────────────
   const handlePrintPayments = async () => {
     const MONTH_NAMES = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
+    let printStudents: Student[] = [];
     let allSubs: MonthlySubscription[] = [];
     try {
-      allSubs = await SubscriptionsService.getAllTeacherSubscriptions();
-    } catch { /* silent */ }
+      printStudents = await getPrintStudents();
+      const missingStudentIds = printStudents
+        .map(s => s.id)
+        .filter(id => !subsMap?.has(id));
+
+      if (missingStudentIds.length > 0) {
+        const chunks: string[][] = [];
+        for (let i = 0; i < missingStudentIds.length; i += 100) {
+          chunks.push(missingStudentIds.slice(i, i + 100));
+        }
+        const batches = await Promise.all(
+          chunks.map(chunk => SubscriptionsService.getBatchSubscriptions(chunk, true))
+        );
+        for (const batch of batches) {
+          allSubs.push(...Object.values(batch).flat());
+        }
+      }
+      if (subsMap) {
+        for (const s of printStudents) {
+          if (!missingStudentIds.includes(s.id) && subsMap.has(s.id)) {
+            allSubs.push(...(subsMap.get(s.id) ?? []));
+          }
+        }
+      }
+    } catch { showToast("تعذر تحميل تقرير الدفع. حاول مرة أخرى.", "error"); return; }
 
     const now = new Date();
     const nowMonth = now.getMonth() + 1;
     const nowYear = now.getFullYear();
 
     // Build map: studentId -> Map<"month-year", status>
-    const subsMap = new Map<string, Map<string, string>>();
+    const printSubsStatusMap = new Map<string, Map<string, string>>();
     for (const sub of allSubs) {
       if (sub.status === "not_due") continue;
-      if (!subsMap.has(sub.student_id)) subsMap.set(sub.student_id, new Map());
-      subsMap.get(sub.student_id)!.set(`${sub.month}-${sub.year}`, sub.status);
+      if (!printSubsStatusMap.has(sub.student_id)) printSubsStatusMap.set(sub.student_id, new Map());
+      printSubsStatusMap.get(sub.student_id)!.set(`${sub.month}-${sub.year}`, sub.status);
     }
 
     // Collect all unique month-year combos that appear across filtered students, sorted
     const monthYearSet = new Set<string>();
-    for (const s of filteredStudents) {
-      const studentSubs = subsMap.get(s.id);
+    for (const s of printStudents) {
+      const studentSubs = printSubsStatusMap.get(s.id);
       if (studentSubs) studentSubs.forEach((_, key) => monthYearSet.add(key));
     }
     const monthYearCols = Array.from(monthYearSet)
@@ -446,8 +547,8 @@ export default function StudentsManagement() {
       `<th style="border:1px solid #ddd;padding:5px 8px;min-width:55px;font-size:11px">${MONTH_NAMES[month-1]}<br/><span style="font-weight:400;color:#888">${year}</span></th>`
     ).join("") + `<th style="border:1px solid #ddd;padding:5px 8px;min-width:70px;background:#e8f5e9">الإجمالي</th>`;
 
-    const rows = filteredStudents.map((s, i) => {
-      const studentSubs = subsMap.get(s.id);
+    const rows = printStudents.map((s, i) => {
+      const studentSubs = printSubsStatusMap.get(s.id);
       let paid = 0, total = 0;
       const monthCells = monthYearCols.map(({ key, month, year }) => {
         const status = studentSubs?.get(key);
@@ -492,13 +593,18 @@ export default function StudentsManagement() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
       <title>تقرير الدفع</title>
       <style>
-        @page{size:A4 landscape;margin:12mm 14mm 12mm 14mm}
+        @page{size:A4 landscape;margin:16mm 18mm 18mm 18mm}
         *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:0;color:#111;background:#fff;direction:rtl}
-        table{border-collapse:collapse;width:100%;table-layout:auto}
+        body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:3mm;color:#111;background:#fff;direction:rtl;overflow-wrap:anywhere}
+        table{border-collapse:collapse;width:100%;table-layout:fixed}
         th{background:#f3f4f6;padding:5px 7px;border:1px solid #ccc;font-size:11px;white-space:nowrap}
         td{padding:4px 7px;border:1px solid #ddd;white-space:nowrap}
         tr:nth-child(even) td{background:#fafafa}
+        thead{display:table-header-group} tr{break-inside:avoid}
+        th,td{white-space:normal!important;min-width:0!important;overflow-wrap:anywhere}
+        th:first-child,td:first-child{width:40px;white-space:nowrap!important}
+        th:nth-child(2),td:nth-child(2){width:80px}
+        th:nth-child(3),td:nth-child(3){width:140px}
 
         .mobile-print-btn {
           display: none;
@@ -524,7 +630,7 @@ export default function StudentsManagement() {
       </style>
     </head><body>
       <h2 style="text-align:center;margin-bottom:4px">تقرير الدفع</h2>
-      <p style="text-align:center;color:#666;margin-bottom:8px">إجمالي: ${filteredStudents.length} طالب — ${new Date().toLocaleDateString("ar-EG")}</p>
+      <p style="text-align:center;color:#666;margin-bottom:8px">إجمالي: ${printStudents.length} طالب — ${new Date().toLocaleDateString("ar-EG")}</p>
       ${legend}
       <table><thead><tr>
         <th style="border:1px solid #ddd;padding:6px">#</th>
@@ -532,15 +638,16 @@ export default function StudentsManagement() {
         <th style="border:1px solid #ddd;padding:6px">الاسم</th>
         ${headerCells}
       </tr></thead><tbody>${rows}</tbody></table>
-      <script>window.onload=()=>window.print()</script>
     </body></html>`;
 
-    printHtml(html);
+    await printInPlace({ html });
   };
 
   // ─── Print ────────────────────────────────────────────────────────────────
-  const handlePrint = () => {
-    const rows = filteredStudents.map((s, i) => {
+  const handlePrint = async () => {
+    let printStudents: Student[];
+    try { printStudents = await getPrintStudents(); } catch { showToast("تعذر تحميل قائمة الطباعة.", "error"); return; }
+    const rows = printStudents.map((s, i) => {
       const group = groups.find((g) => g.id === s.group_id);
       const grade = grades.find((g) => g.id === (s.grade_id || groups.find((gr) => gr.id === s.group_id)?.grade_id));
       const startM = s.subscription_start_month;
@@ -560,17 +667,22 @@ export default function StudentsManagement() {
     const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
       <title>قائمة الطلاب</title>
       <style>
-        @page{size:A4 landscape;margin:12mm 14mm 12mm 14mm}
+        @page{size:A4 landscape;margin:16mm 18mm 18mm 18mm}
         *{box-sizing:border-box}
-        body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:0;color:#111;background:#fff;direction:rtl}
-        table{border-collapse:collapse;width:100%;table-layout:auto}
+        body{font-family:Arial,sans-serif;font-size:12px;margin:0;padding:3mm;color:#111;background:#fff;direction:rtl;overflow-wrap:anywhere}
+        table{border-collapse:collapse;width:100%;table-layout:fixed}
         th{background:#f3f4f6;padding:5px 7px;border:1px solid #ccc;font-size:11px;white-space:nowrap}
         td{padding:4px 7px;border:1px solid #ddd;white-space:nowrap}
         tr:nth-child(even) td{background:#fafafa}
+        thead{display:table-header-group} tr{break-inside:avoid}
+        th,td{white-space:normal!important;min-width:0!important;overflow-wrap:anywhere}
+        th:first-child,td:first-child{width:40px;white-space:nowrap!important}
+        th:nth-child(2),td:nth-child(2){width:80px}
+        th:nth-child(3),td:nth-child(3){width:140px}
       </style>
     </head><body>
       <h2 style="text-align:center;margin-bottom:4px">قائمة الطلاب</h2>
-      <p style="text-align:center;color:#666;margin-bottom:12px">إجمالي: ${filteredStudents.length} طالب — ${new Date().toLocaleDateString("ar-EG")}</p>
+      <p style="text-align:center;color:#666;margin-bottom:12px">إجمالي: ${printStudents.length} طالب — ${new Date().toLocaleDateString("ar-EG")}</p>
       <table><thead><tr>
         <th style="border:1px solid #ddd;padding:6px">#</th>
         <th style="border:1px solid #ddd;padding:6px">الكود</th>
@@ -580,10 +692,9 @@ export default function StudentsManagement() {
         <th style="border:1px solid #ddd;padding:6px">هاتف ولي الأمر</th>
         <th style="border:1px solid #ddd;padding:6px">بداية الاشتراك</th>
       </tr></thead><tbody>${rows}</tbody></table>
-      <script>window.onload=()=>window.print()</script>
     </body></html>`;
 
-    printHtml(html);
+    await printInPlace({ html });
   };
 
   if (!userId && loading) return <Spinner fullScreen />;
@@ -638,19 +749,24 @@ export default function StudentsManagement() {
             <p className="text-slate-400 text-sm">إضافة الطلاب وإدارة الاشتراكات والكتب المستلمة</p>
           </div>
           <div className="students-header-actions">
-            <Button variant="primary" onClick={() => setShowPaymentScan(true)} leftIcon={<CreditCard size={16} />}>
+            <Link className="btn btn-primary" href="/teacher/students/payment-scan"><CreditCard size={16} />
               سكان الدفع
-            </Button>
+            </Link>
             <Button variant="danger" onClick={() => setShowSuspendConfirm(true)} isLoading={actionLoading} leftIcon={<UserX size={16} />}>
               إيقاف المتأخرين
             </Button>
-            <Button variant="secondary" onClick={handlePrintPayments} leftIcon={<Printer size={16} />}>
-              طباعة تقرير الدفع
+            <Button
+              variant="secondary"
+              disabled={activePrintType !== null || loading}
+              onClick={() => void runPrint("payments", handlePrintPayments)}
+              leftIcon={<Printer size={16} />}
+            >
+              {activePrintType === "payments" ? "جاري تجهيز الطباعة…" : "طباعة تقرير الدفع"}
             </Button>
 
           </div>
         </div>
-        {/* Row 2: جدول الدليل */}
+        <details style={{ marginTop: 12 }}><summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 13 }}>دليل الألوان وإجراءات الطلاب</summary>
         <div className="students-legend" style={{ marginTop: "0.75rem" }}>
           <div className="students-legend-section">
             <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "4px" }}>دلالة الألوان</div>
@@ -702,6 +818,7 @@ export default function StudentsManagement() {
             </div>
           </div>
         </div>
+        </details>
       </div>
       </div>
 
@@ -718,36 +835,12 @@ export default function StudentsManagement() {
             activeMonths={activeMonths}
             onSubmit={handleAddStudent}
             onBulkDone={(inserted) => {
-              setStudents((prev) => {
-                const existingIds = new Set(prev.map((s) => s.id));
-                const newOnes = inserted
-                  .filter((s) => !existingIds.has(s.id))
-                  .map((s) => ({
-                    ...s,
-                    months: Array.isArray(s.months) && s.months.length === 12 ? s.months : Array(12).fill(false),
-                    received_books: Array.isArray(s.received_books) ? s.received_books : [],
-                  }));
-                return [...prev, ...newOnes];
-              });
               showToast(`تم إضافة ${inserted.length} طالب بنجاح! ✓`);
-              setShowRefreshHint(true);
+              setCurrentPage(1);
+              setRefreshKey(k => k + 1);
             }}
           />
 
-          {showRefreshHint && (
-            <div style={{ background: "rgba(20,184,166,0.08)", border: "1px solid rgba(20,184,166,0.3)", borderRadius: "12px", padding: "0.75rem 1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <p style={{ fontSize: "0.8rem", color: "var(--color-teal)", margin: 0, lineHeight: 1.5 }}>
-                💡 لو الطالب مش ظاهر في الجدول، اضغط على تحديث
-              </p>
-              <button
-                onClick={() => { setShowRefreshHint(false); setRefreshKey(k => k + 1); }}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", background: "rgba(20,184,166,0.15)", border: "1px solid rgba(20,184,166,0.4)", borderRadius: "8px", color: "var(--color-teal)", cursor: "pointer", padding: "0.4rem 0.8rem", fontSize: "0.82rem", fontWeight: 600, width: "100%" }}
-              >
-                <RefreshCw size={14} />
-                تحديث القائمة
-              </button>
-            </div>
-          )}
 
 
         </aside>
@@ -770,7 +863,10 @@ export default function StudentsManagement() {
             onSubTeacherChange={handleFilterChange(setFilterSubTeacherId)}
             onGroupChange={handleFilterChange(setActiveFilter)}
             onApplyFilters={applyFilters}
-            onPrint={handlePrint}
+            onPrint={() => void runPrint("list", handlePrint)}
+            preparingPrint={activePrintType === "list"}
+            disabled={activePrintType !== null || loading}
+            selectedCount={selectedIds.size}
           />
           </div>
 
@@ -778,8 +874,10 @@ export default function StudentsManagement() {
           <BulkActionBar
             count={selectedIds.size}
             isLoading={actionLoading}
+            groups={groups}
             onDelete={handleBulkDelete}
             onClear={() => setSelectedIds(new Set())}
+            onMoveGroup={handleBulkMoveGroup}
           />
           </div>
 
@@ -828,46 +926,34 @@ export default function StudentsManagement() {
                             >
                               {isCollapsed ? <ChevronDown size={15} color="var(--color-teal)" /> : <ChevronUp size={15} color="var(--color-teal)" />}
                               <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--color-teal)" }}>{label}</span>
-                              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginRight: "auto" }}>{groupStudents.length} طالب</span>
+                              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginRight: "auto" }}>
+                                {groupStudents.length} {totalStudents > PAGE_SIZE ? "طالب في هذه الصفحة" : "طالب"}
+                              </span>
                             </button>
                           </td>
                         </tr>
                         {!isCollapsed && groupStudents.map((student, idx) => {
-                          // إنشاء key فريد يعتمد على subsMap لإجبار React على إعادة render عند تحديث الاشتراكات
                           const studentSubs = subsMap?.get(student.id);
-                          const subsKey = studentSubs 
-                            ? studentSubs.map(s => `${s.id}-${s.status}`).join(',')
-                            : 'loading';
-                          const rowKey = `${student.id}-${subsKey}`;
                           
                           return (
                             <Fragment key={student.id ?? `student-${idx}`}>
                               <StudentTableRow
-                                key={rowKey}
+                                key={student.id}
                                 student={student}
+                                defaultMonthlyPrice={defaultMonthlyPrice}
+                                groupUpdating={groupUpdatingIds.has(student.id)}
                                 groups={groups}
                                 grades={grades}
                                 teacherBooks={teacherBooks}
                                 isSelected={selectedIds.has(student.id)}
                                 subsOverride={studentSubs}
                                 subsLoading={subsMap === null}
-                                purchasedBooksCount={bookCountsMap[student.id]?.length ?? 0}
                                 purchasedBookIds={bookCountsMap[student.id]}
                                 onToggleSelect={toggleSelectStudent}
-                                onToggleBook={handleToggleBook}
                                 onDelete={handleDeleteStudent}
                                 onUpdateGroup={handleChangeGroup}
-                                onEdit={(s) => setEditingStudent(s)}
-                                onSubsChanged={(studentId, updatedSubs) => {
-                                  setSubsMap(prev => {
-                                    const newMap = new Map(prev ?? []);
-                                    newMap.set(studentId, updatedSubs);
-                                    return newMap;
-                                  });
-                                }}
-                                onStudentUpdate={(studentId, updated) =>
-                                  setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, ...updated } : s))
-                                }
+                                onSubsChanged={handleSubsChanged}
+                                onStudentUpdate={handleStudentUpdate}
                               />
                             </Fragment>
                           );
@@ -957,40 +1043,8 @@ export default function StudentsManagement() {
         />
       )}
 
-      {showPaymentScan && (
-        <PaymentScanModal
-          students={students}
-          groups={groups}
-          subsMap={subsMap ?? undefined}
-          onClose={() => setShowPaymentScan(false)}
-          onStudentUpdated={(studentId, months) =>
-            setStudents(prev => prev.map(s => s.id === studentId ? { ...s, months } : s))
-          }
-          onSubsPaid={(studentId, freshSubs) => {
-            setSubsMap(prev => {
-              const newMap = new Map(prev ?? []);
-              newMap.set(studentId, freshSubs);
-              return newMap;
-            });
-          }}
-          onStudentsRefresh={(fresh) =>
-            setStudents(fresh.map(s => ({
-              ...s,
-              months: Array.isArray(s.months) && s.months.length === 12 ? s.months : Array(12).fill(false),
-              received_books: Array.isArray(s.received_books) ? s.received_books : [],
-            })))
-          }
-        />
-      )}
 
-      <StudentProfileModal
-        isOpen={!!editingStudent}
-        onClose={() => setEditingStudent(null)}
-        student={editingStudent}
-        groups={groups}
-        grades={grades}
-        onSave={handleSaveStudentProfile}
-      />
+
     </div>
   );
 }

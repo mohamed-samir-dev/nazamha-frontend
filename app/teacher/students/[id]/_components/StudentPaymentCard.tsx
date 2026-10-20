@@ -22,18 +22,21 @@ interface Props {
    *  duplicate GET /subscriptions/student/:id that would otherwise fire. When
    *  omitted the component self-fetches (standalone / deep-link usage). */
   initialSubs?: MonthlySubscription[];
+  onChanged?: (subs: MonthlySubscription[]) => void;
 }
 
-export function StudentPaymentCard({ studentId, initialSubs }: Props) {
+export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props) {
   const [subs, setSubs] = useState<MonthlySubscription[]>(() => initialSubs ?? []);
   const [loading, setLoading] = useState(!initialSubs);
   const [error, setError] = useState(false);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     // When initialSubs is provided, loading was already initialised to false
     // via useState(!initialSubs), so nothing to do here.
-    if (initialSubs || !studentId) return;
+    if (initialSubs) { setSubs(initialSubs); setLoading(false); return; }
+    if (!studentId) return;
     SubscriptionsService.getStudentSubscriptions(studentId)
       .then(setSubs)
       .catch(() => setError(true))
@@ -43,16 +46,28 @@ export function StudentPaymentCard({ studentId, initialSubs }: Props) {
   const handleToggle = async (sub: MonthlySubscription) => {
     const subId = getId(sub);
     const status = sub.status?.trim() as SubscriptionStatus;
-    if (!subId || status === "not_due" || status === "exempt" || updating === subId) return;
+    if (!subId || status === "not_due" || status === "exempt" || updatingIds.has(subId)) return;
     const newStatus: SubscriptionStatus = status === "paid" ? "due" : "paid";
+    setSaveError("");
+    // Optimistic Update: 0ms instant color change
     setSubs((prev) => prev.map((s) => getId(s) === subId ? { ...s, status: newStatus } : s));
-    setUpdating(subId);
+    setUpdatingIds((prev) => new Set(prev).add(subId));
     try {
-      await SubscriptionsService.updateSubscription(subId, { status: newStatus });
+      const updated = await SubscriptionsService.updateSubscription(subId, { status: newStatus });
+      setSubs((prev) => {
+        const next = prev.map(s => getId(s) === subId ? { ...s, ...updated } : s);
+        onChanged?.(next);
+        return next;
+      });
     } catch {
       setSubs((prev) => prev.map((s) => getId(s) === subId ? { ...s, status: sub.status } : s));
+      setSaveError("تعذر حفظ حالة الدفع. لم يتم اعتماد التغيير.");
     } finally {
-      setUpdating(null);
+      setUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(subId);
+        return next;
+      });
     }
   };
 
@@ -94,6 +109,7 @@ export function StudentPaymentCard({ studentId, initialSubs }: Props) {
       </h3>
 
       {/* Summary */}
+      {saveError && <p role="alert" style={{ color: "#ef4444" }}>{saveError}</p>}
       <div style={{ marginBottom: "1rem", padding: "0.75rem", borderRadius: "10px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "0.5rem", textAlign: "center" }}>
         {[
           { label: "الأشهر المستحقة", value: totalDue,             color: "#94a3b8" },
@@ -120,7 +136,7 @@ export function StudentPaymentCard({ studentId, initialSubs }: Props) {
           const status = sub.status?.trim() as SubscriptionStatus;
           const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG["not_due"];
           const clickable = status === "due" || status === "paid";
-          const isUpdating = updating === subId;
+          const isUpdating = updatingIds.has(subId);
           return (
             <div
               key={subId || `${sub.month}-${sub.year}`}

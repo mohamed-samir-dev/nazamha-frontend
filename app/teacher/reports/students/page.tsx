@@ -50,7 +50,7 @@ export default function StudentReportsPage() {
     selectedYear, setSelectedYear,
     page, setPage, totalPages,
     getStudentLastExam,
-    allExamGrades,
+    examAverages,
     studentSubsInfo,
   } = useStudentReports();
 
@@ -116,7 +116,7 @@ return (
         isStudentPaid={isStudentPaid}
         getLastExam={getStudentLastExam}
         studentSubsInfo={studentSubsInfo}
-        allExamGrades={allExamGrades}
+        examAverages={examAverages}
       />
 
       <StudentsReportTable

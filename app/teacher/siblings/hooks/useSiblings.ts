@@ -37,8 +37,10 @@ export function useSiblings() {
       if (signal?.aborted) return;
       setFamilies((fams as any[]).map((f) => ({ ...f, familyName: f.familyName, members: (f.members as any[]).filter((m) => m.id) })));
       setGroups(grps);
+    } catch (error) {
+      if (!signal?.aborted) setToast({ message: error instanceof Error ? error.message : "تعذر تحميل العائلات. أعد المحاولة.", type: "error" });
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
@@ -88,11 +90,11 @@ export function useSiblings() {
         )
       );
       setToast({ message: "✅ تم تحديث اسم العائلة", type: "success" });
+      setRenamingId(null);
     } catch {
       setToast({ message: "فشل تحديث الاسم", type: "error" });
     } finally {
       setRenameLoading(false);
-      setRenamingId(null);
     }
   };
 
@@ -238,6 +240,7 @@ export function useSiblings() {
     const q = search.trim().toLowerCase();
     return families.filter((f) =>
       getFamilyDisplayName(f).toLowerCase().includes(q) ||
+      f.parentPhone?.includes(q) ||
       f.members.some((m) => m.name.toLowerCase().includes(q) || m.parent_phone?.includes(q))
     );
   }, [families, search]);

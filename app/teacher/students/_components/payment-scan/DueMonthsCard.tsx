@@ -9,6 +9,8 @@ interface Props {
   dueMonths: DueMonth[];
   selectedSubs: Set<string>;
   isConfirming: boolean;
+  locked?: boolean;
+  uncertain?: boolean;
   totalSelected: number;
   resolveAmount: (sub: MonthlySubscription, student: Student) => number;
   onToggle: (id: string) => void;
@@ -19,12 +21,12 @@ interface Props {
 
 export function DueMonthsCard({
   student, dueMonths, selectedSubs, isConfirming,
-  totalSelected, resolveAmount, onToggle, onConfirm, onDismiss, cardRef,
+  totalSelected, resolveAmount, onToggle, onConfirm, onDismiss, cardRef, locked = false, uncertain = false,
 }: Props) {
   const oldMonths = dueMonths.filter(d => d.isOld);
 
   return (
-    <div ref={cardRef} className="rounded-2xl overflow-hidden border border-amber-500/30 bg-gradient-to-b from-amber-500/5 to-black/20 shadow-[0_0_20px_rgba(245,158,11,0.06)]">
+    <div ref={cardRef} data-payment-review className="rounded-2xl overflow-hidden border border-amber-500/30 bg-gradient-to-b from-amber-500/5 to-black/20 shadow-[0_0_20px_rgba(245,158,11,0.06)]">
 
       {/* Header */}
       <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 border-b border-amber-500/15 bg-amber-500/8">
@@ -33,12 +35,14 @@ export function DueMonthsCard({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-[var(--text-primary)] break-words leading-relaxed">{student.name}</p>
+          <p className="text-xs">الكود: {student.center_student_code || student.code || "—"}</p>
           <p className="text-[0.7rem] text-amber-400/80 leading-relaxed">
             {dueMonths.length} شهر مستحق
             {oldMonths.length > 0 && ` · ${oldMonths.length} متأخر`}
           </p>
         </div>
         <button
+          type="button" aria-label="إلغاء اختيار الطالب" disabled={locked}
           onClick={onDismiss}
           className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-red-500/15 hover:text-red-400 transition-all shrink-0"
         >
@@ -57,7 +61,7 @@ export function DueMonthsCard({
       )}
 
       {/* Months list */}
-      <div className="divide-y divide-white/4 overflow-y-auto" style={{ maxHeight: "min(35vh, 350px)" }}>
+      <div className="divide-y divide-white/4">
         {dueMonths.map(d => {
           const net = resolveAmount(d.sub, student);
           const checked = selectedSubs.has(d.sub.id);
@@ -70,6 +74,7 @@ export function DueMonthsCard({
             >
               <input
                 type="checkbox"
+                disabled={locked}
                 className="w-4 h-4 accent-teal-500 cursor-pointer shrink-0"
                 checked={checked}
                 onChange={() => onToggle(d.sub.id)}
@@ -88,7 +93,7 @@ export function DueMonthsCard({
               </span>
               <div className="text-left shrink-0 flex flex-col items-end">
                 <span className="text-sm font-bold text-teal-400 font-mono whitespace-nowrap">
-                  {net > 0 ? `${net.toLocaleString("ar-EG")} ج` : "—"}
+                  {Number.isFinite(net) ? `${net.toLocaleString("ar-EG")} ج` : "مبلغ غير صحيح"}
                 </span>
                 {d.sub.discount > 0 && (
                   <span className="text-[0.65rem] text-[var(--text-muted)] whitespace-nowrap">
@@ -102,7 +107,7 @@ export function DueMonthsCard({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 px-4 py-3 bg-black/20 border-t border-[var(--border-color)]">
+      <div data-payment-actions className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 px-4 py-3 bg-black/20 border-t border-[var(--border-color)]">
         <div className="flex items-center gap-2 justify-center sm:justify-start">
           <Wallet size={14} className="text-[var(--text-muted)]" />
           <span className="text-xs text-[var(--text-muted)]">الإجمالي</span>
@@ -117,7 +122,7 @@ export function DueMonthsCard({
         >
           {isConfirming
             ? <><Spinner /> جاري الحفظ…</>
-            : <><CheckCircle2 size={13} /> تأكيد الدفع ({selectedSubs.size})</>}
+            : <><CheckCircle2 size={13} /> {uncertain ? "التحقق وإعادة نفس العملية" : `تأكيد استلام الدفع (${selectedSubs.size})`}</>}
         </button>
       </div>
     </div>

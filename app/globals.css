@@ -38,7 +38,7 @@
    ══════════════════════════════ */
 @media print {
   /* إخفاء كل شيء ما عدا صفحات الامتحان */
-  body > *:not(#exam-print-root) {
+  body:has(> #exam-print-root) > *:not(#exam-print-root) {
     display: none !important;
   }
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { SubscriptionsService } from "@/lib/services/subscriptionsService";
 import { StudentsService } from "@/lib/services/studentsService";
 import { SuspendModal } from "@/components/features/SuspendModal";
+import { studentPrice } from "@/lib/utils/studentPrice";
 
 const formatTimeTo12H = (timeStr: string) => {
   if (!timeStr) return "";
@@ -29,27 +30,25 @@ function getCurrentMonthYear() {
 
 export interface StudentTableRowProps {
   student: Student;
+  defaultMonthlyPrice?: number;
+  groupUpdating?: boolean;
   groups: Group[];
   grades: Grade[];
   teacherBooks: BookDef[];
   isSelected: boolean;
   subsOverride?: MonthlySubscription[];
   subsLoading?: boolean;
-  purchasedBooksCount?: number;
   purchasedBookIds?: string[];
   onToggleSelect: (id: string) => void;
-  onToggleMonth?: (student: Student, monthIndex: number) => void;
-  onToggleBook: (student: Student, bookId: string) => void;
   onDelete: (id: string) => void;
   onUpdateGroup: (id: string, groupId: string) => void;
-  onEdit?: (student: Student) => void;
   onStudentUpdate?: (studentId: string, updated: Partial<Student>) => void;
   onSubsChanged?: (studentId: string, subs: MonthlySubscription[]) => void;
 }
 
 export const StudentTableRow = React.memo(function StudentTableRow({
-  student, groups, grades, teacherBooks,
-  isSelected, subsOverride, subsLoading, purchasedBooksCount = 0, purchasedBookIds, onToggleSelect, onToggleBook, onDelete, onUpdateGroup, onStudentUpdate, onSubsChanged,
+  student, groups, grades, teacherBooks, defaultMonthlyPrice = 0, groupUpdating = false,
+  isSelected, subsOverride, subsLoading, purchasedBookIds, onToggleSelect, onDelete, onUpdateGroup, onStudentUpdate, onSubsChanged,
 }: StudentTableRowProps) {
   const { currentMonth, currentYear } = useMemo(() => getCurrentMonthYear(), []);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
@@ -58,6 +57,8 @@ export const StudentTableRow = React.memo(function StudentTableRow({
   const [families, setFamilies] = useState<{ familyId: string; members: Student[]; discount?: number | null }[]>([]);
   const [familiesLoading, setFamiliesLoading] = useState(false);
   const [addingToFamily, setAddingToFamily] = useState<string | null>(null);
+  const pendingSubIds = React.useRef(new Set<string>());
+  const familyPending = React.useRef(false);
   const [transferConfirm, setTransferConfirm] = useState<{ familyId: string; familyName: string; discount: number | null } | null>(null);
 
   const getFamilyName = (family: { familyId: string; familyName?: string; members: Student[]; discount?: number | null }) => {
@@ -77,6 +78,9 @@ export const StudentTableRow = React.memo(function StudentTableRow({
         ...f,
         discount: f.members.find((m) => m.family_discount_percent)?.family_discount_percent ?? null,
       })));
+    } catch (error) {
+      setShowFamilyPopup(false);
+      window.alert(error instanceof Error ? error.message : "تعذر تحميل العائلات");
     } finally {
       setFamiliesLoading(false);
     }
@@ -98,6 +102,8 @@ export const StudentTableRow = React.memo(function StudentTableRow({
   };
 
   const doAddToFamily = async (familyId: string) => {
+    if (familyPending.current) return;
+    familyPending.current = true;
     setAddingToFamily(familyId);
     try {
       await StudentsService.transferFamily(student.id, familyId);
@@ -109,7 +115,12 @@ export const StudentTableRow = React.memo(function StudentTableRow({
       });
       setShowFamilyPopup(false);
       setTransferConfirm(null);
+      const freshSubs = await SubscriptionsService.getStudentSubscriptions(student.id);
+      onSubsChanged?.(student.id, freshSubs);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "تعذر نقل الطالب للعائلة");
     } finally {
+      familyPending.current = false;
       setAddingToFamily(null);
     }
   };
@@ -122,14 +133,18 @@ export const StudentTableRow = React.memo(function StudentTableRow({
       const updated = await StudentsService.suspendStudent(student.id, suspended_until, reason || undefined);
       onStudentUpdate?.(student.id, updated);
       setShowSuspendModal(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "تعذر إيقاف الطالب");
     } finally {
       setSuspendLoading(false);
     }
   }, [student.id, onStudentUpdate]);
 
   const handleUnsuspend = useCallback(async () => {
-    const updated = await StudentsService.unsuspendStudent(student.id);
-    onStudentUpdate?.(student.id, updated);
+    try {
+      const updated = await StudentsService.unsuspendStudent(student.id);
+      onStudentUpdate?.(student.id, updated);
+    } catch (error) { window.alert(error instanceof Error ? error.message : "تعذر رفع الإيقاف"); }
   }, [student.id, onStudentUpdate]);
   const gradeGroups = useMemo(
     () => groups.filter((g) => !student.grade_id || g.grade_id === student.grade_id),
@@ -151,28 +166,22 @@ export const StudentTableRow = React.memo(function StudentTableRow({
   );
 
   const [subs, setSubs] = useState<MonthlySubscription[]>(() => subsOverride ?? []);
-  const locallyUpdated = React.useRef(false);
-  const prevSubsOverrideRef = React.useRef<MonthlySubscription[] | undefined>(subsOverride);
-
+  const subsRef = React.useRef(subs);
+  const [savingMonths, setSavingMonths] = useState<Set<string>>(new Set());
+  const [saveError, setSaveError] = useState<string | null>(null);
   useEffect(() => {
-    // لو subsOverride اتغير فعلاً (deep comparison of length and statuses)
-    if (subsOverride !== undefined) {
-      const hasChanged = !prevSubsOverrideRef.current || 
-        subsOverride.length !== prevSubsOverrideRef.current.length ||
-        subsOverride.some((sub, i) => {
-          const prev = prevSubsOverrideRef.current?.[i];
-          return !prev || prev.status !== sub.status || prev.id !== sub.id;
-        });
-      
-      if (hasChanged) {
-        setSubs(subsOverride);
-        prevSubsOverrideRef.current = subsOverride;
-        locallyUpdated.current = false;
-      } else if (locallyUpdated.current) {
-        locallyUpdated.current = false;
-      }
-    }
+    if (!subsOverride) return;
+    const merged = subsOverride.map(incoming => pendingSubIds.current.has(incoming.id)
+      ? subsRef.current.find(local => local.id === incoming.id) ?? incoming : incoming);
+    subsRef.current = merged;
+    setSubs(merged);
   }, [subsOverride]);
+
+  const publishSubs = useCallback((next: MonthlySubscription[]) => {
+    subsRef.current = next;
+    setSubs(next);
+    onSubsChanged?.(student.id, next);
+  }, [student.id, onSubsChanged]);
 
   const dueSubs = subs.filter((s) => s.status !== "not_due");
   const allVisibleSubs = subs; // show all including not_due so user can toggle them
@@ -181,19 +190,20 @@ export const StudentTableRow = React.memo(function StudentTableRow({
   const pct = totalDue > 0 ? Math.round((paidCount / totalDue) * 100) : 0;
 
   const cycleStatus = useCallback((sub: MonthlySubscription) => {
-    if (!sub.id) return;
+    if (!sub.id || pendingSubIds.current.has(sub.id)) return;
+    pendingSubIds.current.add(sub.id);
     const next: SubscriptionStatus =
       sub.status === "not_due" ? "due"
       : sub.status === "due" ? "paid"
       : sub.status === "paid" ? "exempt"
       : "due";
     const updates: Partial<MonthlySubscription> = { status: next, paid_at: next === "paid" ? new Date().toISOString() : null };
-    const newSubs = subs.map((s) => s.id === sub.id ? { ...s, ...updates } : s);
-    locallyUpdated.current = true;
-    setSubs(newSubs);
-    onSubsChanged?.(student.id, newSubs);
+    setSavingMonths(new Set(pendingSubIds.current));
+    setSaveError(null);
+    publishSubs(subsRef.current.map(s => s.id === sub.id ? { ...s, ...updates } : s));
     SubscriptionsService.updateSubscription(sub.id, updates)
-      .then(() => {
+      .then((updated) => {
+        publishSubs(subsRef.current.map(s => s.id === sub.id ? { ...s, ...updated } : s));
         // لو دفع أو معفي — تحقق لو الإيقاف اتفك تلقائياً
         if ((next === "paid" || next === "exempt") && student.is_suspended) {
           StudentsService.checkSuspension(student.id).then((status) => {
@@ -203,11 +213,10 @@ export const StudentTableRow = React.memo(function StudentTableRow({
       })
       .catch((err) => {
         console.error("[cycleStatus] failed to update sub", sub.id, err?.message);
-        locallyUpdated.current = true;
-        setSubs((prev) => prev.map((s) => s.id === sub.id ? sub : s));
-        onSubsChanged?.(student.id, subs);
-      });
-  }, [subs, student.id, student.is_suspended, onSubsChanged, onStudentUpdate]);
+        publishSubs(subsRef.current.map(s => s.id === sub.id ? sub : s));
+        setSaveError(`تعذر حفظ شهر ${sub.month}/${sub.year}. اضغط عليه للمحاولة مرة أخرى.`);
+      }).finally(() => { pendingSubIds.current.delete(sub.id); setSavingMonths(new Set(pendingSubIds.current)); });
+  }, [publishSubs, student.id, student.is_suspended, onStudentUpdate]);
 
   const getSubColor = useCallback((status: SubscriptionStatus, subMonth: number, subYear: number) => {
     if (status === "paid")   return { bg: "rgba(16,185,129,0.25)", color: "#10b981", border: "rgba(16,185,129,0.5)" };
@@ -223,7 +232,7 @@ export const StudentTableRow = React.memo(function StudentTableRow({
     <tr className={`student-row${isSelected ? " row-selected" : ""}`}>
       {/* Checkbox */}
       <td className="td-check" style={{ textAlign: "center", width: "44px", padding: "0.75rem 0.5rem" }}>
-        <button onClick={() => onToggleSelect(student.id)} className="row-check-btn">
+        <button aria-label={`تحديد ${student.name}`} aria-pressed={isSelected} onClick={() => onToggleSelect(student.id)} className="row-check-btn">
           {isSelected ? <CheckSquare size={17} className="color-teal" /> : <Square size={17} />}
         </button>
       </td>
@@ -251,6 +260,7 @@ export const StudentTableRow = React.memo(function StudentTableRow({
       <td data-label="المجموعة" style={{ textAlign: "center", padding: "0.75rem 0.75rem" }}>
         <select
           className="form-input group-select"
+          disabled={groupUpdating}
           value={student.group_id || ""}
           onChange={(e) => { if (e.target.value === "" || /^[a-f\d]{24}$/i.test(e.target.value)) onUpdateGroup(student.id, e.target.value); }}
         >
@@ -271,7 +281,7 @@ export const StudentTableRow = React.memo(function StudentTableRow({
               <div key={i} style={{ width: "32px", height: "32px", borderRadius: "7px", background: "rgba(255,255,255,0.06)", animation: "pulse 1.5s ease-in-out infinite" }} />
             ))}
           </div>
-        ) : dueSubs.length === 0 ? (
+        ) : allVisibleSubs.length === 0 ? (
           <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>—</span>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}>
@@ -283,6 +293,9 @@ export const StudentTableRow = React.memo(function StudentTableRow({
                 return (
                   <button
                     key={sub.id ?? `${sub.month}-${sub.year}-${idx}`}
+                    disabled={savingMonths.has(sub.id)}
+                    aria-busy={savingMonths.has(sub.id)}
+                    aria-label={`${sub.month}/${sub.year} — ${label}${savingMonths.has(sub.id) ? " — جاري الحفظ" : ""}`}
                     onClick={() => cycleStatus(sub)}
                     title={`${sub.month}/${sub.year} — ${label}`}
                     style={{
@@ -301,11 +314,13 @@ export const StudentTableRow = React.memo(function StudentTableRow({
                       transition: "all 0.15s ease",
                     }}
                   >
-                    {sub.month}
+                    {savingMonths.has(sub.id) ? "…" : sub.month}
                   </button>
                 );
               })}
             </div>
+            <span role="status" style={{ fontSize: "0.7rem" }}>{savingMonths.size ? `جاري حفظ ${savingMonths.size} شهر…` : "اضغط الشهر لتغيير حالته"}</span>
+            {saveError && <span role="alert" style={{ color: "#ef4444", fontSize: "0.75rem" }}>{saveError}</span>}
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <div style={{ width: "72px", height: "4px", background: "rgba(255,255,255,0.08)", borderRadius: "99px", overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${pct}%`, background: pct >= 80 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444", borderRadius: "99px", transition: "width 0.3s" }} />
@@ -319,9 +334,9 @@ export const StudentTableRow = React.memo(function StudentTableRow({
       {/* Subscription Price */}
       <td data-label="الاشتراك" style={{ textAlign: "center", padding: "0.75rem 0.75rem" }}>
         {(() => {
-          const firstDue = subs.find((s) => s.status !== "not_due");
-          if (!firstDue) return <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>—</span>;
-          const net = firstDue.amount - (firstDue.discount || 0);
+          const groupPrice = groups.find(g => g.id === student.group_id)?.monthly_price;
+          const firstDue = studentPrice(student, groupPrice, defaultMonthlyPrice);
+          const net = firstDue.net;
           return (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
               <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "#10b981" }}>{net} ج</span>

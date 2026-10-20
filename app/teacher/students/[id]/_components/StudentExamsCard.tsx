@@ -10,15 +10,22 @@ type ExamWithScore = Exam & { score: number | null };
 export function StudentExamsCard({ studentId }: { studentId: string }) {
   const [exams, setExams] = useState<ExamWithScore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
     examsService.getStudentExams(studentId)
-      .then((data) => setExams(data.sort((a, b) => (b.exam_date || "").localeCompare(a.exam_date || ""))))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [studentId]);
+      .then((data) => { if (active) setExams([...data].sort((a, b) => (b.exam_date || "").localeCompare(a.exam_date || ""))); })
+      .catch(() => { if (active) setError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [studentId, attempt]);
 
   if (loading) return <div className="loading-wrapper"><div className="spinner" /></div>;
+  if (error) return <div role="alert"><p>تعذر تحميل الامتحانات والدرجات.</p><button type="button" className="btn btn-secondary" onClick={() => setAttempt(value => value + 1)}>إعادة المحاولة</button></div>;
 
   return (
     <div className="glass-panel" style={{ padding: "1.25rem" }}>

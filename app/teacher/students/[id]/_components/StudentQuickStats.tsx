@@ -17,9 +17,13 @@ export function StudentQuickStats({ student, books, subs: subsProp }: Props) {
   const [absences, setAbsences] = useState(0);
 
   useEffect(() => {
-    if (!subsProp) {
+    if (subsProp) setSubs(subsProp);
+    else {
       SubscriptionsService.getStudentSubscriptions(student.id).then(setSubs).catch(() => {});
     }
+  }, [student.id, subsProp]);
+
+  useEffect(() => {
     const now = new Date();
     apiClient.get(`/attendance?month=${now.getMonth() + 1}&year=${now.getFullYear()}&student_id=${student.id}`)
       .then((records: unknown) => {
@@ -27,7 +31,7 @@ export function StudentQuickStats({ student, books, subs: subsProp }: Props) {
         setAbsences(list.filter((r) => r.status === "absent").length);
       })
       .catch(() => {});
-  }, [student.id, subsProp]);
+  }, [student.id]);
 
   const [purchasedBooksCount, setPurchasedBooksCount] = useState(0);
   const [totalBooks, setTotalBooks] = useState(books.length);
@@ -42,10 +46,10 @@ export function StudentQuickStats({ student, books, subs: subsProp }: Props) {
       .catch(() => {});
   }, [student.id]);
 
-  const paidSubs = subs.filter((s) => s.status === "paid" || s.status === "exempt");
+  const paidSubs = subs.filter((s) => s.status === "paid");
 
   // حساب الإجمالي: كل شهر مدفوع × (السعر - الخصم)
-  const totalPaid = paidSubs.reduce((sum, s) => sum + Math.max(0, s.amount - s.discount), 0);
+  const totalPaid = paidSubs.reduce((sum, s) => sum + Math.max(0, s.amount - (s.discount || 0)), 0);
 
   const stats = [
     {

@@ -1,4 +1,5 @@
 import {
+  countMembershipAttendance,
   formatPhone,
   buildMessage,
   buildSubsMap,
@@ -7,6 +8,10 @@ import {
   filterStudents,
   DEFAULT_TEMPLATE,
 } from "../reportHelpers";
+
+test("monthly report retains attendance from the previous group after transfer",()=>{
+  expect(countMembershipAttendance(["2026-10-13","2026-10-15"],new Set(["2026-10-01","2026-10-13"]),new Set(["2026-10-05"]))).toEqual({present:2,absent:1,total:4});
+});
 import { Student, MonthlySubscription, AttendanceRecord } from "@/lib/types";
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────

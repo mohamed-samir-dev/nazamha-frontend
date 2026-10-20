@@ -58,6 +58,8 @@ export function StudentInfoCard({ student, groups, grades, onSaved }: Props) {
       const updated = await StudentsService.updateStudent(student.id, form);
       onSaved(updated);
       setEditing(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "فشل حفظ البيانات");
     } finally {
       setSaving(false);
     }

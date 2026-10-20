@@ -11,6 +11,7 @@ export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  closeDisabled?: boolean;
   children: ReactNode;
   footer?: ReactNode;
   maxWidth?: string;
@@ -20,13 +21,14 @@ export function Modal({
   isOpen,
   onClose,
   title,
+  closeDisabled = false,
   children,
   footer,
   maxWidth = '500px'
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const close = useEffectEvent(onClose);
+  const close = useEffectEvent(() => { if (!closeDisabled) onClose(); });
   useEffect(() => {
     if (!isOpen) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -55,7 +57,7 @@ export function Modal({
       >
         <div className="flex justify-between items-center px-5 py-4 border-b border-white/5 bg-black/20">
           <h2 id={titleId} className="text-[1.05rem] sm:text-[1.1rem] font-bold m-0">{title}</h2>
-          <button type="button" aria-label="إغلاق" className="btn btn-secondary btn-icon border-none bg-transparent" onClick={onClose}>
+          <button type="button" disabled={closeDisabled} aria-label="إغلاق" className="btn btn-secondary btn-icon border-none bg-transparent" onClick={onClose}>
             <X size={20} />
           </button>
         </div>

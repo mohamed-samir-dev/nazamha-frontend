@@ -6,6 +6,7 @@ import { Grade, Group, Student } from "@/lib/types";
 import { StudentsService } from "@/lib/services/studentsService";
 import { Button } from "@/components/ui/Button";
 import { getErrorMessage } from "@/lib/errors";
+import { parseCsv } from "@/lib/parseCsv";
 
 const CHUNK_SIZE = 100; // طلاب لكل request
 
@@ -28,20 +29,19 @@ interface Props {
 }
 
 function parseCSV(text: string, grades: Grade[], groups: Group[], defaultMonth: number, defaultYear: number): ParsedRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  const lines = parseCsv(text);
   // تخطي الـ header لو موجود
-  const start = lines[0]?.includes("اسم") || lines[0]?.includes("name") ? 1 : 0;
+  const start = /^(اسم الطالب|name)$/i.test(lines[0]?.[0] || "") ? 1 : 0;
 
-  return lines.slice(start).map((line) => {
-    const cols = line.split(",").map((c) => c.trim());
+  return lines.slice(start).map((cols) => {
     const name = cols[0] || "";
     if (!name) return { name: "", grade_id: null, group_id: null, parent_phone: "", subscription_start_month: defaultMonth, subscription_start_year: defaultYear, _error: "اسم فارغ" };
 
     const gradeRaw = cols[1] || "";
     const groupRaw = cols[2] || "";
     const phone    = cols[3] || "";
-    const month    = Number(cols[4]) || defaultMonth;
-    const year     = Number(cols[5]) || defaultYear;
+    const month    = cols[4] ? Number(cols[4]) : defaultMonth;
+    const year     = cols[5] ? Number(cols[5]) : defaultYear;
 
     const grade = grades.find((g) => g.name === gradeRaw || g.id === gradeRaw);
     const group = groups.find((g) => g.name === groupRaw || g.id === groupRaw);
@@ -55,7 +55,11 @@ function parseCSV(text: string, grades: Grade[], groups: Group[], defaultMonth: 
       parent_phone: phone,
       subscription_start_month: month,
       subscription_start_year: year,
-      _error: phoneErr || (!grade && gradeRaw ? `السنة "${gradeRaw}" غير موجودة` : ""),
+      _error: phoneErr || (!grade && gradeRaw ? `السنة "${gradeRaw}" غير موجودة` : "")
+        || (!group && groupRaw ? `المجموعة "${groupRaw}" غير موجودة` : "")
+        || (group && grade && group.grade_id !== grade.id ? "المجموعة لا تتبع السنة المحددة" : "")
+        || (!Number.isInteger(month) || month < 1 || month > 12 ? "شهر البداية غير صحيح" : "")
+        || (!Number.isInteger(year) || year < 2000 || year > 2100 ? "سنة البداية غير صحيحة" : ""),
     };
   });
 }
@@ -66,6 +70,8 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
   const defaultYear  = now.getFullYear();
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const importState = useRef({ completedChunks: 0, students: [] as Student[], keys: [] as string[] });
+  const importing = useRef(false);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [progress, setProgress] = useState(0);       // 0-100
@@ -78,36 +84,40 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || importing.current) return;
+    importState.current = { completedChunks: 0, students: [], keys: [] };
     setFileName(file.name);
     setStatus("idle");
     setProgress(0);
     setInsertedCount(0);
+    setRows([]);
+    setErrorMsg("");
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const parsed = parseCSV(text, grades, groups, defaultMonth, defaultYear);
-      setRows(parsed);
+      try { setRows(parseCSV(text, grades, groups, defaultMonth, defaultYear)); }
+      catch (error) { setStatus("error"); setErrorMsg(getErrorMessage(error, "تعذر قراءة الملف")); }
     };
     reader.readAsText(file, "UTF-8");
   };
 
   const handleImport = async () => {
-    if (!validRows.length) return;
+    if (!validRows.length || importing.current) return;
+    importing.current = true;
     setStatus("running");
-    setProgress(0);
-    setInsertedCount(0);
+    setErrorMsg("");
 
-    const allInserted: Student[] = [];
+    const allInserted = importState.current.students;
     const chunks: ParsedRow[][] = [];
     for (let i = 0; i < validRows.length; i += CHUNK_SIZE) {
       chunks.push(validRows.slice(i, i + CHUNK_SIZE));
     }
 
     try {
-      for (let ci = 0; ci < chunks.length; ci++) {
+      for (let ci = importState.current.completedChunks; ci < chunks.length; ci++) {
         const chunk = chunks[ci];
+        const key = importState.current.keys[ci] ||= crypto.randomUUID();
         const res = await StudentsService.bulkAddStudents(
           chunk.map((r) => ({
             name: r.name,
@@ -116,9 +126,10 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
             parent_phone: r.parent_phone || undefined,
             subscription_start_month: r.subscription_start_month,
             subscription_start_year: r.subscription_start_year,
-          }))
+          })), key
         );
         allInserted.push(...res.students);
+        importState.current.completedChunks = ci + 1;
         setInsertedCount(allInserted.length);
         setProgress(Math.round(((ci + 1) / chunks.length) * 100));
       }
@@ -127,6 +138,8 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
     } catch (err: unknown) {
       setStatus("error");
       setErrorMsg(getErrorMessage(err, "حدث خطأ أثناء استيراد الطلاب."));
+    } finally {
+      importing.current = false;
     }
   };
 
@@ -150,7 +163,7 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
             <Upload size={18} style={{ color: "var(--color-teal)" }} />
             استيراد طلاب من CSV
           </h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+          <button disabled={status === "running"} onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
             <X size={22} />
           </button>
         </div>
@@ -167,7 +180,7 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
         >
           <Upload size={28} style={{ color: "var(--text-muted)", marginBottom: "0.5rem" }} />
           <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)" }}>{fileName || "اضغط لاختيار ملف CSV"}</p>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: "none" }} />
+          <input disabled={status === "running"} ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: "none" }} />
         </div>
 
         {/* Preview */}
@@ -226,7 +239,7 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
 
         {/* Actions */}
         <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <Button variant="secondary" onClick={onClose}>إغلاق</Button>
+          <Button variant="secondary" disabled={status === "running"} onClick={onClose}>إغلاق</Button>
           {status !== "done" && (
             <Button
               variant="primary"

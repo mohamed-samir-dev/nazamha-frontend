@@ -47,17 +47,20 @@ export default function StudentDetailPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const cachedTeacher = typeof window !== "undefined" ? OfflineCache.loadTeacher() : null;
   const [student, setStudent] = useState<Student | null>(null);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [teacherBooks, setTeacherBooks] = useState<BookDef[]>([]);
+  const [groups, setGroups] = useState<Group[]>(() => typeof window !== "undefined" ? OfflineCache.loadGroups() : []);
+  const [grades, setGrades] = useState<Grade[]>(() => (typeof window !== "undefined" && cachedTeacher?.id) ? OfflineCache.loadGrades(cachedTeacher.id) : []);
+  const [teacherBooks, setTeacherBooks] = useState<BookDef[]>(() => cachedTeacher?.books || []);
+  const [defaultMonthlyPrice, setDefaultMonthlyPrice] = useState(() => Number(cachedTeacher?.monthly_price) || 0);
   const [subs, setSubs] = useState<MonthlySubscription[]>([]);
-  const [formData, setFormData] = useState<Partial<Student>>({});
   const [activeTab, setActiveTab] = useState("overview");
 
   const handleCardSaved = (updated: Partial<Student>) => {
     setStudent((prev) => prev ? { ...prev, ...updated } : prev);
-    setFormData((prev) => ({ ...prev, ...updated }));
+    if (student && ["discount_value", "family_discount_percent", "custom_monthly_price", "group_id", "subscription_start_month", "subscription_start_year"].some(key => key in updated)) {
+      SubscriptionsService.getStudentSubscriptions(student.id).then(setSubs).catch(() => showToast("تم الحفظ، لكن تعذر تحديث سجل الدفع. أعد فتح الصفحة.", "error"));
+    }
   };
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -92,10 +95,12 @@ export default function StudentDetailPage() {
         };
 
         setStudent(normalized);
-        setFormData(normalized);
         setGroups(groupsData);
+        OfflineCache.saveGroups(groupsData);
         setGrades(gradesData);
+        OfflineCache.saveGrades(gradesData, currentUser.id);
         setTeacherBooks(teacherProfile?.books || []);
+        setDefaultMonthlyPrice(Number(teacherProfile?.monthly_price) || 0);
       } catch {
         if (!cancelled) showToast("حدث خطأ أثناء تحميل البيانات.", "error");
       } finally {
@@ -106,18 +111,6 @@ export default function StudentDetailPage() {
     return () => { cancelled = true; };
   }, [id, router]);
 
-  const handleToggleBook = async (bookId: string) => {
-    if (!student) return;
-    const prev = student.received_books || [];
-    const updated = prev.includes(bookId) ? prev.filter((b) => b !== bookId) : [...prev, bookId];
-    setStudent((s) => s ? { ...s, received_books: updated } : s);
-    try {
-      await StudentsService.updateStudent(student.id, { received_books: updated });
-    } catch {
-      setStudent((s) => s ? { ...s, received_books: prev } : s);
-      showToast("فشل تعديل حالة الكتاب.", "error");
-    }
-  };
 
 const handleDelete = async () => {
     if (!student) return;
@@ -125,13 +118,13 @@ const handleDelete = async () => {
     try {
       await StudentsService.deleteStudent(student.id);
       router.replace("/teacher/students");
-    } catch {
-      showToast("فشل حذف الطالب.", "error");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "فشل حذف الطالب.", "error");
     }
   };
 
   if (loading) return <Spinner fullScreen />;
-  if (!student) return null;
+  if (!student) return <div className="glass-panel" role="alert" style={{ padding: 24 }}><p>تعذر تحميل بيانات الطالب.</p><button onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 
   const group = groups.find((g) => g.id === student.group_id);
   const grade = grades.find((g) => g.id === student.grade_id);
@@ -150,7 +143,7 @@ const handleDelete = async () => {
       />
 
       {activeTab === "memberships" && <StudentMembershipCard key={student.id} studentId={student.id} />}
-      <StudentQuickStats student={student} books={studentBooks} />
+      <StudentQuickStats student={student} books={studentBooks} subs={subs} />
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "0.35rem", marginBottom: "1.5rem", borderBottom: "1px solid rgba(255,255,255,0.07)", paddingBottom: "0", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
@@ -199,6 +192,7 @@ const handleDelete = async () => {
       {activeTab === "financial" && (
         <div style={{ maxWidth: "min(600px, 100%)" }}>
           <StudentFinancialCard
+            defaultMonthlyPrice={defaultMonthlyPrice}
             student={student}
             group={group}
             onSaved={handleCardSaved}
@@ -207,7 +201,7 @@ const handleDelete = async () => {
       )}
 
       {activeTab === "payments" && (
-        <StudentPaymentCard studentId={student.id} initialSubs={subs} />
+        <StudentPaymentCard studentId={student.id} initialSubs={subs} onChanged={setSubs} />
       )}
 
       {activeTab === "exams" && (

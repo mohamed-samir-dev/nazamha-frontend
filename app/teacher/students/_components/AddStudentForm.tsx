@@ -1,4 +1,5 @@
 "use client";
+import { validateStudentName } from "@/lib/utils/studentName";
 
 import { useState, useRef, useEffect } from "react";
 import { UserPlus, Plus, ChevronDown, Loader2, Upload, Users } from "lucide-react";
@@ -49,7 +50,7 @@ interface Props {
     join_family_id?: string;
     create_new_family?: boolean;
     center_student_code?: string; // "new" أو كود موجود
-  }) => Promise<void>;
+  }) => Promise<boolean | void>;
   onBulkDone: (students: Student[]) => void;
 }
 
@@ -64,7 +65,10 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   const [subTeacherId, setSubTeacherId] = useState("");
   const [subscriptionStartMonth, setSubscriptionStartMonth] = useState(now.getMonth() + 1);
   const [subscriptionStartYear, setSubscriptionStartYear] = useState(now.getFullYear());
-  const [collapsed, setCollapsed] = useState(typeof window !== "undefined" && window.innerWidth <= 768);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("action") === "new") return false;
+    return typeof window !== "undefined" && window.innerWidth <= 768;
+  });
   const [phoneError, setPhoneError] = useState("");
   const [showBulk, setShowBulk] = useState(false);
 
@@ -81,6 +85,13 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   const nameDebounce  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const centerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const lookupVersion = useRef(0);
+  const centerVersion = useRef(0);
+  const [nameError, setNameError] = useState("");
+  useEffect(() => () => {
+    lookupVersion.current++; centerVersion.current++;
+    [phoneDebounce, nameDebounce, centerDebounce].forEach(timer => { if (timer.current) clearTimeout(timer.current); });
+  }, []);
   const groups = groupsProp || [];
 
   const validatePhone = (val: string) => {
@@ -90,21 +101,23 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   };
 
   const triggerLookup = (phone: string, currentName: string) => {
+    const version = ++lookupVersion.current;
     if (!/^01\d{9}$/.test(phone)) { setFamilyMatch(null); setFamilyLookupLoading(false); return; }
     setFamilyLookupLoading(true);
     (async () => {
       try {
         const res = await StudentsService.lookupFamily(phone, currentName);
-        setFamilyMatch(res.family);
+        if (version === lookupVersion.current) setFamilyMatch(res.family);
       } catch {
-        setFamilyMatch(null);
+        if (version === lookupVersion.current) setFamilyMatch(null);
       } finally {
-        setFamilyLookupLoading(false);
+        if (version === lookupVersion.current) setFamilyLookupLoading(false);
       }
     })();
   };
 
   const triggerCenterMatch = (phone: string, currentGradeId: string) => {
+    const version = ++centerVersion.current;
     if (!isCenterContext || !phone || !/^01\d{9}$/.test(phone)) {
       setCenterSuggestions([]);
       return;
@@ -116,17 +129,20 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
         if (currentGradeId) params.set("grade_id", currentGradeId);
         if (currentTeacherId) params.set("teacher_id", currentTeacherId);
         const res = await api.get<{ suggestions: CenterSuggestion[] }>(`/students/center-match?${params}`);
+        if (version !== centerVersion.current) return;
         setCenterSuggestions(res?.suggestions ?? []);
         setSelectedCenterCode(null); // ريست الاختيار عند كل بحث جديد
       } catch {
-        setCenterSuggestions([]);
+        if (version === centerVersion.current) setCenterSuggestions([]);
       } finally {
-        setCenterSuggestionsLoading(false);
+        if (version === centerVersion.current) setCenterSuggestionsLoading(false);
       }
     })();
   };
 
   const handlePhoneChange = (val: string) => {
+    lookupVersion.current++; centerVersion.current++;
+    if (nameDebounce.current) clearTimeout(nameDebounce.current);
     setParentPhone(val);
     setPhoneError(validatePhone(val));
     setFamilyMatch(null); setFamilyChoice("join");
@@ -138,6 +154,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   };
 
   const handleNameChange = (val: string) => {
+    lookupVersion.current++; setNameError("");
+    if (phoneDebounce.current) clearTimeout(phoneDebounce.current);
     setName(val);
     setFamilyMatch(null); setFamilyChoice("join");
     if (nameDebounce.current) clearTimeout(nameDebounce.current);
@@ -145,6 +163,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   };
 
   const resetForm = () => {
+    lookupVersion.current++; centerVersion.current++;
+    [phoneDebounce, nameDebounce, centerDebounce].forEach(timer => { if (timer.current) clearTimeout(timer.current); });
     setName(""); setGradeId(""); setGroupId(""); setParentPhone("");
     setSubTeacherId(""); setPhoneError("");
     setFamilyMatch(null); setFamilyChoice("join");
@@ -155,6 +175,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nameError = validateStudentName(name);
+    if (nameError) { setNameError(nameError); return; }
     const err = validatePhone(parentPhone);
     if (err) { setPhoneError(err); return; }
     if (parentPhone && !/^01\d{9}$/.test(parentPhone)) return;
@@ -169,12 +191,13 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
       extra.center_student_code = selectedCenterCode ?? "new";
     }
 
-    await onSubmit({ name, gradeId, groupId, parentPhone, subTeacherId, customMonthlyPrice: null, subscriptionStartMonth, subscriptionStartYear, ...extra });
+    const saved = await onSubmit({ name, gradeId, groupId, parentPhone, subTeacherId, customMonthlyPrice: null, subscriptionStartMonth, subscriptionStartYear, ...extra });
+    if (saved === false) return;
     resetForm();
   };
 
   const gradeIdsWithGroups = new Set(groups.map((g) => g.grade_id).filter(Boolean));
-  const availableGrades = grades.filter((g) => gradeIdsWithGroups.has(g.id));
+  const availableGrades = grades;
   const filteredGroups = groups
     .filter((g) => !gradeId || g.grade_id === gradeId)
     .filter((g) => !hasCenterMode || !subTeacherId || g.sub_teacher_id === subTeacherId);
@@ -195,20 +218,20 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
         </h2>
 
         <div style={{ display: collapsed ? "none" : "flex", flexDirection: "column", gap: "1rem" }}>
-          {/* زر الاستيراد الجماعي — مخفي مؤقتاً */}
-          {false && (
-            <button
-              type="button"
-              onClick={() => setShowBulk(true)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "7px 12px", borderRadius: "8px", border: "1px dashed rgba(20,184,166,0.4)", background: "rgba(20,184,166,0.05)", color: "var(--color-teal)", fontSize: "0.83rem", cursor: "pointer", fontWeight: 600 }}
-            >
-              <Upload size={14} />
-              استيراد طلاب من CSV (إضافة جماعية)
-            </button>
-          )}
+          {/* زر الاستيراد الجماعي من CSV */}
+          <button
+            type="button"
+            onClick={() => setShowBulk(true)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "8px 12px", borderRadius: "8px", border: "1px dashed rgba(20,184,166,0.5)", background: "rgba(20,184,166,0.08)", color: "var(--color-teal)", fontSize: "0.83rem", cursor: "pointer", fontWeight: 600, transition: "all 0.2s" }}
+            className="hover:bg-teal-500/15"
+          >
+            <Upload size={14} />
+            استيراد طلاب من CSV (إضافة جماعية)
+          </button>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <Input label="اسم الطالب" required placeholder="الاسم الكامل للطالب" value={name} onChange={(e) => handleNameChange(e.target.value)} />
+            <Input label="اسم الطالب" required placeholder="الاسم الكامل للطالب" value={name} maxLength={120} onChange={(e) => handleNameChange(e.target.value)} />
+            {nameError && <p role="alert" style={{ color: "#ef4444", fontSize: 13, margin: 0 }}>{nameError}</p>}
 
             {/* Phone + Family Detection */}
             <div className="form-group">
@@ -262,6 +285,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
               <label className="form-label">السنة الدراسية</label>
               <select required className="form-input" value={gradeId} onChange={(e) => {
                 setGradeId(e.target.value);
+                centerVersion.current++;
+                setCenterSuggestions([]); setSelectedCenterCode(null);
                 setGroupId("");
                 if (centerDebounce.current) clearTimeout(centerDebounce.current);
                 centerDebounce.current = setTimeout(() => triggerCenterMatch(parentPhone, e.target.value), 300);

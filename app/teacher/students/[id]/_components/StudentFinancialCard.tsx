@@ -3,15 +3,16 @@ import { Wallet, Tag, Users, AlertTriangle, Percent, X, Check } from "lucide-rea
 import { FiEdit2 } from "react-icons/fi";
 import { Student, Group } from "@/lib/types";
 import { StudentsService } from "@/lib/services/studentsService";
-import { SubscriptionsService } from "@/lib/services/subscriptionsService";
+import { studentPrice } from "@/lib/utils/studentPrice";
 
 interface Props {
   student: Student;
   group?: Group;
+  defaultMonthlyPrice?: number;
   onSaved: (updated: Partial<Student>) => void;
 }
 
-export function StudentFinancialCard({ student, group, onSaved }: Props) {
+export function StudentFinancialCard({ student, group, onSaved, defaultMonthlyPrice = 0 }: Props) {
   const [discountPct, setDiscountPct] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [bookDiscountPct, setBookDiscountPct] = useState("");
@@ -31,7 +32,7 @@ export function StudentFinancialCard({ student, group, onSaved }: Props) {
     (student.family_discount_percent != null && student.family_discount_percent > 0) ||
     (student.family_book_discount_percent != null && student.family_book_discount_percent > 0);
 
-  const basePrice = student.custom_monthly_price ?? group?.monthly_price ?? null;
+  const basePrice = studentPrice(student, group?.monthly_price, defaultMonthlyPrice).amount;
 
 const openDiscountEdit = () => {
     setDiscountPct(student.discount_value != null ? String(student.discount_value) : "");
@@ -55,6 +56,8 @@ const openDiscountEdit = () => {
       });
       onSaved(updated);
       setEditingDiscount(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "فشل حفظ الخصم");
     } finally {
       setDiscountSaving(false);
     }
@@ -86,7 +89,6 @@ const openDiscountEdit = () => {
     setFamilyError("");
     try {
       await StudentsService.setFamilyDiscount(student.sibling_family_id, pct, subReason, bpct, bookReason);
-      await SubscriptionsService.fixAmounts();
       onSaved({
         family_discount_percent: pct,
         family_discount_reason: subReason.trim() || null,

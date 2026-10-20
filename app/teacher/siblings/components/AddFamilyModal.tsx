@@ -20,12 +20,13 @@ export function AddFamilyModal({ onClose, onCreated, existingFamilies, getFamily
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const handlePhoneChange = (val: string) => {
     setPhone(val);
     if (!val) { setPhoneError("رقم الهاتف مطلوب"); return; }
     if (!/^01\d{9}$/.test(val)) { setPhoneError("يجب أن يكون 11 رقمًا ويبدأ بـ 01"); return; }
-    const duplicate = existingFamilies.find((f) => f.members.some((m) => m.parent_phone === val));
+    const duplicate = existingFamilies.find((f) => f.parentPhone === val || f.members.some((m) => m.parent_phone === val));
     if (duplicate) { setPhoneError(`هذا الرقم مسجل بالفعل في عائلة "${getFamilyDisplayName(duplicate)}"`); return; }
     setPhoneError("");
   };
@@ -33,9 +34,12 @@ export function AddFamilyModal({ onClose, onCreated, existingFamilies, getFamily
   const handleSubmit = async () => {
     if (!familyName.trim() || !phone || phoneError) return;
     setSubmitting(true);
+    setError("");
     try {
       const res = await StudentsService.createFamily(familyName.trim(), phone.trim());
       onCreated(res.familyId, res.familyName);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر إنشاء العائلة. حاول مرة أخرى.");
     } finally {
       setSubmitting(false);
     }
@@ -66,6 +70,7 @@ export function AddFamilyModal({ onClose, onCreated, existingFamilies, getFamily
 
         {/* Body */}
         <div className="px-5 py-4 space-y-4">
+          {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
           <div>
             <label className="block text-xs font-semibold text-[var(--text-muted)] mb-1.5">
               اسم العائلة <span className="text-red-400">*</span>
