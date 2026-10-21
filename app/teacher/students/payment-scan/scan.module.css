@@ -76,3 +76,4 @@
 .result:empty { display: none; }
 .success { padding: 16px; border: 1px solid rgba(20,184,166,.3); border-radius: 14px; background: rgba(20,184,166,.07); }
 .paidAmount { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; } .paidAmount small { font-size: 14px; font-weight: 500; }
+.camera [data-scan-feedback] > * { width: 100%; max-width: 460px; } .camera [data-scan-feedback] .success { padding: 12px; gap: 6px; } .camera [data-scan-feedback] .success svg { width: 28px; height: 28px; } .camera [data-scan-feedback] .success h2 { font-size: 16px; } .camera [data-scan-feedback] .success p { font-size: 11px; }

@@ -350,7 +350,7 @@ export default function StudentsManagement() {
       return true;
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "فشل إضافة الطالب.", "error");
-      return false;
+      return {error: err instanceof Error ? err.message : "فشل إضافة الطالب."};
     } finally {
       setActionLoading(false);
     }

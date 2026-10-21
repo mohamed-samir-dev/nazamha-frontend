@@ -50,7 +50,7 @@ interface Props {
     join_family_id?: string;
     create_new_family?: boolean;
     center_student_code?: string; // "new" أو كود موجود
-  }) => Promise<boolean | void>;
+  }) => Promise<boolean | void | {error: string}>;
   onBulkDone: (students: Student[]) => void;
 }
 
@@ -88,11 +88,19 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   const lookupVersion = useRef(0);
   const centerVersion = useRef(0);
   const [nameError, setNameError] = useState("");
+  const [gradeTouched, setGradeTouched] = useState(false);
+  const [yearTouched, setYearTouched] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitting = useRef(false);
   useEffect(() => () => {
     lookupVersion.current++; centerVersion.current++;
     [phoneDebounce, nameDebounce, centerDebounce].forEach(timer => { if (timer.current) clearTimeout(timer.current); });
   }, []);
   const groups = groupsProp || [];
+  const gradeError = gradeTouched && !grades.some(g => g.id === gradeId) ? "اختر السنة الدراسية أولًا." : "";
+  const yearError = yearTouched && (!Number.isInteger(subscriptionStartYear) || subscriptionStartYear < 2020 || subscriptionStartYear > 2040) ? "أدخل سنة صحيحة من 2020 إلى 2040." : "";
+  const groupError = groupId && !groups.some(g => g.id === groupId && g.grade_id === gradeId) ? "اختر مجموعة تابعة للسنة الدراسية المحددة." : "";
 
   const validatePhone = (val: string) => {
     if (!val) return "";
@@ -141,6 +149,7 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   };
 
   const handlePhoneChange = (val: string) => {
+    setSubmitError("");
     lookupVersion.current++; centerVersion.current++;
     if (nameDebounce.current) clearTimeout(nameDebounce.current);
     setParentPhone(val);
@@ -154,7 +163,7 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   };
 
   const handleNameChange = (val: string) => {
-    lookupVersion.current++; setNameError("");
+    lookupVersion.current++; setNameError(validateStudentName(val)); setSubmitError("");
     if (phoneDebounce.current) clearTimeout(phoneDebounce.current);
     setName(val);
     setFamilyMatch(null); setFamilyChoice("join");
@@ -167,6 +176,7 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
     [phoneDebounce, nameDebounce, centerDebounce].forEach(timer => { if (timer.current) clearTimeout(timer.current); });
     setName(""); setGradeId(""); setGroupId(""); setParentPhone("");
     setSubTeacherId(""); setPhoneError("");
+    setNameError(""); setGradeTouched(false); setYearTouched(false); setSubmitError("");
     setFamilyMatch(null); setFamilyChoice("join");
     setCenterSuggestions([]); setSelectedCenterCode(null);
     setSubscriptionStartMonth(new Date().getMonth() + 1);
@@ -175,10 +185,16 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || submitting.current) return;
+    setSubmitError(""); setGradeTouched(true); setYearTouched(true);
     const nameError = validateStudentName(name);
-    if (nameError) { setNameError(nameError); return; }
+    setNameError(nameError);
     const err = validatePhone(parentPhone);
-    if (err) { setPhoneError(err); return; }
+    setPhoneError(err);
+    if (nameError || err || !grades.some(g => g.id === gradeId) || groupError || !Number.isInteger(subscriptionStartYear) || subscriptionStartYear < 2020 || subscriptionStartYear > 2040) {
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     if (parentPhone && !/^01\d{9}$/.test(parentPhone)) return;
 
     const extra: { join_family_id?: string; create_new_family?: boolean; center_student_code?: string } = {};
@@ -191,9 +207,15 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
       extra.center_student_code = selectedCenterCode ?? "new";
     }
 
-    const saved = await onSubmit({ name, gradeId, groupId, parentPhone, subTeacherId, customMonthlyPrice: null, subscriptionStartMonth, subscriptionStartYear, ...extra });
-    if (saved === false) return;
-    resetForm();
+    submitting.current = true;
+    try {
+      const saved = await onSubmit({ name: name.trim().replace(/\s+/g, " "), gradeId, groupId, parentPhone, subTeacherId, customMonthlyPrice: null, subscriptionStartMonth, subscriptionStartYear, ...extra });
+      if (saved === false || (saved && typeof saved === "object")) {
+        setSubmitError(saved && typeof saved === "object" ? saved.error : "تعذرت إضافة الطالب. راجع البيانات وحاول مرة أخرى."); return;
+      }
+      resetForm();
+    } catch (error) { setSubmitError(error instanceof Error ? error.message : "تعذرت إضافة الطالب. حاول مرة أخرى."); }
+    finally { submitting.current = false; }
   };
 
   const gradeIdsWithGroups = new Set(groups.map((g) => g.grade_id).filter(Boolean));
@@ -229,9 +251,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
             استيراد طلاب من CSV (إضافة جماعية)
           </button>
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <Input label="اسم الطالب" required placeholder="الاسم الكامل للطالب" value={name} maxLength={120} onChange={(e) => handleNameChange(e.target.value)} />
-            {nameError && <p role="alert" style={{ color: "#ef4444", fontSize: 13, margin: 0 }}>{nameError}</p>}
+          <form ref={formRef} noValidate onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <Input label="اسم الطالب" error={nameError} onBlur={() => setNameError(validateStudentName(name))} required placeholder="الاسم الكامل للطالب" value={name} maxLength={120} onChange={(e) => handleNameChange(e.target.value)} />
 
             {/* Phone + Family Detection */}
             <div className="form-group">
@@ -241,6 +262,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
                   type="tel"
                   placeholder="01012345678"
                   value={parentPhone}
+                  error={phoneError}
+                  onBlur={() => setPhoneError(validatePhone(parentPhone))}
                   onChange={(e) => handlePhoneChange(e.target.value)}
                   style={{ direction: "ltr", textAlign: "right" }}
                 />
@@ -250,7 +273,6 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
                   </span>
                 )}
               </div>
-              {phoneError && <span style={{ color: "#ef4444", fontSize: "0.8rem", marginTop: "0.25rem", display: "block" }}>{phoneError}</span>}
               <FamilyMatchBox familyMatch={familyMatch} familyLookupLoading={familyLookupLoading} familyChoice={familyChoice} parentPhone={parentPhone} onChoiceChange={setFamilyChoice} />
 
               {/* Center Student Suggestion */}
@@ -282,8 +304,9 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
             </div>
 
             <div className="form-group">
-              <label className="form-label">السنة الدراسية</label>
-              <select required className="form-input" value={gradeId} onChange={(e) => {
+              <label htmlFor="new-student-grade" className="form-label">السنة الدراسية</label>
+              <select id="new-student-grade" aria-invalid={!!gradeError} aria-describedby={gradeError ? "new-student-grade-error" : undefined} onBlur={() => setGradeTouched(true)} required className="form-input" value={gradeId} onChange={(e) => {
+                setGradeTouched(true); setSubmitError("");
                 setGradeId(e.target.value);
                 centerVersion.current++;
                 setCenterSuggestions([]); setSelectedCenterCode(null);
@@ -294,6 +317,7 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
                 <option value="">-- اختر السنة الدراسية --</option>
                 {availableGrades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
+              {gradeError && <span id="new-student-grade-error" role="alert" className="text-sm text-red-400">{gradeError}</span>}
             </div>
 
             {hasCenterMode && (
@@ -309,8 +333,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
             )}
 
             <div className="form-group">
-              <label className="form-label">المجموعة (اختياري)</label>
-              <select className="form-input" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              <label htmlFor="new-student-group" className="form-label">المجموعة (اختياري)</label>
+              <select id="new-student-group" disabled={!gradeId} aria-invalid={!!groupError} aria-describedby={groupError ? "new-student-group-error" : undefined} className="form-input" value={groupId} onChange={(e) => {setGroupId(e.target.value); setSubmitError("");}}>
                 <option value="">بدون مجموعة</option>
                 {filteredGroups.map((g, i) => (
                   <option key={g.id ?? i} value={g.id}>
@@ -318,6 +342,7 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
                   </option>
                 ))}
               </select>
+              {groupError && <span id="new-student-group-error" role="alert" className="text-sm text-red-400">{groupError}</span>}
             </div>
 
             <div className="form-group">
@@ -331,10 +356,12 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
                     <option key={m} value={m}>{arabicMonthNames[m - 1]}</option>
                   ))}
                 </select>
-                <input type="number" className="form-input" value={subscriptionStartYear} onChange={(e) => setSubscriptionStartYear(Number(e.target.value))} min={2020} max={2040} style={{ flex: 1, direction: "ltr" }} />
+                <input aria-label="سنة بداية الاشتراك" aria-invalid={!!yearError} aria-describedby={yearError ? "new-student-year-error" : undefined} onBlur={() => setYearTouched(true)} type="number" className="form-input" value={subscriptionStartYear || ""} onChange={(e) => {setYearTouched(true); setSubmitError(""); setSubscriptionStartYear(Number(e.target.value));}} min={2020} max={2040} style={{ flex: 1, direction: "ltr" }} />
               </div>
+              {yearError && <span id="new-student-year-error" role="alert" className="text-sm text-red-400">{yearError}</span>}
             </div>
 
+            {submitError && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">{submitError}</div>}
             <Button type="submit" variant="primary" isLoading={isLoading} leftIcon={<Plus size={18} />} style={{ width: "100%", marginTop: "0.5rem" }}>
               إضافة الطالب
             </Button>

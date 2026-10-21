@@ -101,6 +101,7 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
     try {
       const { student, subscriptions: subs } = await SubscriptionsService.lookupPaymentStudent(code);
       if (!mounted.current || request !== epoch.current) return;
+      setManualCode(student.center_student_code || student.code || "");
       const due = subs.filter(s => s.status === "due" && (s.year < target.year || (s.year === target.year && s.month <= target.month)))
         .sort((a,b) => a.year - b.year || a.month - b.month)
         .map(sub => ({ sub, label: `${ARABIC_MONTHS[sub.month - 1]} ${sub.year}`, isOld: sub.year < target.year || sub.month < target.month }));
@@ -134,7 +135,6 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
     if (cooldown.current.code === code && cooldown.current.until > Date.now()) return;
     cooldown.current = { code, until: Date.now() + SCAN_COOLDOWN_MS };
     cameraCode.current = code;
-    setManualCode(code);
     await handleCode(code, true);
   }, [handleCode, autoCamera]);
   const handleManualSubmit = async () => { await handleCode(manualCode); };
@@ -171,7 +171,7 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
         } catch { /* Audio is optional; a saved payment remains successful. */ }
       }
       setFlashMsg({ text: `تم تسجيل دفع ${result.receipt.name}: ${result.receipt.amount.toLocaleString("ar-EG")} ج. رقم العملية ${result.receipt.id}`, type: "success" });
-      cardOpen.current = false; setCurrentStudent(null); setDueMonths(null); setSelection(new Set()); setManualCode("");
+      cardOpen.current = false; setCurrentStudent(null); setDueMonths(null); setSelection(new Set()); setManualCode(result.receipt.code || "");
     } catch (error) {
       if (!mounted.current) return;
       const status = (error as {status?: number})?.status;

@@ -2,6 +2,7 @@
 
 import { Camera, CameraOff, QrCode } from "lucide-react";
 import { SCANNER_DIV_ID } from "./types";
+import type { ReactNode } from "react";
 
 interface Props {
   scanning: boolean;
@@ -9,9 +10,10 @@ interface Props {
   disabled?: boolean;
   onStart: () => void;
   onStop: () => void;
+  overlay?: ReactNode;
 }
 
-export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = false }: Props) {
+export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = false, overlay }: Props) {
   return (
     <div className="flex flex-col gap-2">
       {/* Viewfinder */}
@@ -23,7 +25,7 @@ export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = 
         }}
       >
         {/* Idle overlay */}
-        {!scanning && (
+        {!scanning && !overlay && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
             <div className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl bg-teal-500/8 border border-teal-500/15 flex items-center justify-center">
               <QrCode size={28} className="text-teal-500/40 sm:w-[30px]" />
@@ -56,6 +58,7 @@ export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = 
             <span className="absolute inset-x-4 sm:inset-x-6 h-px bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-60 z-10 animate-[scanline_2s_ease-in-out_infinite]" style={{ top: "50%" }} />
           </>
         )}
+        {overlay && <div data-scan-feedback className="absolute inset-0 z-20 flex items-center justify-center p-3 bg-slate-950/85 backdrop-blur-sm overflow-y-auto">{overlay}</div>}
       </div>
 
       {/* Toggle button */}

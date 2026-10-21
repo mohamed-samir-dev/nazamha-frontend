@@ -54,17 +54,17 @@ function PaymentDesk({ownerId}: {ownerId: string}) {
     <div className={styles.columns}>
       <section className={styles.panel}>
         <div className={styles.panelHeading}><span><Camera size={19} /> مسح كارت الطالب</span><small className={state.scanning ? styles.live : ""}>{state.isConfirming ? "جاري تسجيل الدفع" : state.loadingCode ? "جاري التعرف" : state.currentStudent ? "بانتظار المراجعة" : state.scanning ? "الكاميرا جاهزة" : "الكاميرا متوقفة"}</small></div>
-        <div className={styles.camera}><ScannerView scanning={state.scanning} isStarting={state.isStarting} disabled={state.locked || state.loadingCode || !!state.currentStudent} onStart={state.startScanner} onStop={state.stopScanner} /></div>
+        <div className={styles.camera}><ScannerView scanning={state.scanning} isStarting={state.isStarting} disabled={state.locked || state.loadingCode || !!state.currentStudent} onStart={state.startScanner} onStop={state.stopScanner} overlay={state.flashMsg?.type === "success" ? <div className={styles.success} role="status" aria-live="polite"><CircleCheck size={40} /><h2>تم تسجيل الدفع بنجاح</h2><strong>{state.paidList[0]?.name}</strong><span className={styles.paidAmount}>{state.paidList[0]?.amount.toLocaleString("ar-EG")} <small>ج.م</small></span><p>{state.paidList[0]?.months.map(m => `${ARABIC_MONTHS[m.month - 1]} ${m.year}`).join("، ")}</p><p>ابعد الكارت وامسح كارت الطالب التالي.</p></div> : (state.loadingCode || state.isConfirming || (!state.currentStudent && state.flashMsg)) ? <FlashMessage loading={state.loadingCode || state.isConfirming} saving={state.isConfirming} flashMsg={state.flashMsg} /> : null} /></div>
       <div ref={resultRef} tabIndex={-1} className={styles.resultPanel} aria-label="حالة الطالب والدفع">
         <div className={styles.result}>
-          <FlashMessage loading={state.loadingCode || state.isConfirming} saving={state.isConfirming} flashMsg={state.flashMsg?.type === "success" ? null : state.flashMsg} />
+          {state.currentStudent && !state.isConfirming && <FlashMessage loading={false} flashMsg={state.flashMsg} />}
           {state.uncertain && !state.currentStudent && <button className="btn btn-primary" disabled={state.isConfirming} onClick={state.handleConfirmPayment}>التحقق وإعادة نفس العملية</button>}
           {state.currentStudent && state.dueMonths ? <>
             {state.currentStudent.is_suspended && <p className={styles.warning}>الطالب موقوف — راجع سبب الإيقاف قبل تأكيد استلام الدفع.</p>}
             <DueMonthsCard student={state.currentStudent} dueMonths={state.dueMonths} selectedSubs={state.selectedSubs} totalSelected={state.totalSelected} isConfirming={state.isConfirming} locked={state.locked} uncertain={state.uncertain} resolveAmount={state.resolveAmount} cardRef={cardRef} onConfirm={state.handleConfirmPayment} onDismiss={state.dismissCard} onToggle={id => state.setSelectedSubs(old => {const next=new Set(old); next.has(id)?next.delete(id):next.add(id); return next;})} />
             <button className={styles.refresh} disabled={state.locked || state.loadingCode} onClick={state.reloadStudent}>تحديث المستحقات</button>
           </> : null}
-          {state.flashMsg?.type === "success" && <div className={styles.success} role="status" aria-live="polite"><CircleCheck size={40} /><h2>تم تسجيل الدفع بنجاح</h2><strong>{state.paidList[0]?.name}</strong><span className={styles.paidAmount}>{state.paidList[0]?.amount.toLocaleString("ar-EG")} <small>ج.م</small></span><p>{state.paidList[0]?.months.map(m => `${ARABIC_MONTHS[m.month - 1]} ${m.year}`).join("، ")}</p><p>ابعد الكارت وامسح كارت الطالب التالي.</p></div>}
+
         </div>
       </div>
         <div className={styles.hint}><CircleCheck size={17} /><p>لو المستحق هو الشهر المختار فقط، هنسجّل الدفع مباشرة. المتأخرات والإيقاف وأي مبلغ محتاج مراجعة، هيظهروا للتأكيد.</p></div>
