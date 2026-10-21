@@ -171,3 +171,26 @@ test('already settled information disappears without sending a payment', async()
   await act(async()=>jest.advanceTimersByTime(2000));
   expect(hook.flashMsg).toBeNull(); expect(SubscriptionsService.pay).not.toHaveBeenCalled();
 });
+
+test.each(['NotAllowedError','NotFoundError','NotReadableError','SecurityError'])('camera %s cleans up and allows another attempt without recording payment',async name=>{
+  mockStart.mockRejectedValueOnce(new DOMException('camera startup failed',name));
+  await act(async()=>hook.startScanner());
+  expect(hook.scanning).toBe(false);expect(hook.isStarting).toBe(false);expect(hook.flashMsg?.type).toBe('error');
+  expect(mockClear).toHaveBeenCalledTimes(1);expect(SubscriptionsService.pay).not.toHaveBeenCalled();
+  await act(async()=>hook.startScanner());
+  expect(mockStart).toHaveBeenCalledTimes(2);expect(hook.scanning).toBe(true);
+});
+test('double camera start creates only one stream and stop releases it',async()=>{
+  await act(async()=>{await Promise.all([hook.startScanner(),hook.startScanner()]);});
+  expect(mockStart).toHaveBeenCalledTimes(1);
+  await act(async()=>hook.stopScanner());
+  expect(mockStop).toHaveBeenCalledTimes(1);expect(mockClear).toHaveBeenCalledTimes(1);expect(hook.scanning).toBe(false);
+});
+test('an unknown scanned code never pays and does not block the next valid student',async()=>{
+  const decode=await automaticCamera([sub('oct',10)]);
+  (SubscriptionsService.lookupPaymentStudent as jest.Mock).mockRejectedValueOnce(Object.assign(new Error('الطالب غير موجود'),{status:404}));
+  await act(async()=>decode('unknown-qa-code'));
+  expect(SubscriptionsService.pay).not.toHaveBeenCalled();expect(hook.flashMsg?.type).toBe('error');
+  await act(async()=>decode('A'));
+  expect(SubscriptionsService.pay).toHaveBeenCalledTimes(1);
+});

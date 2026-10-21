@@ -112,7 +112,7 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
 
     if (wasActive) {
       addToast(
-        `تم إلغاء تحديد ${MONTH_NAMES[m - 1]} ${y}. ⚠️ اشتراكات هذا الشهر غير المدفوعة ستُحذف عند الضغط على "مزامنة الطلاب".`,
+        `تم إلغاء تحديد ${MONTH_NAMES[m - 1]} ${y} من الشهور النشطة. الاشتراكات والمديونيات المسجلة ستبقى محفوظة؛ تغيير التقويم لا يلغي دين الطالب.`,
         "warning"
       );
     } else {
@@ -157,14 +157,14 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
   };
 
   const handleFixRollover = async () => {
-    if (!confirm("سيتم حذف الشهور والاشتراكات خارج السنة الدراسية الحالية (مثل 2028). هل أنت متأكد؟")) return;
+    if (!confirm("سيتم تصحيح الشهور النشطة للسنة الدراسية الحالية مع الاحتفاظ بكل الاشتراكات والمديونيات السابقة. هل تريد المتابعة؟")) return;
     setFixing(true);
     try {
       const result = await SubscriptionsService.fixRolloverData();
       if (result.removedYears.length === 0) {
         addToast("لا توجد بيانات خاطئة للإصلاح", "info");
       } else {
-        addToast(`✓ تم الإصلاح: حُذفت سنوات ${result.removedYears.join(", ")} وحُذف ${result.deletedSubscriptions} اشتراك غير مدفوع`, "success");
+        addToast(`✓ تم تصحيح الشهور النشطة للسنوات ${result.removedYears.join(", ")} مع الاحتفاظ بالاشتراكات والمديونيات`, "success");
         onToast(`✓ تم إصلاح البيانات بنجاح`, "success");
         // تحديث الـ UI بالشهور الصحيحة
         const { startYear, endYear } = getCurrentAcademicYear();

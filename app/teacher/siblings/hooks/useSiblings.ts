@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { StudentsService } from "@/lib/services/studentsService";
+import { canSaveFamilyDiscount, validateFamilyDiscount } from "@/lib/utils/familyDiscount";
 import { GroupsService } from "@/lib/services/groupsService";
 import { AuthService } from "@/lib/services/authService";
 import { Group, Student } from "@/lib/types";
@@ -133,18 +134,8 @@ export function useSiblings() {
     const pct = discountPercent === "" ? null : Number(discountPercent);
     const bpct = bookDiscountPercent === "" ? null : Number(bookDiscountPercent);
 
-    // لازم يكون فيه خصم واحد على الأقل أكبر من صفر
-    const hasAny = (pct != null && pct > 0) || (bpct != null && bpct > 0);
-    if (!hasAny) {
-      setToast({ message: "أدخل نسبة خصم واحدة على الأقل", type: "error" });
-      return;
-    }
-    if (pct !== null && (isNaN(pct) || pct < 0 || pct > 100)) {
-      setToast({ message: "نسبة خصم الاشتراك يجب أن تكون بين 1 و 100", type: "error" });
-      return;
-    }
-    if (bpct !== null && (isNaN(bpct) || bpct < 0 || bpct > 100)) {
-      setToast({ message: "نسبة خصم الكتب يجب أن تكون بين 1 و 100", type: "error" });
+    if (!canSaveFamilyDiscount(discountPercent, bookDiscountPercent)) {
+      setToast({ message: validateFamilyDiscount(discountPercent) || validateFamilyDiscount(bookDiscountPercent) || "أدخل نسبة خصم واحدة أكبر من صفر على الأقل", type: "error" });
       return;
     }
 

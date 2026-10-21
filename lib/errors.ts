@@ -105,5 +105,10 @@ export function getCameraErrorMessage(err: unknown): string {
     // "لا توجد كاميرا" is already Arabic — from our own throw inside scan hooks
     if (/[\u0600-\u06FF]/.test(err.message)) return err.message;
   }
+  const details = typeof err === "string" ? err : err instanceof Error ? `${err.name} ${err.message}` : "";
+  if (/NotAllowedError|PermissionDeniedError|permission denied|permission dismissed/i.test(details)) return "إذن الكاميرا مرفوض. اسمح باستخدام الكاميرا من إعدادات المتصفح ثم حاول مرة أخرى.";
+  if (/NotFoundError|DevicesNotFoundError|no camera|device not found/i.test(details)) return "لم يتم العثور على كاميرا متاحة على هذا الجهاز.";
+  if (/NotReadableError|TrackStartError|could not start video/i.test(details)) return "الكاميرا مشغولة أو تعذر الوصول إليها. أغلق التطبيقات التي تستخدمها وحاول مرة أخرى.";
+  if (/SecurityError|secure context|https/i.test(details)) return "الكاميرا تحتاج فتح الموقع عبر اتصال HTTPS آمن.";
   return CAMERA_ERROR;
 }

@@ -7,6 +7,7 @@ import { StudentsService } from "@/lib/services/studentsService";
 import { Button } from "@/components/ui/Button";
 import { getErrorMessage } from "@/lib/errors";
 import { parseCsv } from "@/lib/parseCsv";
+import { validateStudentName } from "@/lib/utils/studentName";
 
 const CHUNK_SIZE = 100; // طلاب لكل request
 
@@ -28,14 +29,14 @@ interface Props {
   onDone: (students: Student[]) => void;
 }
 
-function parseCSV(text: string, grades: Grade[], groups: Group[], defaultMonth: number, defaultYear: number): ParsedRow[] {
+export function parseCSV(text: string, grades: Grade[], groups: Group[], defaultMonth: number, defaultYear: number): ParsedRow[] {
   const lines = parseCsv(text);
   // تخطي الـ header لو موجود
   const start = /^(اسم الطالب|name)$/i.test(lines[0]?.[0] || "") ? 1 : 0;
 
-  return lines.slice(start).map((cols) => {
+  return lines.slice(start).map((cols, index) => {
     const name = cols[0] || "";
-    if (!name) return { name: "", grade_id: null, group_id: null, parent_phone: "", subscription_start_month: defaultMonth, subscription_start_year: defaultYear, _error: "اسم فارغ" };
+    const nameError = validateStudentName(name);
 
     const gradeRaw = cols[1] || "";
     const groupRaw = cols[2] || "";
@@ -48,6 +49,11 @@ function parseCSV(text: string, grades: Grade[], groups: Group[], defaultMonth: 
 
     const phoneErr = phone && !/^01\d{9}$/.test(phone) ? "رقم هاتف غير صحيح" : "";
 
+    const error = nameError || phoneErr || (!grade && gradeRaw ? `السنة "${gradeRaw}" غير موجودة` : "")
+      || (!group && groupRaw ? `المجموعة "${groupRaw}" غير موجودة` : "")
+      || (group && grade && group.grade_id !== grade.id ? "المجموعة لا تتبع السنة المحددة" : "")
+      || (!Number.isInteger(month) || month < 1 || month > 12 ? "شهر البداية غير صحيح" : "")
+      || (!Number.isInteger(year) || year < 2000 || year > 2100 ? "سنة البداية غير صحيحة" : "");
     return {
       name,
       grade_id: grade?.id || null,
@@ -55,11 +61,7 @@ function parseCSV(text: string, grades: Grade[], groups: Group[], defaultMonth: 
       parent_phone: phone,
       subscription_start_month: month,
       subscription_start_year: year,
-      _error: phoneErr || (!grade && gradeRaw ? `السنة "${gradeRaw}" غير موجودة` : "")
-        || (!group && groupRaw ? `المجموعة "${groupRaw}" غير موجودة` : "")
-        || (group && grade && group.grade_id !== grade.id ? "المجموعة لا تتبع السنة المحددة" : "")
-        || (!Number.isInteger(month) || month < 1 || month > 12 ? "شهر البداية غير صحيح" : "")
-        || (!Number.isInteger(year) || year < 2000 || year > 2100 ? "سنة البداية غير صحيحة" : ""),
+      _error: error ? `الصف ${index + start + 1}: ${error}` : "",
     };
   });
 }
@@ -207,6 +209,10 @@ export function BulkImportModal({ grades, groups, activeMonths, onClose, onDone 
                 <div style={{ padding: "5px 12px", fontSize: "0.78rem", color: "var(--text-muted)" }}>... و {rows.length - 5} صف آخر</div>
               )}
             </div>
+            {invalidRows.length > 0 && <div role="alert" className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-red-500/25 bg-red-500/10 p-3 text-xs text-red-300 space-y-2">
+              <p>لن يتم استيراد الصفوف التالية. صحح الملف أو استورد الصفوف الصحيحة فقط:</p>
+              {invalidRows.map((row, index) => <p key={index}>{row._error}</p>)}
+            </div>}
           </div>
         )}
 
