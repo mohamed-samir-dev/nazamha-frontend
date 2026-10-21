@@ -247,6 +247,7 @@ export interface Group {
 }
 
 export interface Student {
+  card_qr_token?: string;
   id: string;
   name: string;
   code?: string;

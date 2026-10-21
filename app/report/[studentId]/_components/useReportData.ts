@@ -16,7 +16,9 @@ export function useReportData(studentId: string, month?: number, year?: number) 
     setLoading(true); setError(""); setReport(null);
     async function load() {
       try {
-        const res = await fetch(`${API_BASE}/public/student/${studentId}?token=${encodeURIComponent(new URLSearchParams(window.location.search).get("token") || "")}${month ? `&month=${month}` : ""}${year ? `&year=${year}` : ""}`, { signal: controller.signal, cache: "no-store" });
+        const search = new URLSearchParams(window.location.search);
+        const access = search.has("card") ? `card=${encodeURIComponent(search.get("card") || "")}` : `token=${encodeURIComponent(search.get("token") || "")}`;
+        const res = await fetch(`${API_BASE}/public/student/${studentId}?${access}${month ? `&month=${month}` : ""}${year ? `&year=${year}` : ""}`, { signal: controller.signal, cache: "no-store", referrerPolicy: "no-referrer" });
         if (!res.ok) { setError("لم يتم العثور على بيانات الطالب."); return; }
         const data = await res.json();
         if (controller.signal.aborted) return;

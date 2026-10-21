@@ -1,5 +1,11 @@
-/** The card identifies a student, never a group or an expiring report token. */
-export function getStudentQRValue(student: { id: string; center_student_code?: string | null }): string {
+/** All student cards use the same permanent, read-only parent-report URL. */
+export function getStudentQRValue(student: { id: string; center_student_code?: string | null; card_qr_token?: string }): string {
+  if (student.card_qr_token) {
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    const identity = student.center_student_code ? `&identity=${encodeURIComponent(student.center_student_code)}` : "";
+    return `${origin}/report/${encodeURIComponent(student.id)}?card=${encodeURIComponent(student.card_qr_token)}${identity}`;
+  }
+  // Compatibility with old API responses and already printed identity cards.
   return student.center_student_code || student.id;
 }
 
@@ -8,6 +14,8 @@ export function parseQRText(text: string): { type: "center" | "legacy"; value: s
   const centerMatch = trimmed.match(/\/report\/c\/([^/?#]+)/);
   if (centerMatch) return { type: "center", value: decodeValue(centerMatch[1]) };
   const legacyMatch = trimmed.match(/\/report\/([^/?#]+)/);
+  const sharedIdentity = legacyMatch && trimmed.match(/[?&]identity=([^&#]+)/);
+  if (sharedIdentity) return { type: "center", value: decodeValue(sharedIdentity[1]) };
   if (legacyMatch) return { type: "legacy", value: decodeValue(legacyMatch[1]) };
   return { type: "legacy", value: trimmed };
 }

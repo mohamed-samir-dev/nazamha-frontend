@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { getStudentReportLink } from "@/lib/services/studentReportLink";
+import { getStudentQRValue } from "@/lib/utils/qrParser";
 import { preparePrintInPlace } from "@/lib/printInPlace";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight } from "lucide-react";
@@ -169,16 +170,16 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
 
           {/* QR Code */}
           <div className="student-hero-qr" style={{ width: 156, height: "auto", minWidth: 156, flexDirection: "column", padding: 10, gap: 4 }}>
-            {reportLink ? <QRCodeSVG
+            {student.card_qr_token ? <QRCodeSVG
               value={
-                reportLink
+                getStudentQRValue(student)
               }
               size={132}
               level="M"
               marginSize={4}
               style={{ flexShrink: 0 }}
-            /> : <span role="status">{reportLinkError ? "تعذر تحميل رابط التقرير" : "جاري تجهيز التقرير…"}</span>}
-            <small style={{ display: "block", fontSize: 10, marginTop: 6, color: "#334155", textAlign: "center" }}>تقرير الشهر · الرابط صالح 7 أيام</small>
+            /> : <span role="status">تعذر تجهيز QR الطالب. أعد تحميل الصفحة.</span>}
+            <small style={{ display: "block", fontSize: 10, marginTop: 6, color: "#334155", textAlign: "center" }}>كارت موحد للحضور والدفع وتقرير ولي الأمر</small>
           </div>
 
           {/* Info */}
