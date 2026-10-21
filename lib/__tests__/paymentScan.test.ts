@@ -8,7 +8,7 @@ const mockStart = jest.fn(), mockStop = jest.fn(), mockClear = jest.fn();
 jest.mock('html5-qrcode', () => ({ Html5Qrcode: jest.fn().mockImplementation(() => ({ start: mockStart, stop: mockStop, clear: mockClear })) }));
 let hook: ReturnType<typeof usePaymentScan>, root: Root, host: HTMLDivElement;
 let autoCamera = false;
-const student = { id: 'A', name: 'Audit A', is_suspended: true } as any;
+const student = { id: 'A', code: 'A', name: 'Audit A', is_suspended: true } as any;
 const sub = (id: string, month: number, status = 'due', year = 2026) => ({ id, student_id: 'A', month, year, status, amount: 200, discount: 0 });
 const onStudentUpdated = jest.fn(), onSubsPaid = jest.fn(), onStudentChanged = jest.fn();
 function Harness() { hook = usePaymentScan({ ownerId: 'teacher', autoCamera, students: [], groups: [], onStudentUpdated, onSubsPaid, onStudentChanged }); return null; }
@@ -131,4 +131,43 @@ test('a scanned QR displays the resolved student code rather than the QR payload
   await act(async () => mockStart.mock.calls[0][2]('https://example.invalid/student/permanent-id'));
   expect(hook.manualCode).toBe('CENTER-009');
   expect(SubscriptionsService.pay).not.toHaveBeenCalled();
+});
+test('success feedback expires in two seconds and can be dismissed immediately', async () => {
+  await search(); await act(async () => hook.handleConfirmPayment());
+  expect(hook.flashMsg?.type).toBe('success');
+  await act(async () => jest.advanceTimersByTime(1999));
+  expect(hook.flashMsg?.type).toBe('success');
+  await act(async () => jest.advanceTimersByTime(1));
+  expect(hook.flashMsg).toBeNull();
+  await search(); await act(async () => hook.handleConfirmPayment());
+  expect(hook.canDismissFeedback).toBe(true);
+  await act(async () => hook.dismissFeedback());
+  expect(hook.flashMsg).toBeNull(); expect(SubscriptionsService.pay).toHaveBeenCalledTimes(2);
+});
+test('next camera scan does not wait for success feedback and old timers cannot hide review', async () => {
+  const decode=await automaticCamera([sub('oct',10)]);
+  await act(async()=>decode('A'));
+  expect(hook.flashMsg?.type).toBe('success');
+  (SubscriptionsService.lookupPaymentStudent as jest.Mock).mockResolvedValue({student:{...student,id:'B',code:'B'},subscriptions:[sub('sept',9),sub('oct',10)]});
+  await act(async()=>decode('B'));
+  expect(SubscriptionsService.lookupPaymentStudent).toHaveBeenCalledTimes(2);
+  expect(hook.currentStudent?.id).toBe('B');
+  await act(async()=>jest.advanceTimersByTime(10000));
+  expect(hook.flashMsg?.type).toBe('warn'); expect(hook.currentStudent?.id).toBe('B');
+  expect(hook.canDismissFeedback).toBe(false);
+  await act(async()=>hook.dismissFeedback());
+  expect(hook.flashMsg?.type).toBe('warn');
+});
+test('uncertain payment feedback cannot expire or be dismissed', async () => {
+  (SubscriptionsService.pay as jest.Mock).mockRejectedValue(new Error('offline'));
+  await search(); await act(async()=>hook.handleConfirmPayment());
+  await act(async()=>{jest.advanceTimersByTime(10000); hook.dismissFeedback();});
+  expect(hook.uncertain).toBe(true); expect(hook.flashMsg?.type).toBe('error');
+  expect(hook.canClose()).toBe(false); expect(hook.canDismissFeedback).toBe(false);
+});
+test('already settled information disappears without sending a payment', async()=>{
+  (SubscriptionsService.lookupPaymentStudent as jest.Mock).mockResolvedValue({student,subscriptions:[sub('oct',10,'paid')]});
+  await search(); expect(hook.flashMsg?.type).toBe('warn');
+  await act(async()=>jest.advanceTimersByTime(2000));
+  expect(hook.flashMsg).toBeNull(); expect(SubscriptionsService.pay).not.toHaveBeenCalled();
 });

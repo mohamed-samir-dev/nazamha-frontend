@@ -49,6 +49,20 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
 
   const storageKey = ownerId ? `payment-scan:pending:${ownerId}` : null;
   const clearAttempt = () => { attempt.current = null; if (storageKey) { try { sessionStorage.removeItem(storageKey); } catch {} } };
+  const dismissFeedback = useCallback(() => {
+    if (busy.current || saving.current || cardOpen.current || attempt.current) return;
+    setFlashMsg(null);
+  }, []);
+  // Feedback never delays the next scan. Only settled, informational results expire.
+  useEffect(() => {
+    if (!flashMsg || flashMsg.type === "error" || currentStudent || loadingCode || isConfirming || uncertain) return;
+    const feedback = flashMsg;
+    const timer = setTimeout(() => {
+      if (busy.current || saving.current || cardOpen.current || attempt.current) return;
+      setFlashMsg(current => current === feedback ? null : current);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [flashMsg, currentStudent, loadingCode, isConfirming, uncertain]);
   const resolveAmount = (sub: MonthlySubscription, _student?: Student) => sub.amount - sub.discount;
   const stopScanner = useCallback(async () => {
     cameraEpoch.current++;
@@ -241,5 +255,7 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
   return { now, selectedMonth, setSelectedMonth, selectedYear, setSelectedYear, scanning, isStarting, paidList, historyError, refreshHistory,
     manualCode, setManualCode, dueMonths, currentStudent, selectedSubs, setSelectedSubs, isConfirming, loadingCode, flashMsg,
     totalSelected, resolveAmount, dismissCard, handleManualSubmit, handleConfirmPayment, startScanner, stopScanner, reloadStudent,
-    uncertain, canClose: () => !saving.current && !attempt.current, locked: isConfirming || uncertain };
+    uncertain, dismissFeedback,
+    canDismissFeedback: !!flashMsg && !currentStudent && !loadingCode && !isConfirming && !uncertain,
+    canClose: () => !saving.current && !attempt.current, locked: isConfirming || uncertain };
 }
