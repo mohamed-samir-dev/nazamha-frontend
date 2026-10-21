@@ -24,6 +24,7 @@ export function DueMonthsCard({
   totalSelected, resolveAmount, onToggle, onConfirm, onDismiss, cardRef, locked = false, uncertain = false,
 }: Props) {
   const oldMonths = dueMonths.filter(d => d.isOld);
+  const differentDiscounts = new Set(dueMonths.map(({sub}) => sub.amount > 0 ? Math.round(sub.discount / sub.amount * 10000) : 0)).size > 1;
 
   return (
     <div ref={cardRef} data-payment-review className="rounded-2xl overflow-hidden border border-amber-500/30 bg-gradient-to-b from-amber-500/5 to-black/20 shadow-[0_0_20px_rgba(245,158,11,0.06)]">
@@ -61,6 +62,7 @@ export function DueMonthsCard({
       )}
 
       {/* Months list */}
+      {differentDiscounts && <p role="note" className="px-4 py-3 text-xs leading-relaxed text-amber-300 border-b border-amber-500/15 bg-amber-500/5">الخصم المسجّل مختلف بين الشهور. راجع السعر الأساسي والخصم والصافي قبل تأكيد الدفع.</p>}
       <div className="divide-y divide-white/4">
         {dueMonths.map(d => {
           const net = resolveAmount(d.sub, student);
@@ -92,12 +94,14 @@ export function DueMonthsCard({
                 </span>
               </span>
               <div className="text-left shrink-0 flex flex-col items-end">
-                <span className="text-sm font-bold text-teal-400 font-mono whitespace-nowrap">
+                <span className="text-sm font-bold text-teal-400 whitespace-nowrap">
+                  <span className="text-xs font-normal">الصافي </span>
                   {Number.isFinite(net) ? `${net.toLocaleString("ar-EG")} ج` : "مبلغ غير صحيح"}
                 </span>
+                <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap">الأساسي {d.sub.amount.toLocaleString("ar-EG")} ج</span>
                 {d.sub.discount > 0 && (
-                  <span className="text-[0.65rem] text-[var(--text-muted)] whitespace-nowrap">
-                    خصم {d.sub.discount}
+                  <span className="text-xs text-[var(--text-secondary)] whitespace-nowrap">
+                    خصم {d.sub.amount > 0 ? (d.sub.discount / d.sub.amount * 100).toLocaleString("ar-EG", {maximumFractionDigits: 2}) : "٠"}٪ · {d.sub.discount.toLocaleString("ar-EG")} ج
                   </span>
                 )}
               </div>
