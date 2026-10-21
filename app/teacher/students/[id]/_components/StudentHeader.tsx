@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { getStudentReportLink } from "@/lib/services/studentReportLink";
 import { getStudentQRValue } from "@/lib/utils/qrParser";
 import { preparePrintInPlace } from "@/lib/printInPlace";
 import { QRCodeSVG } from "qrcode.react";
@@ -34,8 +33,7 @@ interface Props {
 const arabicMonths = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
 export function StudentHeader({ student, group, grade, subs, onDelete, onAddPayment, onStudentUpdate, onNavigateToBooks }: Props) {
-  const [reportLink, setReportLink] = useState("");
-  const [reportLinkError, setReportLinkError] = useState(false);
+  const reportLink = student.card_qr_token ? getStudentQRValue(student) : "";
   const preparedReport = useRef<ReturnType<typeof preparePrintInPlace> | null>(null);
   const [printRevision, setPrintRevision] = useState(0);
   const [printing, setPrinting] = useState(false);
@@ -55,12 +53,6 @@ export function StudentHeader({ student, group, grade, subs, onDelete, onAddPaym
     preparedReport.current = prepared;
     return () => { prepared.dispose(); if (preparedReport.current === prepared) preparedReport.current = null; };
   }, [reportLink, student, subs, printRevision]);
-  useEffect(() => {
-    let active = true;
-    setReportLink(""); setReportLinkError(false);
-    getStudentReportLink(student.id).then(link => { if (active) setReportLink(link); }).catch(() => { if (active) setReportLinkError(true); });
-    return () => { active = false; };
-  }, [student.id]);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [suspendLoading, setSuspendLoading] = useState(false);
   const isSuspended = student.is_suspended === true && (
