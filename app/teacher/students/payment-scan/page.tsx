@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, ScanLine, ShieldCheck, Keyboard, UserRound, Camera, CircleCheck } from "lucide-react";
+import { ArrowRight, ScanLine, ShieldCheck, Keyboard, Camera, CircleCheck } from "lucide-react";
 import { useDashboard } from "@/lib/DashboardContext";
 import { usePaymentScan } from "../_components/payment-scan/usePaymentScan";
 import { ScannerView } from "../_components/payment-scan/ScannerView";
@@ -20,7 +20,7 @@ export default function PaymentScanPage() {
 }
 function PaymentDesk({ownerId}: {ownerId: string}) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const resultRef = useRef<HTMLElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const lastReview = useRef("");
   const state = usePaymentScan({ownerId, autoCamera: true, students: [], groups: [], onStudentUpdated: noop});
   useEffect(() => {
@@ -55,22 +55,22 @@ function PaymentDesk({ownerId}: {ownerId: string}) {
       <section className={styles.panel}>
         <div className={styles.panelHeading}><span><Camera size={19} /> مسح كارت الطالب</span><small className={state.scanning ? styles.live : ""}>{state.isConfirming ? "جاري تسجيل الدفع" : state.loadingCode ? "جاري التعرف" : state.currentStudent ? "بانتظار المراجعة" : state.scanning ? "الكاميرا جاهزة" : "الكاميرا متوقفة"}</small></div>
         <div className={styles.camera}><ScannerView scanning={state.scanning} isStarting={state.isStarting} disabled={state.locked || state.loadingCode || !!state.currentStudent} onStart={state.startScanner} onStop={state.stopScanner} /></div>
-        <div className={styles.hint}><CircleCheck size={17} /><p>لو المستحق هو الشهر المختار فقط، هنسجّل الدفع مباشرة. المتأخرات والإيقاف وأي مبلغ محتاج مراجعة، هيظهروا للتأكيد.</p></div>
-        <div className={styles.manual}><h2><Keyboard size={17} /> إدخال الكود يدويًا</h2><p>مش معاك الكارت؟ اكتب الكود وراجع البيانات قبل الدفع.</p><ManualInput value={state.manualCode} onChange={state.setManualCode} onSubmit={state.handleManualSubmit} loading={state.loadingCode} disabled={state.locked} /></div>
-      </section>
-      <section ref={resultRef} tabIndex={-1} className={`${styles.panel} ${styles.resultPanel}`} aria-label="نتيجة المسح">
-        <div className={styles.panelHeading}><span><UserRound size={19} /> نتيجة المسح</span><small>{ARABIC_MONTHS[state.selectedMonth]} {state.selectedYear}</small></div>
+      <div ref={resultRef} tabIndex={-1} className={styles.resultPanel} aria-label="حالة الطالب والدفع">
         <div className={styles.result}>
-          <FlashMessage loading={state.loadingCode || state.isConfirming} saving={state.isConfirming} flashMsg={state.flashMsg} />
+          <FlashMessage loading={state.loadingCode || state.isConfirming} saving={state.isConfirming} flashMsg={state.flashMsg?.type === "success" ? null : state.flashMsg} />
           {state.uncertain && !state.currentStudent && <button className="btn btn-primary" disabled={state.isConfirming} onClick={state.handleConfirmPayment}>التحقق وإعادة نفس العملية</button>}
           {state.currentStudent && state.dueMonths ? <>
             {state.currentStudent.is_suspended && <p className={styles.warning}>الطالب موقوف — راجع سبب الإيقاف قبل تأكيد استلام الدفع.</p>}
             <DueMonthsCard student={state.currentStudent} dueMonths={state.dueMonths} selectedSubs={state.selectedSubs} totalSelected={state.totalSelected} isConfirming={state.isConfirming} locked={state.locked} uncertain={state.uncertain} resolveAmount={state.resolveAmount} cardRef={cardRef} onConfirm={state.handleConfirmPayment} onDismiss={state.dismissCard} onToggle={id => state.setSelectedSubs(old => {const next=new Set(old); next.has(id)?next.delete(id):next.add(id); return next;})} />
             <button className={styles.refresh} disabled={state.locked || state.loadingCode} onClick={state.reloadStudent}>تحديث المستحقات</button>
-          </> : !state.uncertain && !state.loadingCode && !state.flashMsg && <div className={styles.empty}><div><ScanLine size={42} /></div><h2>جاهزين للطالب التالي</h2><p>شغّل الكاميرا ووجّه الكارت داخل الإطار.<br />بيانات الطالب ونتيجة الدفع هتظهر هنا.</p></div>}
-          {state.flashMsg?.type === "success" && <div className={styles.success}><CircleCheck size={40} /><h2>تم تسجيل الدفع بنجاح</h2><p>ابعد الكارت وامسح كارت الطالب التالي.</p></div>}
+          </> : null}
+          {state.flashMsg?.type === "success" && <div className={styles.success} role="status" aria-live="polite"><CircleCheck size={40} /><h2>تم تسجيل الدفع بنجاح</h2><strong>{state.paidList[0]?.name}</strong><span className={styles.paidAmount}>{state.paidList[0]?.amount.toLocaleString("ar-EG")} <small>ج.م</small></span><p>{state.paidList[0]?.months.map(m => `${ARABIC_MONTHS[m.month - 1]} ${m.year}`).join("، ")}</p><p>ابعد الكارت وامسح كارت الطالب التالي.</p></div>}
         </div>
+      </div>
+        <div className={styles.hint}><CircleCheck size={17} /><p>لو المستحق هو الشهر المختار فقط، هنسجّل الدفع مباشرة. المتأخرات والإيقاف وأي مبلغ محتاج مراجعة، هيظهروا للتأكيد.</p></div>
+        <div className={styles.manual}><h2><Keyboard size={17} /> إدخال الكود يدويًا</h2><p>مش معاك الكارت؟ اكتب الكود وراجع البيانات قبل الدفع.</p><ManualInput value={state.manualCode} onChange={state.setManualCode} onSubmit={state.handleManualSubmit} loading={state.loadingCode} disabled={state.locked} /></div>
       </section>
+
     </div>
   </div>;
 }

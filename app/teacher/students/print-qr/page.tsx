@@ -404,7 +404,7 @@ function PrintQRContent() {
     }
   };
 
-  const handleExportCSV = async (withImages = false) => {
+  const handleExportExcel = async () => {
     if (isExporting) return;
     setIsExporting(true);
     try {
@@ -425,38 +425,22 @@ function PrintQRContent() {
         return;
       }
 
-      const rows = [
-        ["الاسم", "الكود", "السنة الدراسية", "المجموعة", "قيمة QR"],
-        ...exportList.map(s => [
-          s.name,
-          s.center_student_code || s.code || "",
-          s.grade_id ? grades[s.grade_id] || "" : "",
-          s.group_id ? groups[s.group_id] || "" : "",
-          getStudentQRValue(s),
-        ]),
-      ];
-      let blob: Blob;
-      if (withImages) {
-        const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!));
-        const body: string[] = [];
-        for (let i = 0; i < exportList.length; i++) {
-          const image = await QRCode.toDataURL(getStudentQRValue(exportList[i]), { width: 160, margin: 2, errorCorrectionLevel: "M" });
-          body.push(`<tr>${rows[i + 1].map(value => `<td>${escape(value)}</td>`).join("")}<td><img width="128" height="128" src="${image}" alt="QR" /></td></tr>`);
-        }
-        blob = new Blob([`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جدول الطلاب وأكواد QR</title><style>body{font-family:Arial}table{border-collapse:collapse;width:100%}th,td{border:1px solid #aaa;padding:8px;text-align:center;overflow-wrap:anywhere}th{background:#eee}tr{break-inside:avoid}thead{display:table-header-group}@page{size:A4 landscape;margin:12mm}</style></head><body><h1>جدول الطلاب وأكواد QR</h1><table><thead><tr>${[...rows[0], "صورة QR"].map(value => `<th>${escape(value)}</th>`).join("")}</tr></thead><tbody>${body.join("")}</tbody></table></body></html>`], { type: "text/html;charset=utf-8" });
-      } else {
-        const csv = "\uFEFF" + rows.map(r => r.map(v => `"${( /^[\s]*[=+@\-]/.test(String(v)) ? "'" + String(v) : String(v)).replace(/"/g, '""')}"`).join(",")).join("\n");
-        blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      }
+      const { buildStudentQRWorkbook } = await import("@/lib/exportStudentQRWorkbook");
+      const buffer = await buildStudentQRWorkbook(exportList.map(s => ({
+        name: s.name, code: s.center_student_code || s.code || "",
+        grade: s.grade_id ? grades[s.grade_id] || "" : "",
+        group: s.group_id ? groups[s.group_id] || "" : "", qrValue: getStudentQRValue(s),
+      })));
+      const blob = new Blob([new Uint8Array(buffer)], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `students-qr-${selectedStudents.size > 0 ? "selected" : "all"}.${withImages ? "html" : "csv"}`;
+      a.download = `students-qr-${selectedStudents.size > 0 ? "selected" : "all"}.xlsx`;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      console.error("Export CSV error:", err);
-      alert("حدث خطأ أثناء تصدير ملف CSV");
+      console.error("Export Excel error:", err);
+      alert("حدث خطأ أثناء تصدير ملف Excel");
     } finally {
       setIsExporting(false);
     }
@@ -575,19 +559,16 @@ function PrintQRContent() {
                 </span>
               </label>
 
-              <p className="text-xs text-[var(--text-secondary)]">CSV يحتوي قيمة QR. لتحميل جدول بصور الأكواد المدمجة، اختر «جدول بصور QR»؛ يفتح في المتصفح ويعمل بدون إنترنت ويمكن طباعته.</p>
+              <p className="text-xs text-[var(--text-secondary)]">ملف Excel يحتوي بيانات الطلاب وصورة QR فعلية لكل طالب، ويعمل بدون إنترنت.</p>
               {/* Secondary Actions */}
               <div className="flex gap-2">
-                <button type="button" onClick={() => handleExportCSV(true)} disabled={isExporting || total === 0} className="btn btn-secondary">
-                  <Download size={16} /> {isExporting ? "جاري التصدير…" : "جدول بصور QR (HTML)"}
-                </button>
                 <button
-                  onClick={() => handleExportCSV()}
+                  onClick={() => handleExportExcel()}
                   disabled={isExporting || total === 0}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download size={16} />
-                  <span>{isExporting ? "جاري التصدير..." : selectedStudents.size > 0 ? `تصدير المحددة (${selectedStudents.size})` : "تصدير CSV للكل"}</span>
+                  <span>{isExporting ? "جاري التصدير..." : selectedStudents.size > 0 ? `Excel للمحددة (${selectedStudents.size})` : "تنزيل Excel بصور QR"}</span>
                 </button>
                 {selectedStudents.size > 0 && (
                   <button

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import styles from "../siblings.module.css";
 import { Users, Pencil, UserMinus, Check, X, Phone, Tag, Percent, Trash2, UserPlus } from "lucide-react";
 import { SiblingFamily } from "../types";
 import { Group } from "@/lib/types";
@@ -41,7 +42,7 @@ export function FamilyCard({
   const isEmpty = family.members.length === 0;
 
   return (
-    <div className="rounded-none sm:rounded-2xl border-x-0 sm:border-x border-y border-white/8 bg-white/2 hover:bg-white/3 transition-colors overflow-hidden">
+    <div className={styles.family}>
 
       {/* Family Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-white/6">
@@ -55,7 +56,7 @@ export function FamilyCard({
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <input
                 autoFocus
-                value={renameValue}
+                aria-label="اسم العائلة" value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleRename(family.familyId);
@@ -68,13 +69,13 @@ export function FamilyCard({
                 disabled={renameLoading}
                 className="p-1.5 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-400 hover:bg-teal-500/25 transition-colors shrink-0"
               >
-                <Check size={14} />
+                <Check size={14} /><span className="sr-only">حفظ الاسم</span>
               </button>
               <button
                 onClick={() => setRenamingId(null)}
                 className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[var(--text-muted)] hover:bg-white/10 transition-colors shrink-0"
               >
-                <X size={14} />
+                <X size={14} /><span className="sr-only">إلغاء التعديل</span>
               </button>
             </div>
           ) : (
@@ -101,7 +102,7 @@ export function FamilyCard({
               <button
                 onClick={() => handleStartRename(family)}
                 className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors shrink-0"
-                title="تغيير اسم العائلة"
+                aria-label="تغيير اسم العائلة" title="تغيير اسم العائلة"
               >
                 <Pencil size={12} />
               </button>
@@ -133,7 +134,7 @@ export function FamilyCard({
               if (confirm(`هل تريد حذف عائلة "${getFamilyDisplayName(family)}"؟ سيتم فصل جميع الأعضاء وإزالة الخصم.`))
                 handleDeleteFamily(family);
             }}
-            title="حذف العائلة"
+            aria-label={`حذف عائلة ${displayName}`} title="حذف العائلة"
             className="p-1.5 rounded-lg bg-red-500/8 border border-red-500/18 text-red-400 hover:bg-red-500/18 transition-colors"
           >
             <Trash2 size={13} />
@@ -164,16 +165,14 @@ export function FamilyCard({
                 لا يوجد طلاب — لإضافة خصم يجب ربط طالب أولاً
               </span>
             </div>
-            <Link href="/teacher/students">
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/12 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/20 transition-colors whitespace-nowrap">
+            <Link href="/teacher/students" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/12 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/20 transition-colors whitespace-nowrap">
                 <UserPlus size={12} /> إدارة الطلاب
-              </button>
-            </Link>
+              </Link>
           </div>
         )}
 
         {/* Members grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className={styles.members}>
           {family.members.map((student) => {
             const group = getGroup(student.group_id);
             const hasCustomPrice = student.custom_monthly_price != null;
@@ -193,8 +192,8 @@ export function FamilyCard({
                 <button
                   onClick={() => handleUnlink(student)}
                   disabled={isUnlinking}
-                  title="فصل عن العائلة"
-                  className="absolute top-2 left-2 p-1 rounded-md bg-red-500/8 border border-red-500/15 text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                  aria-label={`فصل ${student.name} عن العائلة`} title="فصل عن العائلة"
+                  className="absolute top-2 left-2 p-1 rounded-md bg-red-500/8 border border-red-500/15 text-red-400 hover:bg-red-500/20 opacity-100 transition-all disabled:opacity-50"
                 >
                   {isUnlinking
                     ? <span className="block w-2.5 h-2.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />

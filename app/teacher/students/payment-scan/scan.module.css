@@ -71,3 +71,8 @@
   .manual > div > div, .manual > div > button { flex-basis: 100%; width: 100%; }
   .auto { font-size: 10px; padding-inline: 8px; }
 }
+/* All scan feedback belongs to the scanner card. */
+.columns { grid-template-columns: minmax(0, 1fr); max-width: 800px; margin-inline: auto; }
+.result:empty { display: none; }
+.success { padding: 16px; border: 1px solid rgba(20,184,166,.3); border-radius: 14px; background: rgba(20,184,166,.07); }
+.paidAmount { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; } .paidAmount small { font-size: 14px; font-weight: 500; }
