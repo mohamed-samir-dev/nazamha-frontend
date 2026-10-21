@@ -16,6 +16,7 @@ import { GroupsService } from "@/lib/services/groupsService";
 import { Student, Group, Grade } from "@/lib/types";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
+import { api } from "@/lib/apiClient";
 
 const PAGE_SIZE = 20;
 
@@ -425,11 +426,13 @@ function PrintQRContent() {
         return;
       }
 
-      const { buildStudentQRWorkbook } = await import("@/lib/exportStudentQRWorkbook");
+      // Export must await its own reference data; page metadata loads separately.
+      const [{ buildStudentQRWorkbook, resolveStudentQRLabels }, exportGrades, exportGroups] = await Promise.all([
+        import("@/lib/exportStudentQRWorkbook"), api.get<Grade[]>("/grades"), api.get<Group[]>("/groups"),
+      ]);
       const buffer = await buildStudentQRWorkbook(exportList.map(s => ({
         name: s.name, code: s.center_student_code || s.code || "",
-        grade: s.grade_id ? grades[s.grade_id] || "" : "",
-        group: s.group_id ? groups[s.group_id] || "" : "", qrValue: getStudentQRValue(s),
+        ...resolveStudentQRLabels(s, exportGrades, exportGroups), qrValue: getStudentQRValue(s),
       })));
       const blob = new Blob([new Uint8Array(buffer)], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
       const url = URL.createObjectURL(blob);
@@ -440,7 +443,7 @@ function PrintQRContent() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error("Export Excel error:", err);
-      alert("حدث خطأ أثناء تصدير ملف Excel");
+      alert(err instanceof Error ? err.message : "حدث خطأ أثناء تصدير ملف Excel");
     } finally {
       setIsExporting(false);
     }

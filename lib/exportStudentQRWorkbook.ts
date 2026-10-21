@@ -2,6 +2,20 @@ import QRCode from "qrcode";
 
 export interface StudentQRExportRow { name: string; code: string; grade: string; group: string; qrValue: string }
 
+type Relation = string | {id?: string; _id?: string; name?: string} | null | undefined;
+type NamedRecord = {id?: string; _id?: string; name: string; grade_id?: Relation};
+const relationId = (value: Relation) => typeof value === "string" ? value : value?.id || value?._id || "";
+export function resolveStudentQRLabels(student: {grade_id?: Relation; group_id?: Relation}, grades: NamedRecord[], groups: NamedRecord[]) {
+  const groupId = relationId(student.group_id);
+  const group = groups.find(item => relationId(item) === groupId);
+  const gradeId = relationId(student.grade_id) || relationId(group?.grade_id);
+  const grade = grades.find(item => relationId(item) === gradeId);
+  const gradeName = grade?.name || (typeof student.grade_id === "object" ? student.grade_id?.name : "");
+  const groupName = group?.name || (typeof student.group_id === "object" ? student.group_id?.name : "");
+  if ((gradeId && !gradeName) || (groupId && !groupName)) throw new Error("تعذر تحديد اسم السنة أو المجموعة لبعض الطلاب. أعد تحميل البيانات وحاول التصدير مرة أخرى.");
+  return {grade: gradeName || "غير محددة", group: groupName || "بدون مجموعة"};
+}
+
 /** Real embedded PNG images: the workbook does not depend on external URLs. */
 export async function buildStudentQRWorkbook(rows: StudentQRExportRow[]) {
   const { Workbook } = await import("exceljs");

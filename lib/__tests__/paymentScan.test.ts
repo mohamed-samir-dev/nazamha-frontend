@@ -125,3 +125,10 @@ test('manual input still requires confirmation when camera auto mode is enabled'
   await search();
   expect(SubscriptionsService.pay).not.toHaveBeenCalled();
 });
+test('a scanned QR displays the resolved student code rather than the QR payload', async () => {
+  (SubscriptionsService.lookupPaymentStudent as jest.Mock).mockResolvedValue({student:{...student,code:'GROUP-012',center_student_code:'CENTER-009'},subscriptions:[sub('oct',10)]});
+  await act(async () => hook.startScanner());
+  await act(async () => mockStart.mock.calls[0][2]('https://example.invalid/student/permanent-id'));
+  expect(hook.manualCode).toBe('CENTER-009');
+  expect(SubscriptionsService.pay).not.toHaveBeenCalled();
+});
