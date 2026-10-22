@@ -9,6 +9,16 @@ let host:HTMLDivElement,root:Root;
 function Harness(){const [subs,setSubs]=useState(rows);return React.createElement(StudentPaymentCard,{studentId:'student',initialSubs:subs,onChanged:setSubs});}
 beforeEach(async()=>{(globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;jest.clearAllMocks();host=document.createElement('div');document.body.append(host);root=createRoot(host);await act(async()=>root.render(React.createElement(Harness)));});
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();});
+test('cancelling a paid month requires the in-page confirmation and keeping payment sends nothing',async()=>{
+ await act(async()=>root.render(React.createElement(StudentPaymentCard,{studentId:'student',initialSubs:[{...rows[0],status:'paid'}]})));
+ await act(async()=>host.querySelector<HTMLElement>('[role="button"]')!.click());
+ expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+ expect(SubscriptionsService.updateSubscription).not.toHaveBeenCalled();
+ const keep=Array.from(host.querySelectorAll('button')).find(b=>b.textContent==='الاحتفاظ بالسداد')!;
+ await act(async()=>keep.click());
+ expect(host.querySelector('[role="dialog"]')).toBeNull();
+ expect(SubscriptionsService.updateSubscription).not.toHaveBeenCalled();
+});
 test('different month saves resolving out of order cannot erase a pending choice',async()=>{
  const finish:Record<string,(v:any)=>void>={};
  (SubscriptionsService.updateSubscription as jest.Mock).mockImplementation(id=>new Promise(resolve=>{finish[id]=resolve;}));

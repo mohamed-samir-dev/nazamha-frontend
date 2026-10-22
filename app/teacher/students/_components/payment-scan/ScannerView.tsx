@@ -21,7 +21,6 @@ export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = 
         className="relative rounded-xl sm:rounded-2xl overflow-hidden bg-black/40 border border-[var(--border-color)] flex items-center justify-center transition-all duration-300"
         style={{ 
           minHeight: scanning ? 200 : 140,
-          maxHeight: scanning ? 280 : undefined,
         }}
       >
         {/* Idle overlay */}
@@ -39,7 +38,7 @@ export function ScannerView({ scanning, isStarting, onStart, onStop, disabled = 
         {/* QR reader div */}
         <div
           id={SCANNER_DIV_ID}
-          className="w-full h-full"
+          className="w-full h-full max-w-[640px] mx-auto"
           style={{ 
             minHeight: scanning ? 200 : 1,
             opacity: scanning ? 1 : 0,

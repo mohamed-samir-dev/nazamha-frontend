@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { CheckCircle, XCircle, MinusCircle, Gift } from "lucide-react";
 import { MonthlySubscription, SubscriptionStatus } from "@/lib/types";
 import { SubscriptionsService } from "@/lib/services/subscriptionsService";
+import { Modal } from "@/components/ui/Modal";
 
 const arabicMonths = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
@@ -31,6 +32,7 @@ export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props)
   const [error, setError] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState("");
+  const [cancelSub, setCancelSub] = useState<MonthlySubscription | null>(null);
   const pending = useRef(new Map<string, MonthlySubscription>());
   const confirmed = useRef(initialSubs ?? []);
   const display = (rows: MonthlySubscription[]) => rows.map(s => pending.current.get(getId(s)) ?? s);
@@ -46,11 +48,12 @@ export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props)
       .finally(() => setLoading(false));
   }, [studentId, initialSubs]);
 
-  const handleToggle = async (sub: MonthlySubscription) => {
+  const handleToggle = async (sub: MonthlySubscription, confirmedCancellation = false) => {
     const subId = getId(sub);
     const status = sub.status?.trim() as SubscriptionStatus;
     if (!subId || status === "not_due" || status === "exempt" || pending.current.has(subId)) return;
-    if (status === "paid" && !window.confirm("إلغاء سداد هذا الشهر سيعيده إلى المديونية. هل تريد المتابعة؟")) return;
+    if (status === "paid" && !confirmedCancellation) { setCancelSub(sub); return; }
+    setCancelSub(null);
     const newStatus: SubscriptionStatus = status === "paid" ? "due" : "paid";
     setSaveError("");
     pending.current.set(subId, { ...sub, status: newStatus });
@@ -134,6 +137,13 @@ export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props)
         <div style={{ height: "100%", width: `${percent}%`, background: percent >= 80 ? "#10b981" : percent >= 50 ? "#f59e0b" : "#ef4444", borderRadius: "3px", transition: "width 0.5s ease" }} />
       </div>
 
+      <Modal isOpen={!!cancelSub} title="إلغاء سداد شهر" onClose={() => setCancelSub(null)}>
+        <p style={{ color: "var(--text-secondary)", lineHeight: 1.8 }}>إلغاء سداد {cancelSub ? `${arabicMonths[cancelSub.month - 1]} ${cancelSub.year}` : ""} سيعيد قيمة الشهر إلى مديونية الطالب. هل تريد المتابعة؟</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
+          <button type="button" className="btn btn-secondary" onClick={() => setCancelSub(null)}>الاحتفاظ بالسداد</button>
+          <button type="button" className="btn btn-danger" onClick={() => { if (cancelSub) void handleToggle(cancelSub, true); }}>تأكيد إلغاء السداد</button>
+        </div>
+      </Modal>
       {/* Month grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "0.4rem" }}>
         {subs.map((sub) => {

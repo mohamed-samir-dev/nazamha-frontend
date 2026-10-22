@@ -125,6 +125,13 @@ test('same camera QR can be read again after cooldown and reports already paid w
   expect(SubscriptionsService.pay).toHaveBeenCalledTimes(1);
   expect(hook.flashMsg?.text).toContain('مسدد بالفعل');
 });
+
+test('camera requests high resolution as an ideal preference and a larger square reading area',async()=>{
+ await act(async()=>hook.startScanner());
+ expect(mockStart.mock.calls[0][0]).toEqual({facingMode:'environment',width:{ideal:1920},height:{ideal:1080}});
+ expect(mockStart.mock.calls[0][1].qrbox(640,360)).toEqual({width:306,height:306});
+ expect(hook.scanning).toBe(true);
+});
 test.each(['arrears','suspended','zero','paid'])('camera requires review or skips payment for %s', async reason => {
   const subscriptions = reason==='arrears' ? [sub('sept',9),sub('oct',10)] : [{...sub('oct',10,reason==='paid'?'paid':'due'),amount:reason==='zero'?0:200}];
   const decode=await automaticCamera(subscriptions,reason==='suspended');

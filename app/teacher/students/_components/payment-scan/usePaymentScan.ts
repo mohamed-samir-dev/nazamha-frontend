@@ -219,7 +219,16 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
         if (!mounted.current || generation !== cameraEpoch.current) return;
         qr = new Scanner(SCANNER_DIV_ID);
         scannerRef.current = qr;
-        await qr.start({ facingMode: "environment" }, { fps: 10, qrbox: (w,h) => ({ width: Math.min(220, Math.floor(Math.min(w,h)*0.7)), height: Math.min(220, Math.floor(Math.min(w,h)*0.7)) }) }, processQR, () => {});
+        await qr.start({ facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, {
+          fps: 10,
+          qrbox: (w,h) => { const size = Math.floor(Math.min(w,h) * 0.85); return { width: size, height: size }; },
+        }, processQR, () => {});
+        try {
+          const capabilities = qr.getRunningTrackCapabilities?.() as MediaTrackCapabilities & { focusMode?: string[] };
+          if (capabilities?.focusMode?.includes("continuous")) {
+            await qr.applyVideoConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] });
+          }
+        } catch { /* Optional autofocus must never prevent scanning. */ }
         if (!mounted.current || generation !== cameraEpoch.current) {
           try { await qr.stop(); } catch {} try { qr.clear(); } catch {}
           if (scannerRef.current === qr) scannerRef.current = null;
