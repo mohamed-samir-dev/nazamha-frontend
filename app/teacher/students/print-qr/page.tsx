@@ -179,7 +179,8 @@ function PrintQRContent() {
           const qrSvg = await QRCode.toString(getStudentQRValue(student), {
             type: "svg",
             width: 90,
-            margin: 1,
+            margin: 4,
+            errorCorrectionLevel: "M",
             color: { dark: "#000000", light: "#ffffff" },
           });
           return {
@@ -820,8 +821,8 @@ function PrintQRContent() {
                       <QRCodeSVG
                         value={getStudentQRValue(student)}
                         size={100}
-                        level="H"
-                        includeMargin={false}
+                        level="M"
+                        marginSize={4}
                       />
                     </div>
                   </div>

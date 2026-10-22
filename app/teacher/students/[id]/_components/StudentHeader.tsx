@@ -161,7 +161,7 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
         <div className="student-hero-top">
 
           {/* QR Code */}
-          <div className="student-hero-qr" style={{ width: 156, height: "auto", minWidth: 156, flexDirection: "column", padding: 10, gap: 4 }}>
+          <div className="student-hero-qr" style={{ width: 156, height: 156, minWidth: 156, padding: 10 }}>
             {student.card_qr_token ? <QRCodeSVG
               value={
                 getStudentQRValue(student)
@@ -171,7 +171,6 @@ const dueSubs = subs.filter((s) => s.status !== "not_due");
               marginSize={4}
               style={{ flexShrink: 0 }}
             /> : <span role="status">تعذر تجهيز QR الطالب. أعد تحميل الصفحة.</span>}
-            <small style={{ display: "block", fontSize: 10, marginTop: 6, color: "#334155", textAlign: "center" }}>كارت موحد للحضور والدفع وتقرير ولي الأمر</small>
           </div>
 
           {/* Info */}

@@ -1,5 +1,5 @@
 /** All student cards use the same permanent, read-only parent-report URL. */
-export function getStudentQRValue(student: { id: string; center_student_code?: string | null; card_qr_token?: string }): string {
+export function getStudentQRValue(student: { id: string; code?: string | null; center_student_code?: string | null; card_qr_token?: string }): string {
   if (student.card_qr_token) {
     const origin = typeof window === "undefined" ? "" : window.location.origin;
     const identity = student.center_student_code ? `&identity=${encodeURIComponent(student.center_student_code)}` : "";
