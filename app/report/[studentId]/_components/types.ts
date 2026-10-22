@@ -29,6 +29,7 @@ export interface StudentReport {
   group_day?: string;
   group_time?: string;
   teacher_name?: string;
+  teacher_subject?: string;
   site_name?: string;
   site_logo?: string;
   attendance_present: number;

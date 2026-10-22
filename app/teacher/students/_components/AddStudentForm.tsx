@@ -103,7 +103,7 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
   const groupError = groupId && !groups.some(g => g.id === groupId && g.grade_id === gradeId) ? "اختر مجموعة تابعة للسنة الدراسية المحددة." : "";
 
   const validatePhone = (val: string) => {
-    if (!val) return "";
+    if (!val.trim()) return "رقم هاتف ولي الأمر مطلوب.";
     if (!/^01\d{9}$/.test(val)) return "يجب أن يكون 11 رقمًا ويبدأ بـ 01";
     return "";
   };
@@ -258,7 +258,8 @@ export function AddStudentForm({ grades, groupsProp, hasCenterMode, isCenterCont
             <div className="form-group">
               <div style={{ position: "relative" }}>
                 <Input
-                  label="رقم هاتف ولي الأمر (اختياري)"
+                  label="رقم هاتف ولي الأمر"
+                  required
                   type="tel"
                   placeholder="01012345678"
                   value={parentPhone}

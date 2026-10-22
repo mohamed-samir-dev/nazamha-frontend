@@ -1,4 +1,4 @@
-.page { max-width: 1200px; margin: auto; padding: 24px; color: var(--text-primary); }
+.page { width: 100%; min-width: 0; padding: 0; color: var(--text-primary); }
 .header { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
 .eyebrow { display: flex; align-items: center; gap: 7px; color: #14b8a6; font-size: 12px; }
 .header h1 { font-size: 28px; font-weight: 800; margin: 8px 0; }

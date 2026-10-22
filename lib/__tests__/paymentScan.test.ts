@@ -114,6 +114,17 @@ test('camera pays only the selected month automatically and ignores a held card'
   expect(SubscriptionsService.pay).toHaveBeenCalledTimes(1);
   expect(mockStop).not.toHaveBeenCalled();
 });
+
+test('same camera QR can be read again after cooldown and reports already paid without another charge',async()=>{
+  const decode=await automaticCamera([sub('oct',10)]);
+  await act(async()=>decode('A'));
+  (SubscriptionsService.lookupPaymentStudent as jest.Mock).mockResolvedValue({student,subscriptions:[sub('oct',10,'paid')]});
+  await act(async()=>jest.advanceTimersByTime(3000));
+  await act(async()=>decode('A'));
+  expect(SubscriptionsService.lookupPaymentStudent).toHaveBeenCalledTimes(2);
+  expect(SubscriptionsService.pay).toHaveBeenCalledTimes(1);
+  expect(hook.flashMsg?.text).toContain('مسدد بالفعل');
+});
 test.each(['arrears','suspended','zero','paid'])('camera requires review or skips payment for %s', async reason => {
   const subscriptions = reason==='arrears' ? [sub('sept',9),sub('oct',10)] : [{...sub('oct',10,reason==='paid'?'paid':'due'),amount:reason==='zero'?0:200}];
   const decode=await automaticCamera(subscriptions,reason==='suspended');

@@ -42,7 +42,6 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
   const period = useRef({ month: selectedMonth + 1, year: selectedYear });
   const lastCode = useRef("");
   const cooldown = useRef({ code: "", until: 0 });
-  const cameraCode = useRef("");
   const audio = useRef<AudioContext | null>(null);
   const autoPay = useRef<(student: Student, due: DueMonth[], target: {month: number; year: number}) => Promise<void>>(async () => {});
   const attempt = useRef<{ key: string; studentId: string; items: { id: string; amount: number; discount: number }[]; autoPeriod?: {month: number; year: number} } | null>(null);
@@ -145,11 +144,13 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
   const processQR = useCallback(async (raw: string) => {
     if (cardOpen.current || busy.current || saving.current || attempt.current) return;
     const code = raw.trim();
-    if (!code || (autoCamera && cameraCode.current === code)) return;
+    if (!code) return;
     if (cooldown.current.code === code && cooldown.current.until > Date.now()) return;
     cooldown.current = { code, until: Date.now() + SCAN_COOLDOWN_MS };
-    cameraCode.current = code;
     await handleCode(code, true);
+    // A held card can be read again after the feedback expires. Always reload
+    // its ledger, so the second read says already paid rather than charging it.
+    if (cooldown.current.code === code) cooldown.current.until = Date.now() + SCAN_COOLDOWN_MS;
   }, [handleCode, autoCamera]);
   const handleManualSubmit = async () => { await handleCode(manualCode); };
   const reloadStudent = async () => { if (!attempt.current) await handleCode(lastCode.current); };
@@ -210,7 +211,6 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
         void audio.current.resume().catch(() => {});
       }
     } catch { /* Camera and payment still work without audio. */ }
-    cameraCode.current = "";
     setIsStarting(true); setFlashMsg(null);
     const task = (async () => {
       let qr: Html5Qrcode | null = null;

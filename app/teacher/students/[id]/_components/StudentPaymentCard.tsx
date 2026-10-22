@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CheckCircle, XCircle, MinusCircle, Gift } from "lucide-react";
 import { MonthlySubscription, SubscriptionStatus } from "@/lib/types";
 import { SubscriptionsService } from "@/lib/services/subscriptionsService";
@@ -31,14 +31,17 @@ export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props)
   const [error, setError] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState("");
+  const pending = useRef(new Map<string, MonthlySubscription>());
+  const confirmed = useRef(initialSubs ?? []);
+  const display = (rows: MonthlySubscription[]) => rows.map(s => pending.current.get(getId(s)) ?? s);
 
   useEffect(() => {
     // When initialSubs is provided, loading was already initialised to false
     // via useState(!initialSubs), so nothing to do here.
-    if (initialSubs) { setSubs(initialSubs); setLoading(false); return; }
+    if (initialSubs) { confirmed.current = initialSubs; setSubs(display(initialSubs)); setLoading(false); return; }
     if (!studentId) return;
     SubscriptionsService.getStudentSubscriptions(studentId)
-      .then(setSubs)
+      .then(rows => { confirmed.current = rows; setSubs(display(rows)); })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [studentId, initialSubs]);
@@ -46,21 +49,23 @@ export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props)
   const handleToggle = async (sub: MonthlySubscription) => {
     const subId = getId(sub);
     const status = sub.status?.trim() as SubscriptionStatus;
-    if (!subId || status === "not_due" || status === "exempt" || updatingIds.has(subId)) return;
+    if (!subId || status === "not_due" || status === "exempt" || pending.current.has(subId)) return;
+    if (status === "paid" && !window.confirm("إلغاء سداد هذا الشهر سيعيده إلى المديونية. هل تريد المتابعة؟")) return;
     const newStatus: SubscriptionStatus = status === "paid" ? "due" : "paid";
     setSaveError("");
+    pending.current.set(subId, { ...sub, status: newStatus });
     // Optimistic Update: 0ms instant color change
     setSubs((prev) => prev.map((s) => getId(s) === subId ? { ...s, status: newStatus } : s));
     setUpdatingIds((prev) => new Set(prev).add(subId));
     try {
       const updated = await SubscriptionsService.updateSubscription(subId, { status: newStatus });
-      setSubs((prev) => {
-        const next = prev.map(s => getId(s) === subId ? { ...s, ...updated } : s);
-        onChanged?.(next);
-        return next;
-      });
+      confirmed.current = confirmed.current.map(s => getId(s) === subId ? { ...s, ...updated } : s);
+      pending.current.delete(subId);
+      setSubs(display(confirmed.current));
+      onChanged?.(confirmed.current);
     } catch {
-      setSubs((prev) => prev.map((s) => getId(s) === subId ? { ...s, status: sub.status } : s));
+      pending.current.delete(subId);
+      setSubs(display(confirmed.current));
       setSaveError("تعذر حفظ حالة الدفع. لم يتم اعتماد التغيير.");
     } finally {
       setUpdatingIds((prev) => {
@@ -142,6 +147,7 @@ export function StudentPaymentCard({ studentId, initialSubs, onChanged }: Props)
               key={subId || `${sub.month}-${sub.year}`}
               onClick={() => handleToggle(sub)}
               role="button"
+              aria-disabled={!clickable || isUpdating}
               tabIndex={clickable ? 0 : -1}
               onKeyDown={(e) => e.key === "Enter" && handleToggle(sub)}
               style={{

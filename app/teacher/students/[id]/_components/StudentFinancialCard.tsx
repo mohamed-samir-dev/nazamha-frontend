@@ -3,6 +3,7 @@ import { Wallet, Tag, Users, AlertTriangle, Percent, X, Check } from "lucide-rea
 import { FiEdit2 } from "react-icons/fi";
 import { Student, Group } from "@/lib/types";
 import { StudentsService } from "@/lib/services/studentsService";
+import { validateFamilyDiscount } from "@/lib/utils/familyDiscount";
 import { studentPrice } from "@/lib/utils/studentPrice";
 
 interface Props {
@@ -32,6 +33,9 @@ export function StudentFinancialCard({ student, group, onSaved, defaultMonthlyPr
     (student.family_discount_percent != null && student.family_discount_percent > 0) ||
     (student.family_book_discount_percent != null && student.family_book_discount_percent > 0);
 
+  const discountError = validateFamilyDiscount(discountPct) || validateFamilyDiscount(bookDiscountPct);
+  const familyValidationError = validateFamilyDiscount(subPct) || validateFamilyDiscount(bookPct);
+
   const basePrice = studentPrice(student, group?.monthly_price, defaultMonthlyPrice).amount;
 
 const openDiscountEdit = () => {
@@ -42,6 +46,7 @@ const openDiscountEdit = () => {
   };
 
   const handleSaveDiscount = async () => {
+    if (discountSaving || discountError) return;
     const val = discountPct === "" ? 0 : Number(discountPct);
     const bval = bookDiscountPct === "" ? null : Number(bookDiscountPct);
     if (isNaN(val) || val < 0 || val > 100) return;
@@ -80,7 +85,7 @@ const openDiscountEdit = () => {
   };
 
   const handleSaveFamilyDiscount = async () => {
-    if (!student.sibling_family_id) return;
+    if (!student.sibling_family_id || familySaving || familyValidationError) return;
     const pct = subPct === "" ? null : Number(subPct);
     const bpct = bookPct === "" ? null : Number(bookPct);
     if (pct !== null && (isNaN(pct) || pct < 0 || pct > 100)) { setFamilyError("نسبة خصم الاشتراك يجب أن تكون بين 0 و 100"); return; }
@@ -212,11 +217,12 @@ const openDiscountEdit = () => {
                 </div>
               )}
 
+              {discountError && <p role="alert" style={{ color: "#ef4444" }}>{discountError}</p>}
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
                 <button onClick={() => { setDiscountPct(""); setDiscountReason(""); setBookDiscountPct(""); }} disabled={discountSaving} style={{ flex: 1, padding: "0.5rem", borderRadius: "8px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>
                   إزالة الخصم
                 </button>
-                <button onClick={handleSaveDiscount} disabled={discountSaving} style={{ flex: 2, padding: "0.5rem", borderRadius: "8px", background: "#f59e0b", border: "none", color: "#000", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                <button onClick={handleSaveDiscount} disabled={discountSaving || !!discountError} style={{ flex: 2, padding: "0.5rem", borderRadius: "8px", background: "#f59e0b", border: "none", color: "#000", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
                   <Check size={13} /> {discountSaving ? "جاري الحفظ..." : "حفظ"}
                 </button>
               </div>
@@ -314,13 +320,15 @@ const openDiscountEdit = () => {
                   </div>
                 )}
 
+                {familyValidationError && <p role="alert" style={{ color: "#ef4444" }}>{familyValidationError}</p>}
                 {familyError && <p style={{ fontSize: "0.8rem", color: "#f87171", margin: 0 }}>{familyError}</p>}
 
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+                {discountError && <p role="alert" style={{ color: "#ef4444" }}>{discountError}</p>}
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
                   <button onClick={() => { setSubPct(""); setSubReason(""); setBookPct(""); setBookReason(""); }} disabled={familySaving} style={{ flex: 1, padding: "0.5rem", borderRadius: "8px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>
                     إزالة الخصم
                   </button>
-                  <button onClick={handleSaveFamilyDiscount} disabled={familySaving} style={{ flex: 2, padding: "0.5rem", borderRadius: "8px", background: "#a78bfa", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                  <button onClick={handleSaveFamilyDiscount} disabled={familySaving || !!familyValidationError} style={{ flex: 2, padding: "0.5rem", borderRadius: "8px", background: "#a78bfa", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
                     {familySaving ? <span style={{ width: 13, height: 13, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spin 0.7s linear infinite" }} /> : <Check size={13} />}
                     {familySaving ? "جاري الحفظ..." : "حفظ"}
                   </button>

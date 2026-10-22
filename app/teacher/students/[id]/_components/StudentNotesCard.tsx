@@ -13,13 +13,18 @@ export function StudentNotesCard({ student, onUpdate }: Props) {
   const [editing, setEditing] = useState(false);
   const [notes, setNotes] = useState(student.notes || "");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSave = async () => {
+    if (saving) return;
+    setError("");
     setSaving(true);
     try {
       await StudentsService.updateStudent(student.id, { notes });
       onUpdate(notes);
       setEditing(false);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر حفظ الملاحظات. حاول مرة أخرى.");
     } finally {
       setSaving(false);
     }
@@ -36,7 +41,7 @@ export function StudentNotesCard({ student, onUpdate }: Props) {
           </button>
         ) : (
           <div style={{ marginRight: "auto", display: "flex", gap: "0.4rem" }}>
-            <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", padding: "2px 8px", borderRadius: "6px", fontFamily: "inherit" }}>
+            <button disabled={saving} onClick={() => { setNotes(student.notes || ""); setError(""); setEditing(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", padding: "2px 8px", borderRadius: "6px", fontFamily: "inherit" }}>
               <FiX size={13} /> إلغاء
             </button>
             <button onClick={handleSave} disabled={saving} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-teal)", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", padding: "2px 8px", borderRadius: "6px", fontFamily: "inherit" }}>
@@ -46,8 +51,11 @@ export function StudentNotesCard({ student, onUpdate }: Props) {
         )}
       </h3>
 
+      {error && <p role="alert" style={{ color: "#ef4444" }}>{error}</p>}
       {editing ? (
         <textarea
+          disabled={saving}
+          aria-label="ملاحظات الطالب"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="أضف ملاحظة عن الطالب... مثلاً: يحتاج متابعة، ممتاز في البرمجة..."

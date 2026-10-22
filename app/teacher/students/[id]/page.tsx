@@ -142,7 +142,6 @@ const handleDelete = async () => {
         onNavigateToBooks={() => setActiveTab("books")}
       />
 
-      {activeTab === "memberships" && <StudentMembershipCard key={student.id} studentId={student.id} />}
       <StudentQuickStats student={student} books={studentBooks} subs={subs} />
 
       {/* Tabs */}
@@ -174,6 +173,8 @@ const handleDelete = async () => {
       </div>
 
       {/* Tab content */}
+      {activeTab === "memberships" && <StudentMembershipCard key={student.id} studentId={student.id} />}
+
       {activeTab === "overview" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.25rem" }}>
           <StudentInfoCard

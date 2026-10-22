@@ -39,6 +39,7 @@ export default function Sidebar({
     { name: "الطلاب", path: "/teacher/students", icon: Users },
     { name: "بطاقات QR", path: "/teacher/students/print-qr", icon: QrCode },
     { name: "الأخوات", path: "/teacher/siblings", icon: Users },
+    ...(!isAssistant ? [{ name: "سكان الدفع", path: "/teacher/students/payment-scan", icon: QrCode }] : []),
     ...(hasAttendance ? [{ name: "الحضور والغياب", path: "/teacher/attendance", icon: ClipboardCheck }] : []),
     ...(hasAttendance ? [{ name: "تقارير الحضور", path: "/teacher/attendance/reports", icon: BarChart3 }] : []),
     { name: "تقارير الطلاب", path: "/teacher/reports/students", icon: FileText },

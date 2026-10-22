@@ -88,7 +88,7 @@ export function StudentBooksCard({ student }: Props) {
                   </>
                 )}
                 <div style={{ fontSize: "0.68rem", color: row.paid ? "#10b981" : "#f59e0b" }}>
-                  {row.paid ? "مدفوع" : "غير مدفوع"}
+                  {row.is_exempt ? "لا يوجد مبلغ مطلوب" : row.paid ? "مدفوع" : "غير مدفوع"}
                 </div>
               </div>
             </div>

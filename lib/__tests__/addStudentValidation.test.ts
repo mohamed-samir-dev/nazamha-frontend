@@ -33,9 +33,19 @@ test('missing grade and invalid year block requests and show field errors',async
   await send(); expect(submit).not.toHaveBeenCalled(); expect(host.textContent).toContain('اختر السنة الدراسية أولًا');
 });
 test('server validation remains visible inside the form and retains entered values',async()=>{
+  await input('input[type="tel"]','01012345678');
   await input('input[placeholder="الاسم الكامل للطالب"]','محمد أحمد');
   await act(async()=>{const grade=host.querySelector<HTMLSelectElement>('#new-student-grade')!;grade.value='grade';grade.dispatchEvent(new Event('change',{bubbles:true}));});
   submit.mockResolvedValue({error:'الطالب مسجل بالفعل'});
   await send(); expect(host.textContent).toContain('الطالب مسجل بالفعل');
   expect(host.querySelector<HTMLInputElement>('input[placeholder="الاسم الكامل للطالب"]')!.value).toBe('محمد أحمد');
+});
+
+test('parent phone is required and blank phone never reaches create request',async()=>{
+  await input('input[placeholder="الاسم الكامل للطالب"]','محمد أحمد');
+  await act(async()=>{const grade=host.querySelector<HTMLSelectElement>('#new-student-grade')!;grade.value='grade';grade.dispatchEvent(new Event('change',{bubbles:true}));});
+  await send();
+  expect(host.querySelector<HTMLInputElement>('input[type="tel"]')!.required).toBe(true);
+  expect(host.textContent).toContain('رقم هاتف ولي الأمر مطلوب');
+  expect(submit).not.toHaveBeenCalled();
 });
