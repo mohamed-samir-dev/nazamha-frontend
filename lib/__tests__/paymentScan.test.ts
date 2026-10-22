@@ -128,9 +128,18 @@ test('same camera QR can be read again after cooldown and reports already paid w
 
 test('camera requests high resolution as an ideal preference and a larger square reading area',async()=>{
  await act(async()=>hook.startScanner());
- expect(mockStart.mock.calls[0][0]).toEqual({facingMode:'environment',width:{ideal:1920},height:{ideal:1080}});
+ expect(mockStart.mock.calls[0][0]).toEqual({facingMode:'environment'});
+ expect(mockStart.mock.calls[0][1].videoConstraints).toEqual({facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}});
  expect(mockStart.mock.calls[0][1].qrbox(640,360)).toEqual({width:306,height:306});
  expect(hook.scanning).toBe(true);
+});
+
+test('unsupported high-resolution constraints retry once with basic camera settings',async()=>{
+ mockStart.mockRejectedValueOnce(new DOMException('unsupported','OverconstrainedError')).mockResolvedValueOnce(undefined);
+ await act(async()=>hook.startScanner());
+ expect(mockStart).toHaveBeenCalledTimes(2);
+ expect(mockStart.mock.calls[1][1].videoConstraints).toBeUndefined();
+ expect(hook.scanning).toBe(true);expect(hook.flashMsg).toBeNull();
 });
 test.each(['arrears','suspended','zero','paid'])('camera requires review or skips payment for %s', async reason => {
   const subscriptions = reason==='arrears' ? [sub('sept',9),sub('oct',10)] : [{...sub('oct',10,reason==='paid'?'paid':'due'),amount:reason==='zero'?0:200}];

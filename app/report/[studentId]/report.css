@@ -7,8 +7,8 @@
 .monthly-report .report-student-table h1 { margin: 0; font-size: 16px; line-height: 1.6; color: var(--ink); background: none; -webkit-text-fill-color: currentColor; }
 .report-student-table th, .report-student-table td { width: 25%; }
 .monthly-report .status-tag.absent, .monthly-report .status-tag.unrecorded { background: #fff0ed; color: #b42318; font-weight: 700; }
-@media (max-width: 640px) { .monthly-report .report-student-table h1 { font-size: 12px; } .report-teacher { font-size: 12px; } }
-@media print { .report-student-table { break-inside: avoid; } .monthly-report .report-student-table h1 { font-size: 12px; } }
+@media (max-width: 640px) { .monthly-report .report-student-table h1 { font-size: 12px !important; } .report-teacher { font-size: 12px; } }
+@media print { .report-student-table, .report-section:has(.report-details-table) { break-inside: avoid-page; } .monthly-report .report-student-table h1 { font-size: 12px !important; } }
 .monthly-report table { table-layout: fixed; border: 1px solid #bbc4c2; }
 .monthly-report th, .monthly-report td { border: 1px solid #ccd3d1; vertical-align: top; }
 .monthly-report tbody tr:last-child td { border-bottom: 1px solid #ccd3d1; }

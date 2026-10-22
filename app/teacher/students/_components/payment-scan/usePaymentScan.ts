@@ -6,6 +6,7 @@ import { SubscriptionsService } from "@/lib/services/subscriptionsService";
 import type { Html5Qrcode } from "html5-qrcode";
 import { ARABIC_MONTHS, SCAN_COOLDOWN_MS, SCANNER_DIV_ID, DueMonth, PaidEntry } from "./types";
 import { getErrorMessage, getCameraErrorMessage } from "@/lib/errors";
+import { paymentCameraConfig, isCameraConstraintError } from "./cameraConfig";
 
 interface Props {
   ownerId?: string;
@@ -219,10 +220,15 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
         if (!mounted.current || generation !== cameraEpoch.current) return;
         qr = new Scanner(SCANNER_DIV_ID);
         scannerRef.current = qr;
-        await qr.start({ facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, {
-          fps: 10,
-          qrbox: (w,h) => { const size = Math.floor(Math.min(w,h) * 0.85); return { width: size, height: size }; },
-        }, processQR, () => {});
+        try {
+          await qr.start({ facingMode: "environment" }, paymentCameraConfig(), processQR, () => {});
+        } catch (error) {
+          if (!isCameraConstraintError(error) || !mounted.current || generation !== cameraEpoch.current) throw error;
+          try { await qr.stop(); } catch {} try { qr.clear(); } catch {}
+          qr = new Scanner(SCANNER_DIV_ID);
+          scannerRef.current = qr;
+          await qr.start({ facingMode: "environment" }, paymentCameraConfig(false), processQR, () => {});
+        }
         try {
           const capabilities = qr.getRunningTrackCapabilities?.() as MediaTrackCapabilities & { focusMode?: string[] };
           if (capabilities?.focusMode?.includes("continuous")) {
