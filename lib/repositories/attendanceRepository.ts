@@ -43,7 +43,9 @@ export const AttendanceRepository = {
       return { state: "queued" };
     }
     try {
-      const saved = await api.post<AttendanceRecord>("/attendance", record);
+      const saved = record.lesson_id
+        ? (await api.post<{record:AttendanceRecord}>(`/attendance/lessons/${record.lesson_id}/mark`,record)).record
+        : await api.post<AttendanceRecord>("/attendance", record);
       OfflineCache.saveAttendanceRecords([saved]);
       broadcast();
       return { state: "saved", record: saved };
@@ -64,7 +66,9 @@ export const AttendanceRepository = {
   },
 
   async deleteAttendanceRecord(id: string): Promise<void> {
-    await api.delete(`/attendance/${id}`);
+    const reason=window.prompt("سبب إلغاء الحضور (يُحفظ في سجل التعديلات):");
+    if(!reason || reason.trim().length<3) throw new Error("لم يتم الإلغاء؛ يلزم سبب واضح");
+    await api.delete(`/attendance/${id}`,{reason:reason.trim()});
     OfflineCache.removeAttendanceRecord(id);
     broadcast();
   },
@@ -86,10 +90,21 @@ export const AttendanceRepository = {
   },
 
   async flushQueue(): Promise<number> {
-    const queue = AttendanceQueue.getAll();
-    if (queue.length === 0) return 0;
+    const allQueue = AttendanceQueue.getAll();
+    let lessonSynced=0;
+    const lessonGeneration=appCache.generation();
+    for(const queued of allQueue.filter(r=>r.lesson_id)) {
+      if(lessonGeneration!==appCache.generation()) return lessonSynced;
+      const {_queueId,_queuedAt,_error,...payload}=queued;
+      try {
+        const result=await AttendanceRepository.upsertAttendanceRecord({...payload,source:"offline",device_captured_at:payload.device_captured_at||_queuedAt});
+        if(result.state==="saved" && lessonGeneration===appCache.generation()){AttendanceQueue.acknowledge([queued]);lessonSynced++;}
+      }catch(error){if(lessonGeneration===appCache.generation()) AttendanceQueue.reject(queued,error instanceof Error?error.message:"تعذر رفع الحضور");}
+    }
+    const queue = allQueue.filter(r=>!r.lesson_id);
+    if (queue.length === 0) {if(lessonSynced)broadcast();return lessonSynced;}
 
-    let synced = 0;
+    let synced = lessonSynced;
     const generation = appCache.generation();
     for (let offset=0;offset<queue.length;offset+=1000) {
       if (generation !== appCache.generation()) break;

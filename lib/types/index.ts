@@ -308,6 +308,21 @@ export interface AcademicYearSettings {
 }
 
 export interface AttendanceRecord {
+  lesson_id?: string;
+  actual_lesson_id?: string;
+  session_slot?: string;
+  is_extra?: boolean;
+  source?: "qr" | "manual" | "offline" | "correction" | "bulk" | "automatic";
+  qr?: string;
+  device_captured_at?: string;
+  credit_lesson_id?: string;
+  reason?: string;
+  arrived_at?: string | null;
+  received_at?: string;
+  timing_state?: "on_time" | "late" | "unverified";
+  late_minutes?: number | null;
+  revision?: number;
+  history?: {actor_id:string;actor_type:string;at:string;action:string;reason:string;before?:unknown;after?:unknown}[];
   scanner_group_id?: string;
   scanner_session_date?: string;
   cross_group_confirmed?: boolean;
