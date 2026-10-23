@@ -50,7 +50,7 @@ export default function SiblingsPage() {
       {families.length > 0 && <p className={styles.resultCount}>عرض {filteredFamilies.length} من {families.length} عائلة · افتح اسم الطالب لعرض ملفه</p>}
       {/* Empty State */}
       {families.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-20 rounded-2xl border border-white/8 bg-white/2 text-center mx-4 sm:mx-0">
+        <div className="flex flex-col items-center justify-center gap-3 py-20 rounded-2xl border border-white/8 bg-white/2 text-center">
           <div className="w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
             <Users size={28} className="text-teal-400" />
           </div>

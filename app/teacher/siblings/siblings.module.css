@@ -1,4 +1,4 @@
-.page { width: 100%; min-width: 0; padding: 0; color: var(--text-primary); }
+.page { width: 100%; max-width: none; min-width: 0; margin: 0; padding: 0; color: var(--text-primary); }
 .header { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
 .eyebrow { display: flex; align-items: center; gap: 7px; color: #14b8a6; font-size: 12px; }
 .header h1 { font-size: 28px; font-weight: 800; margin: 8px 0; }
@@ -25,5 +25,5 @@
 .members > div > button { min-height: 36px; min-width: 36px; display: grid; place-items: center; }
 .family button { min-height: 36px; }
 .page button:focus-visible, .page a:focus-visible { outline: 2px solid #14b8a6; outline-offset: 3px; }
-@media(max-width: 640px) { .page { padding: 12px; } .header h1 { font-size: 24px; } .header .primary { width: 100%; } .stats { gap: 8px; } .stats > div { flex-direction: column; padding: 14px 6px; gap: 6px; text-align: center; } .stats span { font-size: 11px; } .stats strong { font-size: 23px; } .toolbar > * { width: 100%; } .family > div:first-child { padding: 14px; } .members { grid-template-columns: minmax(0,1fr); } }
+@media(max-width: 640px) { .page { padding: 0; } .header h1 { font-size: 24px; } .header .primary { width: 100%; } .stats { gap: 8px; } .stats > div { flex-direction: column; padding: 14px 6px; gap: 6px; text-align: center; } .stats span { font-size: 11px; } .stats strong { font-size: 23px; } .toolbar > * { width: 100%; } .family > div:first-child { padding: 14px; } .members { grid-template-columns: minmax(0,1fr); } }
 @media(max-width: 640px) { .family button { min-height: 44px; min-width: 44px; } .members > div > a { padding-inline-end: 60px; } }

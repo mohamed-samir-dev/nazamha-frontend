@@ -1,4 +1,4 @@
-.page { width: 100%; min-width: 0; padding: 0; color: var(--text-primary); }
+.page { width: 100%; max-width: none; min-width: 0; margin: 0; padding: 0; color: var(--text-primary); }
 .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 26px; }
 .eyebrow { display: flex; gap: 7px; align-items: center; color: #14b8a6; font-size: 12px; font-weight: 700; }
 .header h1 { font-size: 30px; margin: 8px 0 4px; font-weight: 800; }
@@ -35,7 +35,7 @@
 .refresh { padding: 11px; border: 1px solid var(--border-color); border-radius: 10px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .page button:disabled, .page select:disabled { opacity: .5; cursor: not-allowed; }
 .page a:focus-visible, .page select:focus-visible, .refresh:focus-visible { outline: 2px solid #14b8a6; outline-offset: 3px; }
-@media(max-width: 850px) { .columns { grid-template-columns: 1fr; gap: 16px; } .page { padding: 16px; } .period { gap: 16px; padding: 16px; } .auto { margin-inline-start: 0; } .empty { min-height: 220px; } }
+@media(max-width: 850px) { .columns { grid-template-columns: 1fr; gap: 16px; } .page { padding-inline: 0; } .period { gap: 16px; padding: 16px; } .auto { margin-inline-start: 0; } .empty { min-height: 220px; } }
 @media(max-width: 420px) { .header h1 { font-size: 25px; } .periodFields { width: 100%; } .periodFields label { flex: 1; } .camera, .result, .manual { padding: 14px; } .camera > div > div:first-child { min-height: 240px !important; } }
 
 /* Keep controls usable on narrow phones and short landscape screens. */
@@ -50,7 +50,7 @@
 .manual input { min-height: 44px; font-size: 16px; }
 .manual button, .refresh { min-height: 44px; }
 @media (max-width: 850px) {
-  .page { padding: 12px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  .page { padding: 0; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
   .header { gap: 10px; margin-bottom: 18px; }
   .header p { font-size: 12px; line-height: 1.8; }
   .period { margin-bottom: 16px; }
@@ -65,7 +65,7 @@
   .result [data-payment-actions] button { min-height: 46px; flex: 1; white-space: normal; }
 }
 @media (max-width: 360px) {
-  .page { padding-inline: 8px; }
+  .page { padding-inline: 0; }
   .header h1 { font-size: 23px; }
   .back { padding: 8px 10px; }
   .manual > div > div, .manual > div > button { flex-basis: 100%; width: 100%; }

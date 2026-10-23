@@ -24,6 +24,7 @@ import { StudentsFilters } from "./_components/StudentsFilters";
 import { BulkActionBar } from "./_components/BulkActionBar";
 import { ConfirmDeleteDialog } from "./_components/ConfirmDeleteDialog";
 import Link from "next/link";
+import { matchesStudentSearch } from "@/lib/utils/studentSearch";
 
 const PAGE_SIZE = 20;
 
@@ -34,6 +35,7 @@ interface PendingConfirm {
 
 export default function StudentsManagement() {
   const [loading, setLoading] = useState(true);
+  const [studentsError, setStudentsError] = useState(false);
   const [userId, setUserId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     const t = OfflineCache.loadTeacher();
@@ -122,7 +124,7 @@ export default function StudentsManagement() {
   // Debounced search — wait 400ms before hitting server
   useEffect(() => {
     const t = setTimeout(() => {
-      setSearchQuery(searchInput);
+      setSearchQuery(searchInput.trim());
       setCurrentPage(1);
     }, 400);
     return () => clearTimeout(t);
@@ -196,6 +198,7 @@ export default function StudentsManagement() {
     if (!userId) setUserId(effectiveUserId);
     let cancelled = false;
     async function loadStudentsPage() {
+      setStudentsError(false);
       const queryKey = JSON.stringify([effectiveUserId, currentPage, searchQuery, activeFilter, filterGradeId, filterSubTeacherId]);
       // Refresh confirmed changes in the background; keep mounted rows and their data.
       if (loadedQuery.current !== queryKey) setLoading(true);
@@ -233,7 +236,7 @@ export default function StudentsManagement() {
           })
           .catch(() => { if (!cancelled) setSubsMap(new Map()); });
       } catch {
-        if (!cancelled) showToast("حدث خطأ أثناء تحميل الطلاب.", "error");
+        if (!cancelled) { setStudentsError(true); showToast("حدث خطأ أثناء تحميل الطلاب.", "error"); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -327,7 +330,7 @@ export default function StudentsManagement() {
         newMap.set(newStudent.id, _subscriptions ?? []);
         return newMap;
       });
-      const matchesSearch = !searchQuery || newStudent.name.toLowerCase().includes(searchQuery.toLowerCase()) || (newStudent.code || "").toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = matchesStudentSearch(newStudent, searchQuery);
       const matchesFilters = matchesSearch && (filterGradeId === "all" || newStudent.grade_id === filterGradeId)
         && (activeFilter === "all" || (newStudent.group_id || "none") === activeFilter)
         && (filterSubTeacherId === "all" || groups.find(g => g.id === newStudent.group_id)?.sub_teacher_id === filterSubTeacherId);
@@ -858,14 +861,15 @@ export default function StudentsManagement() {
             filterGradeId={filterGradeId}
             filterSubTeacherId={filterSubTeacherId}
             activeFilter={activeFilter}
-            onSearchChange={(v) => setSearchInput(v)}
+            onSearchChange={(v) => {setSearchInput(v); setSelectedIds(new Set());}}
+            searching={loading || searchInput.trim() !== searchQuery}
             onGradeChange={handleFilterChange(setFilterGradeId)}
             onSubTeacherChange={handleFilterChange(setFilterSubTeacherId)}
             onGroupChange={handleFilterChange(setActiveFilter)}
             onApplyFilters={applyFilters}
             onPrint={() => void runPrint("list", handlePrint)}
             preparingPrint={activePrintType === "list"}
-            disabled={activePrintType !== null || loading}
+            disabled={activePrintType !== null || loading || studentsError || searchInput.trim() !== searchQuery}
             selectedCount={selectedIds.size}
           />
           </div>
@@ -904,6 +908,8 @@ export default function StudentsManagement() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={9} className="text-center p-12"><Spinner /></td></tr>
+                ) : studentsError ? (
+                  <tr><td colSpan={9} className="text-center p-12"><div role="alert" className="flex flex-col items-center gap-3"><p>تعذر تحميل نتائج البحث. حاول مرة أخرى.</p><Button variant="secondary" onClick={() => setRefreshKey(k => k + 1)}>إعادة المحاولة</Button></div></td></tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="text-center p-12">
