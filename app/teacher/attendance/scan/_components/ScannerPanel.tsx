@@ -1,135 +1,62 @@
 "use client";
-
-import { CheckCircle2, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { CrossGroupConfirm, LastScan } from "../_hooks/useScanSession";
-
+import {useEffect,useRef} from "react";
+import {Camera,CameraOff,CheckCircle2,AlertCircle,ScanLine,Volume2,VolumeX,X,LoaderCircle,Flashlight} from "lucide-react";
+import type {CrossGroupConfirm,LastScan} from "../_hooks/useScanSession";
+import styles from "../scan.module.css";
 interface Props {
-  scanning: boolean;
-  selectedGroupId: string;
-  scannerDivId: string;
-  lastScan: LastScan | null;
-  crossGroupConfirm: CrossGroupConfirm | null;
-  onConfirmCrossGroup: () => void;
-  onCancelCrossGroup: () => void;
+ scanning:boolean;selectedGroupId:string;scannerDivId:string;lastScan:LastScan|null;crossGroupConfirm:CrossGroupConfirm|null;
+ onConfirmCrossGroup:()=>void;onCancelCrossGroup:()=>void;
+ busy?:string|null;queuedScans?:number;isStarting?:boolean;sessionReady?:boolean;soundEnabled?:boolean;
+ onStart?:()=>void;onStop?:()=>void;onDismiss?:()=>void;onToggleSound?:()=>void;
+ torchSupported?:boolean;torchOn?:boolean;onToggleTorch?:()=>void;zoomRange?:{min:number;max:number};zoom?:number;onZoom?:(value:number)=>void;
 }
-
-export function ScannerPanel({
-  scanning, selectedGroupId, scannerDivId,
-  lastScan, crossGroupConfirm,
-  onConfirmCrossGroup, onCancelCrossGroup,
-}: Props) {
-  return (
-    <section className="glass-panel p-4 sm:p-5 flex flex-col items-center justify-center min-h-[320px] sm:min-h-[420px] relative">
-      {!scanning && (
-        <div className="flex flex-col items-center justify-center gap-4 text-center py-10 px-6">
-          <div className="text-teal-400 opacity-20">
-            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
-              <rect x="7" y="7" width="3" height="3" />
-              <rect x="14" y="7" width="3" height="3" />
-              <rect x="7" y="14" width="3" height="3" />
-              <path d="M14 14h3v3" />
-            </svg>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <p className="text-base font-semibold text-slate-300">
-              {selectedGroupId ? "اضغط «تشغيل الكاميرا» لبدء السكان" : "اختر المجموعة أولاً"}
-            </p>
-            <p className="text-sm text-slate-500">وجّه الكاميرا نحو QR الطالب وسيتم تسجيله تلقائياً</p>
-          </div>
-        </div>
-      )}
-
-      {lastScan && (
-        <div className={`w-full max-w-[480px] px-4 py-3 rounded-xl font-bold text-sm flex items-start gap-2 shadow-[0_4px_15px_rgba(0,0,0,0.3)] animate-[slideUp_0.3s_ease] ${
-          lastScan.pending ? "bg-amber-500/15 border border-amber-500/40 text-amber-300" : lastScan.success
-            ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-400"
-            : "bg-red-500/15 border border-red-500/40 text-red-400"
-        }`}>
-          <span className="flex-shrink-0 mt-0.5">
-            {lastScan.success ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-          </span>
-          <span className="leading-snug break-words min-w-0">
-            {lastScan.success ? `حضر: ${lastScan.name}` : lastScan.name}
-          </span>
-        </div>
-      )}
-
-      <div className="relative w-full max-w-[480px]">
-        <div
-          id={scannerDivId}
-          style={{
-            width: "100%",
-            borderRadius: 16,
-            overflow: "hidden",
-            minHeight: scanning || crossGroupConfirm ? 440 : 0,
-          }}
-        />
-
-        {crossGroupConfirm && (
-          <div role="dialog" aria-modal="true" className="absolute inset-0 overflow-y-auto bg-black/90 z-50 flex flex-col items-center p-4 sm:p-6 text-center rounded-2xl backdrop-blur-sm">
-            <AlertCircle size={40} className="text-amber-400 mb-3 flex-shrink-0" />
-            <h3 className="text-white mb-3 font-bold text-lg">تسجيل حضور خارج المجموعة</h3>
-            
-            <div className="bg-slate-800/60 rounded-lg p-4 mb-4 w-full space-y-3 text-right">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-700">
-                <span className="text-slate-400 text-sm">اسم الطالب:</span>
-                <strong className="text-white text-base">{crossGroupConfirm.student.name}</strong>
-              </div>
-              
-              <div className="space-y-2">
-                <p className="text-amber-300 text-sm font-semibold">هذا الطالب مسجل في:</p>
-                <div className="bg-slate-900/50 rounded p-2 space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs">المجموعة:</span>
-                    <strong className="text-amber-400 text-sm">{crossGroupConfirm.originalGroupName}</strong>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs">موعد الحصص:</span>
-                    <strong className="text-emerald-400 text-sm">{crossGroupConfirm.originalGroupSchedule}</strong>
-                  </div>
-                  {crossGroupConfirm.nextScheduledDate && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400 text-xs">الموعد القادم:</span>
-                      <strong className={`text-sm ${crossGroupConfirm.scheduledDateIsToday ? 'text-green-400' : 'text-blue-400'}`}>
-                        {crossGroupConfirm.nextScheduledDate}
-                        {crossGroupConfirm.scheduledDateIsToday && " (اليوم)"}
-                      </strong>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="pt-2 border-t border-slate-700">
-                <p className="text-slate-300 text-sm leading-relaxed">
-                  {crossGroupConfirm.reason}
-                </p>
-              </div>
-            </div>
-            
-            <p className="text-white text-sm mb-4 font-semibold">
-              هل توافق على تسجيل حضوره في مجموعته الأصلية؟
-            </p>
-            
-            <div className="flex gap-3 w-full">
-              <Button
-                onClick={onCancelCrossGroup}
-                style={{ flex: 1, justifyContent: "center", background: "rgba(100,116,139,0.4)", border: "none", fontSize: "0.9rem", fontWeight: "600", color: "#e2e8f0" }}
-              >
-                إلغاء
-              </Button>
-              <Button
-                variant="primary"
-                style={{ flex: 1, justifyContent: "center", fontSize: "0.9rem", fontWeight: "600" }}
-                onClick={onConfirmCrossGroup}
-              >
-                موافق، سجّل الحضور
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
+export function ScannerPanel(p:Props){
+ const dialog=useRef<HTMLDivElement>(null);
+ useEffect(()=>{
+  if(!p.crossGroupConfirm) return;
+  const previous=document.activeElement as HTMLElement|null;
+  dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  return ()=>previous?.focus?.();
+ },[p.crossGroupConfirm]);
+ function handleKeys(event:React.KeyboardEvent){
+  if(event.key==="Escape" && !p.busy) p.onCancelCrossGroup();
+  if(event.key!=="Tab") return;
+  const buttons=dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+  if(!buttons?.length) {event.preventDefault();return;}
+  const first=buttons[0],last=buttons[buttons.length-1];
+  if(event.shiftKey && document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
+ }
+ return <section className={styles.cameraCard} aria-label="ماسح حضور الطلاب">
+  <div className={styles.cameraHeading}><span><ScanLine size={19}/> سكان الحضور</span><button className={styles.iconButton} type="button" aria-label={p.soundEnabled ? "كتم صوت النجاح" : "تشغيل صوت النجاح"} aria-pressed={p.soundEnabled} onClick={p.onToggleSound}>{p.soundEnabled ? <Volume2 size={20}/> : <VolumeX size={20}/>}</button></div>
+  <div className={styles.viewport}>
+   <div id={p.scannerDivId} className={styles.reader}/>
+   {!p.scanning && <div className={styles.cameraEmpty}><ScanLine size={68}/><strong>{p.isStarting ? "جاري فتح الكاميرا…" : p.sessionReady ? "جاهز لاستقبال الطلاب" : "اختر جلسة صالحة أولًا"}</strong><p>وجّه QR داخل الإطار. التسجيل تلقائي للطالب المسموح له.</p></div>}
+   {p.scanning && !p.crossGroupConfirm && !p.lastScan && !p.busy && <div className={styles.readyHint}>جاهز · وجّه بطاقة الطالب داخل الإطار</div>}
+   <div aria-live="polite" aria-atomic="true" className={styles.feedback}>
+    {p.busy && !p.crossGroupConfirm && <div className={styles.busy}><LoaderCircle size={22} className={styles.spin}/><strong>{p.busy}</strong></div>}
+    {p.lastScan && !p.crossGroupConfirm && <div className={`${styles.result} ${p.lastScan.pending ? styles.pending : p.lastScan.success ? styles.success : p.lastScan.info ? styles.info : styles.error}`}>
+     {p.lastScan.success ? <CheckCircle2 size={27}/> : <AlertCircle size={27}/>}
+     <div><strong>{p.lastScan.success ? "تم التسجيل بنجاح" : p.lastScan.pending ? "لم يؤكد على الخادم بعد" : p.lastScan.info ? "معلومة" : "تعذر التسجيل"}</strong><p>{p.lastScan.name}</p></div>
+     <button className={styles.iconButton} type="button" aria-label="إخفاء الرسالة" onClick={p.onDismiss}><X size={20}/></button>
+    </div>}
+   </div>
+   {p.crossGroupConfirm && <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="cross-group-title" aria-describedby="cross-group-reason" onKeyDown={handleKeys} className={styles.confirmation}>
+    <div className={styles.confirmHeader}><AlertCircle size={24}/><h2 id="cross-group-title">الطالب من مجموعة أخرى</h2></div>
+    <strong className={styles.studentName}>{p.crossGroupConfirm.student.name}</strong>
+    <span dir="ltr" className={styles.muted}>{p.crossGroupConfirm.student.code || p.crossGroupConfirm.student.center_student_code}</span>
+    <dl className={styles.identity}><div><dt>مجموعته الأصلية</dt><dd>{p.crossGroupConfirm.originalGroupName}</dd></div><div><dt>موعد المجموعة</dt><dd>{p.crossGroupConfirm.originalGroupSchedule}</dd></div>{p.crossGroupConfirm.nextScheduledDate && <div><dt>الحصة المحتسب عليها الحضور</dt><dd>{p.crossGroupConfirm.nextScheduledDate}</dd></div>}</dl>
+    <p id="cross-group-reason">{p.crossGroupConfirm.reason}</p>
+    <p className={styles.muted}>المسح متوقف لحين إتمام قرار هذا الطالب.</p>
+    {p.lastScan && <p role="alert" className={styles.warning}>{p.lastScan.name}</p>}
+    <div className={styles.confirmActions}><button className={styles.secondary} disabled={!!p.busy} onClick={p.onCancelCrossGroup}>إلغاء</button><button className={styles.primary} disabled={!!p.busy} onClick={p.onConfirmCrossGroup}>{p.busy ? "جاري التسجيل…" : "تأكيد الحضور"}</button></div>
+   </div>}
+  </div>
+  <div className={styles.cameraControls}>
+   <button className={p.scanning ? styles.secondary : styles.primary} disabled={!!p.busy || !!p.crossGroupConfirm || p.isStarting || (!p.scanning && !p.sessionReady)} onClick={p.scanning ? p.onStop : p.onStart}>{p.scanning ? <CameraOff size={19}/> : <Camera size={19}/>} {p.isStarting ? "جاري التشغيل…" : p.scanning ? "إيقاف الكاميرا" : "تشغيل الكاميرا"}</button>
+   {p.scanning && p.torchSupported && <button className={styles.iconButton} aria-label="فلاش الكاميرا" aria-pressed={p.torchOn} onClick={p.onToggleTorch}><Flashlight size={20}/></button>}
+  </div>
+  {p.scanning && p.zoomRange && <label className={styles.zoom}>تقريب الكاميرا<input aria-label="تقريب الكاميرا" type="range" min={p.zoomRange.min} max={p.zoomRange.max} step="0.1" value={p.zoom} onChange={e=>p.onZoom?.(Number(e.target.value))}/></label>}
+  <p className={styles.cameraFoot} role="status">{p.crossGroupConfirm ? "بانتظار قرارك" : p.queuedScans ? `${p.queuedScans} بطاقة في انتظار المعالجة` : "نتيجة التسجيل تظهر هنا · صوت النجاح للحضور المؤكد فقط"}</p>
+ </section>;
 }

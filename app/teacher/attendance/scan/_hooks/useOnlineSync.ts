@@ -10,20 +10,24 @@ export function useOnlineSync(onSynced?: (count: number) => void) {
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
   const [pendingCount, setPendingCount] = useState(() => AttendanceQueue.count());
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string|null>(null);
+  const syncLock=useRef(false);
 
   const refreshPending = useCallback(() => {
     setPendingCount(AttendanceQueue.count());
   }, []);
 
   const syncQueue = useCallback(async () => {
-    if (AttendanceQueue.count() === 0) return;
-    setSyncing(true);
+    if (AttendanceQueue.count() === 0 || syncLock.current) return;
+    syncLock.current=true;setSyncing(true);setSyncError(null);
     try {
       const synced = await AttendanceRepository.syncQueue();
       setPendingCount(AttendanceQueue.count());
-      if (synced > 0) callbackRef.current?.(synced);
-    } finally {
-      setSyncing(false);
+      callbackRef.current?.(synced);
+      if(AttendanceQueue.getAll().some(r=>r._error)) setSyncError("بعض السجلات لم تُقبل؛ افتح المعلق لمراجعة السبب.");
+    } catch {setSyncError("تعذرت المزامنة؛ السجلات محفوظة على هذا الجهاز. أعد المحاولة.");}
+    finally {
+      syncLock.current=false;setSyncing(false);
     }
   }, []);
 
@@ -50,5 +54,5 @@ export function useOnlineSync(onSynced?: (count: number) => void) {
     };
   }, [syncQueue]);
 
-  return { isOnline, pendingCount, syncing, syncQueue, refreshPending };
+  return { isOnline, pendingCount, syncing, syncQueue, refreshPending, syncError };
 }

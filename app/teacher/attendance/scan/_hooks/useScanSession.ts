@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Html5Qrcode } from "html5-qrcode";
 import { AuthService } from "@/lib/services/authService";
@@ -14,13 +14,15 @@ import { AttendanceQueue, OfflineCache } from "@/lib/offlineQueue";
 import { appCache } from "@/lib/appCache";
 import { getErrorMessage, getCameraErrorMessage } from "@/lib/errors";
 import { getTodayCairo, getDateCairo, getDayOfWeekCairo } from "@/lib/utils/dateUtils";
-import { codeText } from "@/lib/utils/studentSearch";
 import { findStudentByQR } from "@/lib/utils/qrParser";
+import { useScanSound } from "./useScanSound";
+import { resolveManualStudent } from "../_utils/resolveManualStudent";
+import { studentsForPeriod, type AttendanceContext } from "@/lib/utils/attendancePeriod";
 import {cameraScanConfig,isCameraConstraintError} from "@/lib/cameraScanConfig";
 
 const invalidateAllTimeCache = () => appCache.invalidate("allTimeAttendanceMap");
 
-export interface LastScan { name: string; success: boolean; pending?: boolean; }
+export interface LastScan { name: string; success: boolean; pending?: boolean; info?: boolean; }
 export interface CrossGroupConfirm {
   context: {userId: string|null; selectedGroupId: string; sessionDate: string};
   student: Student;
@@ -102,17 +104,34 @@ function detectCurrentGroup(groups: Group[]): Group | null {
     if (!g.day_of_week || !g.time) return false;
     const startDate = g.start_date ?? g.created_at?.slice(0, 10) ?? null;
     if (startDate && todayStr < startDate) return false;
-    const days = g.day_of_week.split(/\s*[,،]\s*|\s+،\s+/).map(d => d.trim());
-    if (!days.includes(todayAr)) return false;
+    if (!parseGroupDayNumbers(g.day_of_week).includes(DAYS_AR.indexOf(todayAr)) || g.cancelled_sessions?.includes(todayStr)) return false;
     const [h, m] = g.time.split(":").map(Number);
     const gMins = h * 60 + m;
     return nowMins >= gMins - 5 && nowMins <= gMins + 20;
   });
-  return match ?? null;
+  const matches = groups.filter(g => {
+    if (!g.time || !getValidSessionDates(g).includes(todayStr)) return false;
+    const [h,m] = g.time.split(":").map(Number);
+    return nowMins >= h*60+m-5 && nowMins <= h*60+m+20;
+  });
+  return matches.length === 1 ? match ?? null : null;
 }
 
 export function useScanSession() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [queuedScans, setQueuedScans] = useState(0);
+  const [pastDateAcknowledged, setPastDateAcknowledged] = useState(false);
+  const pastAcknowledgedRef = useRef(false);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
+  const deletingRef = useRef(new Set<string>());
+  const [attendanceContext, setAttendanceContext] = useState<AttendanceContext | null>(null);
+  const [cameraTools, setCameraTools] = useState<{torch:boolean; zoom?:{min:number;max:number}}>({torch:false});
+  const [torchOn, setTorchOn] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const { soundEnabled, toggleSound, unlockSound, playSuccess } = useScanSound();
   const [userId, setUserId] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -139,12 +158,22 @@ export function useScanSession() {
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const cameraGeneration = useRef(0);
-  const rawScanRef = useRef({text:"",at:0,pending:false});
+  const epochRef = useRef(0);
+  const operationRef = useRef(false);
+  const confirmRef = useRef<CrossGroupConfirm | null>(null);
+  const queueRef = useRef<{text:string; manual:boolean; epoch:number}[]>([]);
+  const activeTextRef = useRef("");
+  const pumpRef = useRef<() => Promise<void>>(async()=>{});
+  const resetOperation = useCallback(() => {
+    epochRef.current++;
+    queueRef.current=[]; setQueuedScans(0);
+    confirmRef.current=null; setCrossGroupConfirm(null); setScannerPaused(false);
+    pastAcknowledgedRef.current=false; setPastDateAcknowledged(false);
+    setLastScan(null);
+  }, []);
   const lastTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const manualTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
-  const manualBusy = useRef(false);
   const writesRevision = useRef(0);
-  const processingRef = useRef<Set<string>>(new Set());
   const scannedIdsRef = useRef<Map<string, number>>(new Map());
   const autoGroupRef = useRef<string | null>(null);
   const manualOverrideRef = useRef(false);
@@ -170,16 +199,27 @@ export function useScanSession() {
     }
   },[scanning,crossGroupConfirm]);
 
-  const showLastScan = useCallback((name: string, success: boolean, pending = false) => {
+  const showLastScan = useCallback((name: string, success: boolean, pending = false, info = false) => {
     if(lastTimer.current) clearTimeout(lastTimer.current);
-    setLastScan({ name, success, pending });
-    lastTimer.current = setTimeout(() => setLastScan(null), 2000);
-  }, []);
+    setLastScan({ name, success, pending, info });
+    if(success) playSuccess();
+    // Acknowledged saves disappear quickly. Errors remain until dismissed or the next operation.
+    if(success || info) lastTimer.current = setTimeout(() => setLastScan(null), success ? 1400 : 2400);
+  }, [playSuccess]);
 
   // ── startScanner ──────────────────────────────────────────────
   const startScanner = useCallback(async (groupId?: string) => {
     const gid = groupId ?? stateRef.current.selectedGroupId;
-    if (!gid || scannerRef.current) return;
+    const group = stateRef.current.groups.find(g=>g.id===gid);
+    const date = stateRef.current.sessionDate;
+    if (!gid || !group || !getValidSessionDates(group).includes(date)) {
+      setSessionDateError("اختر جلسة صالحة قبل تشغيل الكاميرا"); return;
+    }
+    if(date < getTodayCairo() && !pastAcknowledgedRef.current) {
+      setSessionDateError("أكد التسجيل في الجلسة السابقة أولًا"); return;
+    }
+    unlockSound();
+    if (scannerRef.current) return;
     const generation = ++cameraGeneration.current;
     try {
       const config = cameraScanConfig();
@@ -189,7 +229,7 @@ export function useScanSession() {
       scannerRef.current = qr as unknown as Html5Qrcode;
 
       // FIX: استخدام handleQRSuccessRef بدل تكرار الكود
-      const onScan = (decodedText: string) => handleQRSuccessRef.current(decodedText);
+      const onScan = (decodedText: string) => {if(generation===cameraGeneration.current) handleQRSuccessRef.current(decodedText);};
 
       try {
         await qr.start({ facingMode: "environment" }, config, onScan, () => {});
@@ -204,6 +244,17 @@ export function useScanSession() {
       }
       if(generation !== cameraGeneration.current) { try { await qr.stop(); qr.clear(); } catch {} return; }
       setScanning(true);
+      setTorchOn(false);
+      try {
+        const capabilities = qr.getRunningTrackCapabilities() as MediaTrackCapabilities & {torch?:boolean;zoom?:{min:number;max:number}};
+        setCameraTools({torch:!!capabilities.torch,zoom:capabilities.zoom});
+        const settings=qr.getRunningTrackSettings() as MediaTrackSettings & {zoom?:number};
+        setZoom(settings.zoom ?? capabilities.zoom?.min ?? 1);
+      } catch { setCameraTools({torch:false}); }
+      const track = document.getElementById(scannerDivId)?.querySelector("video")?.srcObject as MediaStream | null;
+      track?.getVideoTracks?.().forEach(t=>t.addEventListener("ended",()=>{
+        if(generation===cameraGeneration.current) {scannerRef.current=null;setScanning(false);showLastScan("توقفت الكاميرا؛ اضغط تشغيل الكاميرا للاستئناف",false);}
+      },{once:true}));
     } catch (err: unknown) {
       if(generation === cameraGeneration.current) { scannerRef.current = null; showLastScan(getCameraErrorMessage(err), false); }
     }
@@ -217,13 +268,13 @@ export function useScanSession() {
       try { scannerRef.current.clear(); } catch {}
       scannerRef.current = null;
     }
-    setScanning(false);
+    setScanning(false); setCameraTools({torch:false}); setTorchOn(false);
   }, []);
 
   // ── Auto-detect: fills group/grade only, never touches camera ──
   const applyAutoDetect = useCallback((grpData: Group[]) => {
     const match = detectCurrentGroup(grpData);
-    if (!match) return;
+    if (!match || operationRef.current || confirmRef.current || scannerRef.current) return;
     if (match.id === autoGroupRef.current) return;
     autoGroupRef.current = match.id;
     setSelectedGroupId(match.id);
@@ -243,6 +294,7 @@ export function useScanSession() {
     let cancelled = false;
     async function load() {
       try {
+        setLoadError(null);
         // عرض الـ cache فوراً
         const cachedGroups = OfflineCache.loadGroups();
         const cachedStudents = OfflineCache.loadStudents();
@@ -257,7 +309,8 @@ export function useScanSession() {
         }
 
         const currentUser = await AuthService.getUser();
-        if (!currentUser || cancelled) return;
+        if (cancelled) return;
+        if (!currentUser) throw new Error("انتهت الجلسة؛ سجل الدخول مرة أخرى");
         setUserId(currentUser.id);
         stateRef.current.userId = currentUser.id;
 
@@ -288,7 +341,7 @@ export function useScanSession() {
         stateRef.current.userId = currentUser.id;
       } catch (e) {
         if (cancelled) return;
-        console.error("[Load] error:", e);
+        setLoadError(getErrorMessage(e,"تعذر تحميل بيانات السكان؛ أعد المحاولة"));
         const grpData = OfflineCache.loadGroups();
         const stData = OfflineCache.loadStudents();
         const grdData = OfflineCache.loadGrades();
@@ -305,7 +358,7 @@ export function useScanSession() {
     load();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadRevision]);
 
   // keep latest applyAutoDetect in a ref so effects always call the fresh version
   const applyAutoDetectRef = useRef(applyAutoDetect);
@@ -344,11 +397,11 @@ export function useScanSession() {
   const urlAutoStartedRef = useRef(false);
   useEffect(() => {
     if (!urlGroupId || !selectedGroupId || selectedGroupId !== urlGroupId) return;
-    if (urlAutoStartedRef.current || scanning || scannerRef.current) return;
+    if (urlAutoStartedRef.current || scanning || scannerRef.current || !validSessionDates.includes(sessionDate) || sessionDate !== getTodayCairo()) return;
     urlAutoStartedRef.current = true;
     setIsStarting(true);
     startScanner(selectedGroupId).finally(() => setIsStarting(false));
-  }, [urlGroupId, selectedGroupId, scanning, startScanner]);
+  }, [urlGroupId, selectedGroupId, scanning, startScanner, validSessionDates, sessionDate]);
 
   // ── Periodic auto-detect every 30s ───────────────────────────
   useEffect(() => {
@@ -363,7 +416,7 @@ export function useScanSession() {
 
   // ── Load session attendance from Supabase after group is set ─
   useEffect(() => {
-    if (!userId || !selectedGroupId || students.length === 0) return;
+    if (!userId || !selectedGroupId) return;
     let active = true;
     const revisionAtStart=writesRevision.current;
     async function loadSessionAttendance() {
@@ -373,21 +426,25 @@ export function useScanSession() {
             `/attendance?group_id=${selectedGroupId}&session_date=${sessionDate}&status=present`
           );
           if (records && active) {
+            setSessionDateError(null);
             if(revisionAtStart!==writesRevision.current) { refreshSessionAttendance(); return; }
             OfflineCache.replaceAttendanceSession(userId!,selectedGroupId,sessionDate,records);
             const currentStudents = stateRef.current.students;
-            setScannedToday(records.map(r => {
+            const entries:ScannedEntry[]=[...records].sort((a,b)=>(b.created_at||"").localeCompare(a.created_at||"")).map(r => {
               const st = currentStudents.find(s => s.id === r.student_id);
               return {
                 recordId: r.id || r._id, studentId: r.student_id,
                 studentName: st?.name ?? r.student_name ?? "طالب غير معروف",
                 time: r.created_at ? new Date(r.created_at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "—",
               };
-            }));
+            });
+            const queued=AttendanceQueue.getAll().filter(r=>r.teacher_id===userId && (r.scanner_group_id||r.group_id)===selectedGroupId && (r.scanner_session_date||r.session_date)===sessionDate);
+            entries.push(...queued.filter(r=>!entries.some(e=>e.studentId===r.student_id)).map(r=>({studentId:r.student_id,studentName:currentStudents.find(s=>s.id===r.student_id)?.name||"طالب",queued:true,time:new Date(r._queuedAt).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})})));
+            stateRef.current.scannedToday=entries;setScannedToday(entries);
           }
-        } catch { if(active) showLastScan("تعذر تحميل سجل الجلسة؛ تحقق من الاتصال قبل المتابعة",false); }
+        } catch { if(active) setSessionDateError("تعذر تحميل سجل الجلسة؛ أعد المحاولة. الخادم سيظل يتحقق من تكرار التسجيل."); }
       } else {
-        const queued = AttendanceQueue.getAll().filter(r => r.teacher_id===userId && (r.scanner_group_id || r.group_id) === selectedGroupId && r.session_date === sessionDate);
+        const queued = AttendanceQueue.getAll().filter(r => r.teacher_id===userId && (r.scanner_group_id || r.group_id) === selectedGroupId && (r.scanner_session_date || r.session_date) === sessionDate);
         const cached=OfflineCache.loadAttendanceRecords().filter(r=>r.teacher_id===userId && r.status==="present" && ((r.group_id===selectedGroupId&&r.session_date===sessionDate)||(r.scanner_group_id===selectedGroupId&&r.scanner_session_date===sessionDate))).map(r=>({studentId:r.student_id,studentName:students.find(s=>s.id===r.student_id)?.name||"طالب",recordId:r.id,time:r.created_at?new Date(r.created_at).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}):"—"}));
         setScannedToday([...cached,...queued.filter(r=>!cached.some(c=>c.studentId===r.student_id)).map(r => {
           const st = students.find(s => s.id === r.student_id);
@@ -403,7 +460,23 @@ export function useScanSession() {
     return () => { active=false; };
   }, [userId, selectedGroupId, sessionDate, students, sessionRevision]);
 
+  useEffect(() => {
+    if(!userId) return;
+    let active=true;
+    AttendanceService.getContext().then(context=>{if(active && context?.memberships) setAttendanceContext(context);}).catch(()=>{});
+    return ()=>{active=false;};
+  },[userId,loadRevision]);
+
+  useEffect(()=>{
+    const hide=()=>{if(document.hidden) void stopScanner();};
+    const pageHide=()=>{void stopScanner();};
+    document.addEventListener("visibilitychange",hide); window.addEventListener("pagehide",pageHide);
+    return ()=>{document.removeEventListener("visibilitychange",hide);window.removeEventListener("pagehide",pageHide);};
+  },[stopScanner]);
+
   useEffect(() => () => {
+    epochRef.current++;
+    queueRef.current=[];
     if(lastTimer.current) clearTimeout(lastTimer.current);
     void stopScanner();
     if(manualTimer.current) clearTimeout(manualTimer.current);
@@ -416,6 +489,7 @@ export function useScanSession() {
     confirmed = false,
   ) => {
     const { userId, sessionDate, selectedGroupId } = context;
+    if (!getValidSessionDates(stateRef.current.groups.find(g=>g.id===selectedGroupId) || {day_of_week:""} as Group).includes(sessionDate)) throw new Error("الجلسة لم تعد متاحة؛ راجع تاريخ الحصة");
     if (stateRef.current.userId !== userId || stateRef.current.sessionDate !== sessionDate || stateRef.current.selectedGroupId !== selectedGroupId) throw new Error("تغيرت الجلسة؛ أعد مسح الطالب");
     if (!userId) throw new Error("يرجى تسجيل الدخول");
     // ── Backend will automatically use student's original group_id ──────────
@@ -435,195 +509,97 @@ export function useScanSession() {
       recordId: saved.state === "saved" ? saved.record.id : undefined, queued: saved.state === "queued",
       time: new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }),
     };
-    if(stateRef.current.sessionDate === sessionDate && stateRef.current.selectedGroupId === selectedGroupId) setScannedToday(prev => prev.some(e => e.studentId === student.id) ? prev : [entry, ...prev]);
+    if(stateRef.current.sessionDate === sessionDate && stateRef.current.selectedGroupId === selectedGroupId) {
+      stateRef.current.scannedToday=[entry,...stateRef.current.scannedToday.filter(e=>e.studentId!==student.id)];
+      setScannedToday(stateRef.current.scannedToday);
+    }
     return saved;
-  }, [showLastScan]);
-
-  const handleQRSuccess = useCallback(async (decodedText: string) => {
-    const context = {...stateRef.current};
-    const { userId, scannerPaused, students, groups, grades, scannedToday, selectedGroupId, sessionDate } = context;
-    if (!userId || scannerPaused) return;
-    
-    const nowMs = Date.now();
-    if(rawScanRef.current.pending || (rawScanRef.current.text === decodedText && nowMs - rawScanRef.current.at < SCAN_COOLDOWN_MS)) return;
-    rawScanRef.current = {text:decodedText, at:nowMs, pending:true};
-    // support center QR (/report/c/{code}), legacy URL (/report/{id}), and raw ID
-    let scannedStudent: Student | undefined;
-    try {
-      scannedStudent = navigator.onLine
-        ? await StudentsService.getStudentByQR(decodedText)
-        : findStudentByQR(students, decodedText);
-    } catch (error) { showLastScan(getErrorMessage(error), false); return; }
-    finally { rawScanRef.current.pending = false; }
-    if (stateRef.current.selectedGroupId !== selectedGroupId || stateRef.current.sessionDate !== sessionDate) return;
-    if (!scannedStudent) { showLastScan("طالب غير مسجل عندك!", false); return; }
-    const studentId = scannedStudent.id;
-    if ((scannedIdsRef.current.get(studentId) ?? 0) + SCAN_COOLDOWN_MS > nowMs) return;
-    if (processingRef.current.has(studentId)) return;
-    processingRef.current.add(studentId);
-    scannedIdsRef.current.set(studentId, nowMs);
-
-    const student = scannedStudent;
-
-    // Check suspension
-    if (student.is_suspended && (!student.suspended_until || new Date(student.suspended_until) > new Date())) {
-      processingRef.current.delete(studentId);
-      const reason = student.suspension_reason ? ` — ${student.suspension_reason}` : "";
-      showLastScan(`${student.name} — الطالب موقوف${reason}`, false);
-      return;
-    }
-
-    // ── Cross-group validation via backend ────────────────────────────────
-    if (student.group_id !== selectedGroupId) {
-      try {
-        const validation = await api.post<import("@/lib/types").CrossGroupValidation>("/attendance/validate-cross-group", {
-          student_id: student.id,
-          scanner_group_id: selectedGroupId,
-          requested_date: sessionDate,
-        });
-
-        if(stateRef.current.selectedGroupId !== selectedGroupId || stateRef.current.sessionDate !== sessionDate) return;
-        if (validation.decision === "deny") {
-          processingRef.current.delete(studentId);
-          showLastScan(`${student.name} — ${validation.reason}`, false);
-          return;
-        }
-
-        if (validation.decision === "confirm") {
-          setScannerPaused(true);
-          setCrossGroupConfirm({
-            student, context,
-            originalGroupName: validation.studentGroupName,
-            originalGroupSchedule: validation.studentGroupSchedule,
-            nextScheduledDate: validation.nextScheduledDate,
-            scheduledDateIsToday: validation.scheduledDateIsToday,
-            reason: validation.reason,
-          });
-          processingRef.current.delete(studentId);
-          return;
-        }
-
-        // decision === "allow" → continue to attendance recording
-      } catch (e: unknown) {
-        processingRef.current.delete(studentId);
-        const errorMsg = getErrorMessage(e, "حدث خطأ في التحقق من صلاحية الحضور");
-        showLastScan(errorMsg, false);
-        return;
-      }
-    }
-
-    if (scannedToday.some(e => e.studentId === student.id)) {
-      processingRef.current.delete(studentId);
-      showLastScan(`${student.name} — مسجل مسبقاً`, false);
-      return;
-    }
-
-    try {
-      const saved = await commitAttendance(student, context);
-      if(saved) showLastScan(saved.state === "queued" ? `${student.name} — في انتظار المزامنة` : student.name, saved.state === "saved", saved.state === "queued");
-    } catch (e: unknown) {
-      const msg = getErrorMessage(e, "حدث خطأ أثناء تسجيل الحضور.");
-      // If the backend message explicitly mentions suspension keywords, surface them directly
-      showLastScan(msg.includes("محظور") || msg.includes("موقوف") ? `${student.name} — الطالب موقوف` : msg, false);
-    } finally {
-      processingRef.current.delete(studentId);
-    }
-  }, [showLastScan, commitAttendance]);
-
-  // ربط الـ ref بالـ callback الحالي
-  useLayoutEffect(() => { handleQRSuccessRef.current = handleQRSuccess; }, [handleQRSuccess]);
-
-  const showManualMsg = useCallback((text: string, type: "success" | "error" | "warn") => {
-    if(manualTimer.current) clearTimeout(manualTimer.current);
-    setManualMsg({ text, type });
-    manualTimer.current=setTimeout(() => setManualMsg(null), 3000);
   }, []);
 
-  const handleManualSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if(manualBusy.current) return;
-    manualBusy.current=true;
+  // One operation owns lookup, validation, confirmation and save. Different cards wait in order.
+  const pump = useCallback(async () => {
+    if(operationRef.current || confirmRef.current) return;
+    const item=queueRef.current.shift(); setQueuedScans(queueRef.current.length);
+    if(!item) return;
+    if(item.epoch!==epochRef.current) {void pumpRef.current();return;}
+    operationRef.current=true; activeTextRef.current=item.text;
+    const context={...stateRef.current};
+    const active=()=>item.epoch===epochRef.current;
     try {
-    const context = {...stateRef.current};
-    const { userId, students, groups, scannedToday, selectedGroupId, sessionDate } = context;
-    if(context.scannerPaused) {showManualMsg("راجع تأكيد الطالب الحالي أو أغلقه أولًا","warn");return;}
-    if (!userId || !selectedGroupId || !getValidSessionDates(groups.find(g=>g.id===selectedGroupId) || {day_of_week:""} as Group).includes(sessionDate)) { showManualMsg("اختر جلسة متاحة أولًا","error"); return; }
-    
-    const group = groups.find(g => g.id === selectedGroupId);
-    const fullCode = group?.code ? `${group.code}-${manualCode.trim()}` : manualCode.trim();
-    const normalized = codeText(manualCode);
-    const student = findStudentByQR(students, manualCode) ?? students.find(s => [s.code,s.center_student_code].some(c => c && [normalized,codeText(fullCode)].includes(codeText(c)))) ?? (/^\d+$/.test(normalized) ? students.find(s=>s.group_id===selectedGroupId && s.code && Number(s.code.split("-").at(-1))===Number(normalized)) : undefined);
-    if (!student) { showManualMsg("الكود غير موجود", "error"); return; }
-    if (student.is_suspended && (!student.suspended_until || new Date(student.suspended_until) > new Date())) {
-      const reason = student.suspension_reason ? ` — ${student.suspension_reason}` : "";
-      showManualMsg(`${student.name} — الطالب موقوف${reason}`, "error"); return;
-    }
-    if (scannedToday.some(e => e.studentId === student.id)) {
-      showManualMsg(`${student.name} — مسجل مسبقاً ✓`, "warn"); return;
-    }
-    // ── Cross-group check للإدخال اليدوي ──────────────────────────
-    if (student.group_id !== selectedGroupId) {
-      try {
-        const validation = await api.post<import("@/lib/types").CrossGroupValidation>("/attendance/validate-cross-group", {
-          student_id: student.id,
-          scanner_group_id: selectedGroupId,
-          requested_date: sessionDate,
-        });
-
-        if(stateRef.current.selectedGroupId !== selectedGroupId || stateRef.current.sessionDate !== sessionDate) return;
-        if (validation.decision === "deny") {
-          showManualMsg(`${student.name} — ${validation.reason}`, "error");
-          setManualCode("");
-          return;
-        }
-
-        if (validation.decision === "confirm") {
-          setScannerPaused(true);
-          setCrossGroupConfirm({
-            student, context,
-            originalGroupName: validation.studentGroupName,
-            originalGroupSchedule: validation.studentGroupSchedule,
-            nextScheduledDate: validation.nextScheduledDate,
-            scheduledDateIsToday: validation.scheduledDateIsToday,
-            reason: validation.reason,
-          });
-          setManualCode("");
-          return;
-        }
-
-        // decision === "allow" → continue below
-      } catch (err: unknown) {
-        showManualMsg(getErrorMessage(err, "حدث خطأ في التحقق من صلاحية الحضور"), "error");
-        setManualCode("");
-        return;
+      const group=context.groups.find(g=>g.id===context.selectedGroupId);
+      if(!context.userId || !group || !getValidSessionDates(group).includes(context.sessionDate)) throw new Error("اختر جلسة متاحة أولًا");
+      if(context.sessionDate < getTodayCairo() && !pastAcknowledgedRef.current) throw new Error("أكد التسجيل في الجلسة السابقة أولًا");
+      setBusy("جاري التعرف على الطالب…"); setLastScan(null);
+      let student:Student|undefined;
+      if(item.manual) student=resolveManualStudent(context.students,item.text,group);
+      if(!student) student=navigator.onLine ? await StudentsService.getStudentByQR(item.text) : findStudentByQR(context.students,item.text);
+      if(!active()) return;
+      if(!student) throw new Error("الكود غير موجود؛ راجع كود الطالب كاملًا");
+      if(student.is_suspended && (!student.suspended_until || new Date(student.suspended_until)>new Date())) throw new Error(`${student.name} — الطالب موقوف${student.suspension_reason ? " — "+student.suspension_reason : ""}`);
+      if(stateRef.current.scannedToday.some(e=>e.studentId===student.id)) {
+        const queued=stateRef.current.scannedToday.some(e=>e.studentId===student.id&&e.queued);
+        showLastScan(`${student.name} — ${queued ? "مسجل على الجهاز وفي انتظار المزامنة" : "مسجل مسبقًا"}`,false,queued,!queued); return;
       }
+      if(student.group_id!==context.selectedGroupId) {
+        setBusy(`جاري التحقق من حضور ${student.name}…`);
+        const validation=await api.post<import("@/lib/types").CrossGroupValidation>("/attendance/validate-cross-group",{student_id:student.id,scanner_group_id:context.selectedGroupId,requested_date:context.sessionDate});
+        if(!active()) return;
+        if(validation.decision==="deny") throw new Error(`${student.name} — ${validation.reason}`);
+        if(validation.decision==="confirm") {
+          const confirmation={student,context,originalGroupName:validation.studentGroupName,originalGroupSchedule:validation.studentGroupSchedule,nextScheduledDate:validation.nextScheduledDate,scheduledDateIsToday:validation.scheduledDateIsToday,reason:validation.reason};
+          confirmRef.current=confirmation; setCrossGroupConfirm(confirmation);
+          stateRef.current.scannerPaused=true;setScannerPaused(true);
+          return;
+        }
+      }
+      setBusy(`جاري تسجيل ${student.name}…`);
+      const saved=await commitAttendance(student,context);
+      if(active() && saved) showLastScan(saved.state==="queued" ? `${student.name} — في انتظار المزامنة` : `تم تسجيل حضور ${student.name} · ${student.code || student.center_student_code || ""}`,saved.state==="saved",saved.state==="queued");
+    } catch(error) {if(active()) showLastScan(getErrorMessage(error,"تعذر التسجيل؛ حاول مرة أخرى"),false);}
+    finally {
+      operationRef.current=false;activeTextRef.current=""; setBusy(null);
+      if(item.manual && active()) setManualCode("");
+      if(!confirmRef.current) void pumpRef.current();
     }
-    try {
-      const saved = await commitAttendance(student, context);
-      if(!saved)return;
-      showManualMsg(saved?.state === "queued" ? `${student.name} — في انتظار المزامنة` : `تم تسجيل ${student.name}`, saved?.state === "queued" ? "warn" : "success");
-      setManualCode("");
-    } catch (err: unknown) {
-      showManualMsg(getErrorMessage(err, "حدث خطأ أثناء تسجيل الحضور. حاول مرة أخرى."), "error");
-    }
-    } finally { manualBusy.current = false; }
-  }, [manualCode, showManualMsg, commitAttendance]);
+  },[commitAttendance,showLastScan]);
+  useLayoutEffect(()=>{pumpRef.current=pump;},[pump]);
+
+  const enqueue = useCallback(async(text:string,manual=false)=>{
+    text=text.trim();if(!text) return;
+    if(confirmRef.current) return;
+    const now=Date.now();
+    if(activeTextRef.current===text || queueRef.current.some(item=>item.text===text)) return;
+    const last=scannedIdsRef.current.get(text);
+    if(!manual && last && now-last<SCAN_COOLDOWN_MS) return;
+    if(queueRef.current.length>=5) {showLastScan("طابور المسح ممتلئ؛ انتظر انتهاء التسجيل ثم أعد مسح البطاقة",false);return;}
+    scannedIdsRef.current.set(text,now);
+    queueRef.current.push({text,manual,epoch:epochRef.current});setQueuedScans(queueRef.current.length);
+    await pumpRef.current();
+  },[showLastScan]);
+  useLayoutEffect(()=>{handleQRSuccessRef.current=(text)=>{void enqueue(text);};},[enqueue]);
+
+  const handleManualSubmit = useCallback(async(e:React.FormEvent)=>{
+    e.preventDefault();unlockSound();
+    if(operationRef.current || confirmRef.current) {showLastScan("انتظر اكتمال تسجيل الطالب الحالي أو راجع تأكيده",false,false,true);return;}
+    await enqueue(manualCode,true);
+  },[manualCode,enqueue,unlockSound,showLastScan]);
 
   // FIX: handleGradeChange async مع await stopScanner
   const handleGradeChange = useCallback(async (v: string) => {
     manualOverrideRef.current = true;
-    setCrossGroupConfirm(null); setScannerPaused(false);
+    resetOperation();
     stateRef.current.selectedGroupId = "";
     await stopScanner();
+    setValidSessionDates([]);
     setSelectedGradeId(v);
     setSelectedGroupId("");
     setScannedToday([]);
     scannedIdsRef.current.clear();
-    processingRef.current.clear();
-  }, [scanning, stopScanner]);
+  }, [stopScanner,resetOperation]);
 
   const handleGroupChange = useCallback(async (v: string) => {
-    setCrossGroupConfirm(null); setScannerPaused(false);
+    resetOperation();
+    setSessionDateError(null);
     if(isStarting) await stopScanner();
     autoGroupRef.current = null;
     manualOverrideRef.current = true;
@@ -631,7 +607,6 @@ export function useScanSession() {
     stateRef.current.selectedGroupId = v;
     setScannedToday([]);
     scannedIdsRef.current.clear();
-    processingRef.current.clear();
     // حساب التواريخ الصالحة وضبط التاريخ
     if (v) {
       const grp = stateRef.current.groups.find(g => g.id === v);
@@ -647,49 +622,50 @@ export function useScanSession() {
     }
     if (scanning) {
       await stopScanner();
-      if (v) {
+      if (v && stateRef.current.sessionDate===getTodayCairo()) {
         setIsStarting(true);
         await startScanner(v);
         setIsStarting(false);
       }
     }
-  }, [scanning, isStarting, stopScanner, startScanner]);
+  }, [scanning, isStarting, stopScanner, startScanner,resetOperation]);
 
   const handleSessionDateChange = useCallback((date: string) => {
-    if (validSessionDates.length && !validSessionDates.includes(date)) return;
-    setCrossGroupConfirm(null); setScannerPaused(false);
+    if (!validSessionDates.includes(date)) return;
+    void stopScanner();
+    resetOperation();
     setSessionDateError(null);
     setSessionDate(date);
     stateRef.current.sessionDate = date;
     setScannedToday([]);
     scannedIdsRef.current.clear();
-    processingRef.current.clear();
-  }, [validSessionDates]);
+  }, [validSessionDates,stopScanner,resetOperation]);
 
   const handleConfirmCrossGroup = useCallback(async () => {
-    if (!crossGroupConfirm) return;
-    const st = crossGroupConfirm.student;
-    scannedIdsRef.current.set(st.id, Date.now());
-    setCrossGroupConfirm(null);
+    const confirmation=confirmRef.current;
+    if(!confirmation || operationRef.current) return;
+    unlockSound();operationRef.current=true;
+    const epoch=epochRef.current;
+    setBusy(`جاري تسجيل ${confirmation.student.name}…`);
     try {
-      const context = crossGroupConfirm.context;
-      const saved = await commitAttendance(st, {...stateRef.current, ...context}, true);
-      if(saved) showLastScan(saved.state === "queued" ? `${st.name} — في انتظار المزامنة` : st.name, saved.state === "saved", saved.state === "queued");
-    } catch (e: unknown) {
-      showLastScan(getErrorMessage(e, "حدث خطأ أثناء تسجيل الحضور."), false);
-    } finally { setScannerPaused(false); }
-  }, [crossGroupConfirm, showLastScan, commitAttendance]);
-
-  const handleCancelCrossGroup = useCallback(() => {
-    if (crossGroupConfirm) scannedIdsRef.current.set(crossGroupConfirm.student.id, Date.now());
-    setCrossGroupConfirm(null);
-    setScannerPaused(false);
-  }, [crossGroupConfirm]);
+      const saved=await commitAttendance(confirmation.student,{...stateRef.current,...confirmation.context},true);
+      if(epoch===epochRef.current && saved) showLastScan(saved.state==="queued" ? `${confirmation.student.name} — في انتظار المزامنة` : `تم تسجيل حضور ${confirmation.student.name}`,saved.state==="saved",saved.state==="queued");
+      if(epoch===epochRef.current) {confirmRef.current=null;setCrossGroupConfirm(null);setScannerPaused(false);stateRef.current.scannerPaused=false;}
+    } catch(error) {if(epoch===epochRef.current) showLastScan(getErrorMessage(error,"تعذر التسجيل؛ أعد المحاولة أو ألغِ التأكيد"),false);}
+    finally {operationRef.current=false;setBusy(null);if(!confirmRef.current) void pumpRef.current();}
+  },[commitAttendance,showLastScan,unlockSound]);
+  const handleCancelCrossGroup=useCallback(()=>{
+    if(operationRef.current) return;
+    confirmRef.current=null;setCrossGroupConfirm(null);setScannerPaused(false);stateRef.current.scannerPaused=false;
+    void pumpRef.current();
+  },[]);
 
   const handleRemoveScanned = useCallback(async (studentId: string) => {
-    const { userId, sessionDate, scannedToday } = stateRef.current;
+    const { userId, sessionDate, selectedGroupId, scannedToday } = stateRef.current;
     const entry = scannedToday.find(e => e.studentId === studentId);
-    if (!entry || !userId) return;
+    if (!entry || !userId || deletingRef.current.has(studentId)) return;
+    if(!window.confirm(`إلغاء حضور ${entry.studentName} بتاريخ ${sessionDate}؟`)) return;
+    deletingRef.current.add(studentId);setDeletingIds([...deletingRef.current]);
     try {
       if(entry.queued && AttendanceService.isSyncing()) throw new Error("انتظر انتهاء المزامنة قبل إلغاء الحضور");
       if(entry.queued && AttendanceQueue.getAll().some(r=>r.student_id===studentId && r.session_date===sessionDate)) AttendanceQueue.remove(studentId, sessionDate);
@@ -703,10 +679,12 @@ export function useScanSession() {
         if(id) await AttendanceService.deleteAttendanceRecord(id);
       }
       writesRevision.current++;
-      if(stateRef.current.sessionDate!==sessionDate)return;
-      setScannedToday(prev => prev.filter(e => e.studentId !== studentId));
+      if(stateRef.current.sessionDate!==sessionDate || stateRef.current.selectedGroupId!==selectedGroupId)return;
+      stateRef.current.scannedToday=stateRef.current.scannedToday.filter(e=>e.studentId!==studentId);
+      setScannedToday(stateRef.current.scannedToday);
       scannedIdsRef.current.delete(studentId); invalidateAllTimeCache();
     } catch(error) { showLastScan(getErrorMessage(error,"تعذر إلغاء الحضور"),false); }
+    finally {deletingRef.current.delete(studentId);setDeletingIds([...deletingRef.current]);}
   }, [showLastScan]);
 
   const manualPlaceholder = (() => {
@@ -721,18 +699,26 @@ export function useScanSession() {
     ? (groups.find(g => g.id === selectedGroupId)?.code ?? null)
     : null;
 
-  const groupStudentsCount = students.filter(s => s.group_id === selectedGroupId).length;
+  const studentMap=useMemo(()=>new Map(students.map(s=>[s.id,s])),[students]);
+  const eligibleStudents=useMemo(()=>studentsForPeriod(students,attendanceContext?.memberships||[],sessionDate,sessionDate).filter(s=>s.group_id===selectedGroupId && (!s.created_at || s.created_at.slice(0,10)<=sessionDate) && (sessionDate!==getTodayCairo() || !s.is_suspended || (!!s.suspended_until && new Date(s.suspended_until)<=new Date()))),[students,attendanceContext,selectedGroupId,sessionDate]);
+  const groupStudentsCount=eligibleStudents.length;
+  const remainingCount=useMemo(()=>eligibleStudents.filter(s=>!scannedToday.some(e=>e.studentId===s.id)).length,[eligibleStudents,scannedToday]);
+  const crossGroupCount=useMemo(()=>scannedToday.filter(e=>studentMap.get(e.studentId)?.group_id!==selectedGroupId).length,[scannedToday,studentMap,selectedGroupId]);
 
-  // عدد الطلاب الحاضرين من مجموعات أخرى (cross-group)
-  const crossGroupCount = scannedToday.filter(e => {
-    const st = students.find(s => s.id === e.studentId);
-    return st ? st.group_id !== selectedGroupId : false;
-  }).length;
+  const acknowledgePastDate=()=>{pastAcknowledgedRef.current=true;setPastDateAcknowledged(true);setSessionDateError(null);};
+  const applyCameraTool=async(constraint:MediaTrackConstraints)=>{
+    try {await scannerRef.current?.applyVideoConstraints(constraint);} catch {showLastScan("الجهاز لا يدعم ضبط الكاميرا المطلوب",false);}
+  };
+  const toggleTorch=async()=>{const next=!torchOn;try {await scannerRef.current?.applyVideoConstraints({advanced:[{torch:next} as MediaTrackConstraintSet]});setTorchOn(next);}catch {showLastScan("تعذر تشغيل الفلاش على هذا الجهاز",false);}};
 
   const gradesWithGroups = grades.filter(gr => groups.some(g => g.grade_id === gr.id));
 
   return {
-    loading, userId,
+    loading, userId, loadError, retryLoad:()=>setLoadRevision(v=>v+1),
+    busy, queuedScans, pastDateAcknowledged, acknowledgePastDate, remainingCount, deletingIds,
+    soundEnabled,toggleSound, cameraTools,torchOn,toggleTorch,zoom,
+    setCameraZoom:async(value:number)=>{await applyCameraTool({advanced:[{zoom:value} as MediaTrackConstraintSet]});setZoom(value);},
+    dismissLastScan:()=>setLastScan(null),
     groups, students, grades: gradesWithGroups,
     selectedGradeId, selectedGroupId, sessionDate,
     validSessionDates,

@@ -1,50 +1,25 @@
 "use client";
-
-import { CheckCircle2, Users, X } from "lucide-react";
-import { ScannedEntry } from "@/lib/types";
-
-interface Props {
-  entries: ScannedEntry[];
-  totalInGroup: number;
-  crossGroupCount: number;
-  onRemove: (studentId: string) => void;
-}
-
-export function ScannedList({ entries, totalInGroup, crossGroupCount, onRemove }: Props) {
-  if (entries.length === 0) return null;
-
-  const presentInGroup = entries.length - crossGroupCount;
-  const absentCount = Math.max(0, totalInGroup - presentInGroup);
-
-  return (
-    <div className="bg-[var(--bg-card)] border border-white/[0.07] rounded-xl p-4">
-      <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-300 mb-3">
-        <Users size={14} />
-        <span>حضور مؤكد {entries.filter(e=>!e.queued).length}{entries.some(e=>e.queued) ? ` · معلق ${entries.filter(e=>e.queued).length}` : ""}</span>
-        {absentCount > 0 && (
-          <span className="text-slate-400 mr-2">· لم يسجل بعد {absentCount}</span>
-        )}
-      </div>
-      <div className="flex flex-col gap-1.5 max-h-[300px] overflow-y-auto">
-        {entries.map((entry) => (
-          <div key={entry.studentId} className="flex justify-between items-center px-2.5 py-1.5 rounded-lg bg-emerald-500/[0.06] border border-emerald-500/[0.12] text-sm">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0" />
-              <span className={entry.queued ? "text-amber-300" : "text-emerald-100"}>{entry.studentName}{entry.queued ? " — معلق" : ""}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-xs font-mono">{entry.time}</span>
-              <button
-                onClick={() => onRemove(entry.studentId)}
-                title="إلغاء التسجيل"
-                className="bg-none border-none cursor-pointer text-slate-400 p-0.5 flex items-center hover:text-slate-200 transition-colors"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+import {useMemo,useState} from "react";
+import {Trash2,Search,LoaderCircle} from "lucide-react";
+import type {ScannedEntry,Student,Group} from "@/lib/types";
+import {matchesStudentSearch} from "@/lib/utils/studentSearch";
+import styles from "../scan.module.css";
+interface Props {entries:ScannedEntry[];totalInGroup:number;crossGroupCount:number;onRemove:(id:string)=>void;students?:Student[];groups?:Group[];deletingIds?:string[];remainingCount?:number}
+export function ScannedList(p:Props){
+ const [search,setSearch]=useState(""),[limit,setLimit]=useState(30);
+ const map=useMemo(()=>new Map(p.students?.map(s=>[s.id,s])),[p.students]);
+ const groups=useMemo(()=>new Map(p.groups?.map(g=>[g.id,g.name])),[p.groups]);
+ const entries=useMemo(()=>p.entries.filter(e=>matchesStudentSearch(map.get(e.studentId)||{name:e.studentName},search)),[p.entries,map,search]);
+ return <section className={styles.card}>
+  <details open className={styles.listDetails}><summary>حضور الجلسة <span>{p.entries.filter(e=>!e.queued).length} مؤكد · {p.entries.filter(e=>e.queued).length} معلق</span></summary>
+   <p className={styles.muted}>سجلات الجلسة على الخادم ومعها المعلق على هذا الجهاز · من مجموعات أخرى: {p.crossGroupCount}</p>
+   <label className={styles.search}><Search size={17}/><input aria-label="بحث في حضور الجلسة" placeholder="بحث بالاسم أو الكود" value={search} onChange={e=>{setSearch(e.target.value);setLimit(30);}}/></label>
+   <div className={styles.attendanceList}>{entries.slice(0,limit).map(entry=>{const student=map.get(entry.studentId);const deleting=p.deletingIds?.includes(entry.studentId);return <div key={entry.studentId} className={styles.attendanceRow}>
+    <div className={styles.entryIdentity}><strong>{entry.studentName}</strong><span><bdi>{student?.code || student?.center_student_code || "—"}</bdi> · {groups.get(student?.group_id||"") || "مجموعة غير متاحة"}</span><span className={entry.queued ? styles.amberText : styles.tealText}>{entry.queued ? "معلق على الجهاز" : "مؤكد على الخادم"} · {entry.time}</span></div>
+    <button className={styles.iconButton} disabled={deleting} onClick={()=>p.onRemove(entry.studentId)} aria-label={`إلغاء حضور ${entry.studentName}`} title="إلغاء الحضور مع التأكيد">{deleting ? <LoaderCircle size={18} className={styles.spin}/> : <Trash2 size={18}/>}</button>
+   </div>;})}</div>
+   {!entries.length && <p className={styles.empty}>{search ? "لا توجد نتائج مطابقة" : "لم يسجل حضور بعد في هذه الجلسة"}</p>}
+   {entries.length>limit && <button className={styles.secondary} onClick={()=>setLimit(v=>v+30)}>عرض المزيد ({entries.length-limit})</button>}
+  </details>
+ </section>;
 }
