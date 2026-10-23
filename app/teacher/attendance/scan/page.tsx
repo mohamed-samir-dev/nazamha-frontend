@@ -11,6 +11,7 @@ import { ScannedList } from "./_components/ScannedList";
 import { ScannerPanel } from "./_components/ScannerPanel";
 import { useScanSession } from "./_hooks/useScanSession";
 import { useOnlineSync } from "./_hooks/useOnlineSync";
+import { AttendanceQueue } from "@/lib/offlineQueue";
 
 function QRScanPageInner() {
   const router = useRouter();
@@ -32,7 +33,7 @@ function QRScanPageInner() {
     startScanner, stopScanner,
     handleManualSubmit, setManualCode,
     handleConfirmCrossGroup, handleCancelCrossGroup,
-    handleRemoveScanned,
+    handleRemoveScanned, refreshSessionAttendance,
   } = useScanSession();
 
   const [syncToast, setSyncToast] = useState<number | null>(null);
@@ -42,11 +43,12 @@ function QRScanPageInner() {
   }
 
   const { isOnline, pendingCount, syncing, syncQueue } = useOnlineSync((count) => {
-    if (count > 0) showSyncToast(count);
+    if (count > 0) { showSyncToast(count); refreshSessionAttendance(); }
   });
 
   async function handleExit() {
-    if (scanning) await stopScanner();
+    if (AttendanceQueue.count() > 0 && !window.confirm("يوجد حضور لم يُرفع بعد وسيظل محفوظًا للمزامنة. مغادرة السكان؟")) return;
+    await stopScanner();
     router.push("/teacher/attendance");
   }
 
@@ -105,7 +107,7 @@ function QRScanPageInner() {
 
       {/* Layout */}
       <div className="grid grid-cols-[320px_1fr] gap-5 items-start max-[900px]:grid-cols-1">
-        <aside className="flex flex-col gap-4">
+        <aside className="flex flex-col gap-4 max-[900px]:order-2">
           <SessionConfig
             grades={grades}
             groups={groups}
@@ -142,7 +144,7 @@ function QRScanPageInner() {
           />
         </aside>
 
-        <ScannerPanel
+        <div className="max-[900px]:order-1"><ScannerPanel
           scanning={scanning}
           selectedGroupId={selectedGroupId}
           scannerDivId={scannerDivId}
@@ -150,8 +152,9 @@ function QRScanPageInner() {
           crossGroupConfirm={crossGroupConfirm}
           onConfirmCrossGroup={handleConfirmCrossGroup}
           onCancelCrossGroup={handleCancelCrossGroup}
-        />
+        /></div>
       </div>
+      {pendingCount > 0 && <div className="glass-panel p-4 border border-amber-500/30 text-amber-300" role="status"><p className="font-bold mb-2">{pendingCount} حضور في انتظار الرفع</p><p className="text-sm mb-3">الحضور المعلق لم يُؤكد على الخادم بعد.</p>{AttendanceQueue.getAll().filter(r => r._error).map(r => <p key={`${r.student_id}-${r.session_date}`} className="text-sm text-red-300 py-2 border-t border-white/10">{r.session_date}: {r._error}</p>)}</div>}
 
       {/* Mobile sticky bottom bar */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center gap-2 px-3 py-2.5 bg-[rgba(8,12,20,0.97)] border-t border-white/10 backdrop-blur-xl">
@@ -185,7 +188,7 @@ function QRScanPageInner() {
           onClick={handleExit}
         >
           <ArrowRight size={14} />
-          حفظ وإنهاء
+          خروج من السكان
         </button>
       </div>
     </div>

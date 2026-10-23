@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AttendanceQueue } from "@/lib/offlineQueue";
 import { AttendanceRepository } from "@/lib/repositories/attendanceRepository";
 
 export function useOnlineSync(onSynced?: (count: number) => void) {
+  const callbackRef = useRef(onSynced);
+  useEffect(() => { callbackRef.current=onSynced; }, [onSynced]);
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
   const [pendingCount, setPendingCount] = useState(() => AttendanceQueue.count());
   const [syncing, setSyncing] = useState(false);
@@ -19,11 +21,19 @@ export function useOnlineSync(onSynced?: (count: number) => void) {
     try {
       const synced = await AttendanceRepository.syncQueue();
       setPendingCount(AttendanceQueue.count());
-      if (synced > 0) onSynced?.(synced);
+      if (synced > 0) callbackRef.current?.(synced);
     } finally {
       setSyncing(false);
     }
-  }, [onSynced]);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("attendance-queue-changed", refreshPending);
+    window.addEventListener("storage", refreshPending);
+    let active=true;
+    void Promise.resolve().then(()=>{if(active && navigator.onLine) return syncQueue();});
+    return () => { active=false; window.removeEventListener("attendance-queue-changed", refreshPending); window.removeEventListener("storage", refreshPending); };
+  }, [refreshPending, syncQueue]);
 
   useEffect(() => {
     const handleOnline = async () => {

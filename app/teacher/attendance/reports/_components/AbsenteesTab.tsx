@@ -82,6 +82,7 @@ interface Props {
 
 export function AbsenteesTab({ rows, threshold, onThresholdChange, selectedMonth, selectedYear }: Props) {
   const [page, setPage] = useState(1);
+
   const thCls = "px-2.5 py-2 text-[0.65rem] font-bold text-slate-400 border-b border-white/[0.07] whitespace-nowrap uppercase tracking-wider text-right";
   const tdCls = "px-2.5 py-2 border-b border-white/[0.04] whitespace-nowrap";
   const paged = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -136,7 +137,7 @@ export function AbsenteesTab({ rows, threshold, onThresholdChange, selectedMonth
                   ? `https://wa.me/${formatPhone(row.student.parent_phone)}?text=${encodeURIComponent(buildAbsenceMessage(row, selectedMonth, selectedYear))}`
                   : null;
                 return (
-                  <tr key={row.student.id} className="transition-colors hover:bg-white/[0.025]">
+                  <tr key={`${row.student.id}-${row.student.group_id}-${row.student.group_join_date}`} className="transition-colors hover:bg-white/[0.025]">
                     <td className={`${tdCls} text-center text-slate-600 font-semibold text-xs`}>{(page - 1) * PAGE_SIZE + i + 1}</td>
                     <td className={tdCls}>
                       <div className="flex flex-col gap-px">

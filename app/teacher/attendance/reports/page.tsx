@@ -24,8 +24,8 @@ export default function AttendanceReportsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("students");
 
   const {
-    loading,
-    grades, availableGrades, availableGroups, groups,
+    loading, error,
+    availableGrades, availableGroups,
     selectedMonth, setSelectedMonth,
     selectedYear, setSelectedYear,
     selectedGradeId, setSelectedGradeId,
@@ -37,6 +37,7 @@ export default function AttendanceReportsPage() {
   } = useAttendanceReports();
 
   if (loading) return <Spinner fullScreen />;
+  if(error) return <div role="alert" className="glass-panel p-6 text-red-400">{error}<button className="btn btn-secondary mr-3" onClick={() => window.location.reload()}>إعادة المحاولة</button></div>;
 
   return (
     <div className="flex flex-col gap-3 sm:gap-5">
@@ -106,7 +107,7 @@ export default function AttendanceReportsPage() {
         {/* Tab content */}
         <div className="p-3 sm:p-4">
           {activeTab === "students" && (
-            <StudentReportTab
+            <StudentReportTab key={`${selectedMonth}-${selectedYear}-${selectedGradeId}-${selectedGroupId}`}
               rows={studentRows}
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
@@ -114,7 +115,7 @@ export default function AttendanceReportsPage() {
           )}
           {activeTab === "groups" && <GroupReportTab rows={groupRows} />}
           {activeTab === "absentees" && (
-            <AbsenteesTab
+            <AbsenteesTab key={`${selectedMonth}-${selectedYear}-${selectedGradeId}-${selectedGroupId}`}
               rows={absenteeRows}
               threshold={absentThreshold}
               onThresholdChange={setAbsentThreshold}
@@ -124,7 +125,7 @@ export default function AttendanceReportsPage() {
           )}
           {activeTab === "last-session" && (
             <LastSessionTab
-              groups={availableGroups}
+              groups={availableGroups.filter(g => selectedGroupId === "all" || g.id === selectedGroupId)}
               getLastSessionAbsentees={getLastSessionAbsentees}
             />
           )}

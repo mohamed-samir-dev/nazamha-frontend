@@ -1,5 +1,5 @@
 import { Student, AttendanceRecord, Group } from "@/lib/types";
-import { getGroupSessionDates } from "../_utils/sessionDates";
+import { getGroupSessionDates, isSessionExpired, sessionTime } from "../_utils/sessionDates";
 import { AttendanceService } from "@/lib/services/attendanceService";
 import { AttendanceQueue } from "@/lib/offlineQueue";
 import { printHtml } from "@/lib/printHtml";
@@ -28,6 +28,7 @@ function buildGroupTable(
   cancelledSessions: Set<string>,
   attendance: AttendanceRecord[],
   startIndex: number,
+  group?: Group,
 ): string {
   const isPresent = (sid: string, d: string) =>
     attendance.some(a => a.student_id === sid && a.session_date === d && a.status === "present");
@@ -38,15 +39,15 @@ function buildGroupTable(
     .map(d => `<th>${escapeHtml(formatDate(d))}</th>`)
     .join("");
 
-  const today = getTodayCairo();
+
   const rows = grpStudents.map((s, i) => {
     const joinDate = s.group_join_date || s.created_at?.slice(0, 10) || null;
     const cells = activeDates.map(d => {
       const p = isPresent(s.id, d);
-      const neutral = d > today || (joinDate != null && d < joinDate);
+      const neutral = !!s.attendance_excluded_dates?.includes(d) || !!(s.attendance_ends_on && d > s.attendance_ends_on) || !isSessionExpired(d, group ? sessionTime(group,d) : "23:59") || (joinDate != null && d < joinDate);
       return `<td class="cell-center" style="color:${p ? "#0d9488" : neutral ? "#aaa" : "#dc2626"};font-weight:700">${p ? "✓" : neutral ? "—" : "✗"}</td>`;
     }).join("");
-    const relevantDates = activeDates.filter(d => (!joinDate || d >= joinDate) && d <= today);
+    const relevantDates = activeDates.filter(d => !s.attendance_excluded_dates?.includes(d) && (!joinDate || d >= joinDate) && (!s.attendance_ends_on || d<=s.attendance_ends_on) && isSessionExpired(d, group ? sessionTime(group,d) : "23:59"));
     const present = relevantDates.filter(d => isPresent(s.id, d)).length;
     const pct = relevantDates.length > 0 ? Math.round((present / relevantDates.length) * 100) : 0;
     return `<tr>
@@ -116,7 +117,8 @@ export async function exportAttendancePrint(
         ? grp.day_of_week.split(/\s*[,،]\s*|\s+/).map(d => d.trim()).filter(Boolean)
         : [];
       const grpDates = grp ? getGroupSessionDates(grp, month, year) : [];
-      const activeDates = grpDates.filter(d => !cancelledSessions.has(d));
+      const groupCancelled = new Set(grp?.cancelled_sessions ?? []);
+      const activeDates = grpDates.filter(d => !groupCancelled.has(d));
       const daysHtml = days.map(d => `<span class="day-chip">${escapeHtml(d)}</span>`).join("");
 
       body += `<div class="group-block">
@@ -127,7 +129,7 @@ export async function exportAttendancePrint(
             <span class="group-count">${grpStudents.length} طالب · ${activeDates.length} حصة</span>
           </span>
         </div>
-        ${buildGroupTable(grpStudents, grpDates, cancelledSessions, attendance, idx)}
+        ${buildGroupTable(grpStudents, grpDates, groupCancelled, attendance, idx, grp)}
       </div>`;
       idx += grpStudents.length;
     });
@@ -139,7 +141,7 @@ export async function exportAttendancePrint(
     const grpDates = grp ? getGroupSessionDates(grp, month, year) : _sessionDates;
     const daysText = days.length > 0 ? ` · ${days.join(" - ")}` : "";
     body = `<p class="subtitle" style="margin-bottom:8px">${students.length} طالب · ${grpDates.filter(d => !cancelledSessions.has(d)).length} حصة فعّالة${daysText}</p>`
-      + buildGroupTable(students, grpDates, cancelledSessions, attendance, 0);
+      + buildGroupTable(students, grpDates, cancelledSessions, attendance, 0, grp || undefined);
   }
 
   const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">

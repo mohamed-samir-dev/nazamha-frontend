@@ -9,7 +9,10 @@ const arabicMonths = [
   "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",
 ];
 
+import { getGroupSessionDates, isSessionExpired, sessionTime } from "../_utils/sessionDates";
+import { Group } from "@/lib/types";
 interface Props {
+  groups?: Group[];
   students: Student[];
   monthDates: string[];
   cancelledSessions: Set<string>;
@@ -18,11 +21,13 @@ interface Props {
   selectedYear: number;
 }
 
-export function AttendanceStats({ students, monthDates, cancelledSessions, attendance, selectedMonth, selectedYear }: Props) {
+export function AttendanceStats({ students, groups = [], monthDates, cancelledSessions, attendance, selectedMonth, selectedYear }: Props) {
 
 
-  const activeDates = monthDates.filter(d => !cancelledSessions.has(d));
-  const cancelledCount = monthDates.length - activeDates.length;
+  const rosterGroups=new Set(students.map(s=>s.group_id));
+  const slots=groups.filter(g=>rosterGroups.has(g.id)).flatMap(g=>getGroupSessionDates(g,selectedMonth,selectedYear).map(date=>({date,cancelled:g.cancelled_sessions?.includes(date)})));
+  const activeDates = slots.length ? slots.filter(s=>!s.cancelled).map(s=>s.date) : monthDates.filter(d => !cancelledSessions.has(d));
+  const cancelledCount = slots.length ? slots.filter(s=>s.cancelled).length : monthDates.length - activeDates.length;
 
   // O(A) build once, O(1) per lookup
   const presentSet = useMemo(() => {
@@ -34,29 +39,33 @@ export function AttendanceStats({ students, monthDates, cancelledSessions, atten
   }, [attendance]);
 
   const { avg, below75 } = useMemo(() => {
-    const percents = students.map(s => {
-      if (activeDates.length === 0) return 0;
-      const p = activeDates.filter(d => presentSet.has(`${s.id}|${d}`)).length;
-      return Math.round((p / activeDates.length) * 100);
+    const totals=new Map<string,{present:number;total:number}>();
+    students.forEach(s => {
+      const group = groups.find(g => g.id === s.group_id);
+      const joined = s.group_join_date || s.created_at?.slice(0,10) || "";
+      const dates = (group ? getGroupSessionDates(group,selectedMonth,selectedYear).filter(d => !group.cancelled_sessions?.includes(d)) : activeDates).filter(d => !s.attendance_excluded_dates?.includes(d) && d >= joined && (!s.attendance_ends_on || d <= s.attendance_ends_on) && isSessionExpired(d, group ? sessionTime(group,d) : "23:59"));
+      const p = dates.filter(d => presentSet.has(`${s.id}|${d}`)).length;
+      const total=totals.get(s.id)||{present:0,total:0}; totals.set(s.id,{present:total.present+p,total:total.total+dates.length});
     });
+    const percents=[...totals.values()].filter(s=>s.total>0).map(s=>Math.round(s.present/s.total*100));
     const avg = percents.length > 0 ? Math.round(percents.reduce((a, b) => a + b, 0) / percents.length) : 0;
     const below75 = percents.filter(p => p < 75).length;
     return { avg, below75 };
-  }, [students, activeDates, presentSet]);
+  }, [students, activeDates, presentSet, groups, selectedMonth, selectedYear]);
 
   if (students.length === 0 || monthDates.length === 0) return null;
 
   const stats = [
     {
       label: "إجمالي الطلاب",
-      value: students.length,
+      value: new Set(students.map(s=>s.id)).size,
       icon: <Users size={17} />,
       colorClass: "text-blue-400",
       bgClass: "bg-blue-500/10",
     },
     {
       label: "حصص الشهر",
-      value: `${activeDates.length}${cancelledCount > 0 ? ` / ${monthDates.length}` : ""}`,
+      value: `${activeDates.length}${cancelledCount > 0 ? ` / ${activeDates.length+cancelledCount}` : ""}`,
       sub: cancelledCount > 0 ? `${cancelledCount} ملغاة` : undefined,
       icon: <BookOpen size={17} />,
       colorClass: cancelledCount > 0 ? "text-amber-400" : "text-teal-400",

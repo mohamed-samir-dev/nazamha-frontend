@@ -2,6 +2,7 @@ import { mutate } from "swr";
 import { api, resetAuthFailureGuard } from "@/lib/apiClient";
 import { Teacher } from "@/lib/types";
 import { appCache } from "@/lib/appCache";
+import {AttendanceQueue} from "@/lib/offlineQueue";
 
 interface AuthResponse {
   teacher: Teacher;
@@ -33,6 +34,8 @@ const USER_SPECIFIC_STORAGE_KEYS = [
   "ot_grades",
   "ot_grades_owner",
   "ot_attendance_queue",
+  "ot_attendance_context",
+  "ot_attendance_records",
   "ot_last_sync",
   "ot_is_assistant",
   // legacy keys
@@ -58,6 +61,7 @@ export const AuthService = {
 
     // localStorage: clear user-specific offline cache
     if (typeof window !== "undefined") {
+      AttendanceQueue.archive();
       USER_SPECIFIC_STORAGE_KEYS.forEach((key) => {
         localStorage.removeItem(key);
       });
@@ -100,7 +104,7 @@ export const AuthService = {
     const cached = appCache.get<Teacher>(AUTH_CACHE_KEY);
     if (cached) return cached;
     const user = await api.get<Teacher>("/auth/me").catch(() => null);
-    if (user) appCache.set(AUTH_CACHE_KEY, user, 5 * 60 * 1000);
+    if (user) { appCache.set(AUTH_CACHE_KEY, user, 5 * 60 * 1000); AttendanceQueue.restore(user.id); }
     return user;
   },
 

@@ -229,6 +229,7 @@ export interface Grade {
 }
 
 export interface Group {
+  attendance_sessions?: {session_date:string;time:string;cancelled:boolean}[];
   id: string;
   name: string;
   code?: string | null;
@@ -247,6 +248,8 @@ export interface Group {
 }
 
 export interface Student {
+  attendance_ends_on?: string;
+  attendance_excluded_dates?: string[];
   card_qr_token?: string;
   id: string;
   name: string;
@@ -305,6 +308,9 @@ export interface AcademicYearSettings {
 }
 
 export interface AttendanceRecord {
+  scanner_group_id?: string;
+  scanner_session_date?: string;
+  cross_group_confirmed?: boolean;
   id: string;
   student_id: string;
   session_date: string;
@@ -422,6 +428,8 @@ export interface Plan {
 }
 
 export interface ScannedEntry {
+  recordId?: string;
+  queued?: boolean;
   studentId: string;
   studentName: string;
   time: string;

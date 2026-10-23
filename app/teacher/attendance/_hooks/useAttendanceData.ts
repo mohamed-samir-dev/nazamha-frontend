@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { studentsForPeriod, contextGroups, AttendanceMembership } from "@/lib/utils/attendancePeriod";
 import { AuthService } from "@/lib/services/authService";
 import { Group, Student, Grade, AttendanceRecord } from "@/lib/types";
 import { GroupsService } from "@/lib/services/groupsService";
@@ -12,13 +13,15 @@ import { getGroupSessionDatesForWeek, getGroupSessionDates } from "../_utils/ses
 import { getTodayCairo, getYearCairo, getMonthCairo } from "@/lib/utils/dateUtils";
 
 export function useAttendanceData() {
-  const todayStr = getTodayCairo();
+
   const [todayYear, todayMonth] = [getYearCairo(), getMonthCairo()];
   const [loading, setLoading] = useState(true);
+  const [loadedWeek,setLoadedWeek]=useState<number|null>(null);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [memberships,setMemberships]=useState<AttendanceMembership[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState("all");
@@ -35,11 +38,12 @@ export function useAttendanceData() {
         const cachedGroups = OfflineCache.loadGroups();
         const cachedStudents = OfflineCache.loadStudents();
         const cachedGrades = OfflineCache.loadGrades();
+        const cachedContext=OfflineCache.loadAttendanceContext();
+        if(cachedContext) setMemberships(cachedContext.memberships);
         if (cachedGroups.length || cachedStudents.length) {
           setGroups(cachedGroups);
           setStudents(cachedStudents);
           setGrades(cachedGrades);
-          setLoading(false);
         }
 
         // getUser يستخدم in-memory cache (5 دقائق) — لا waterfall حقيقي
@@ -49,26 +53,27 @@ export function useAttendanceData() {
         setUserId(currentUser.id);
 
         if (navigator.onLine) {
-          const todayStr2 = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
-          const [ty, tm] = todayStr2.split("-").map(Number);
-          const [grpData, stData, grdData, initialAtt] = await Promise.all([
+
+          const [grpData, stData, grdData, initialAtt, context] = await Promise.all([
             GroupsService.getGroupsByTeacherId(),
-            StudentsService.getStudentsByTeacherId("id,name,code,group_id,grade_id,is_suspended,suspended_until,suspension_reason,created_at,group_join_date"),
+            StudentsService.getStudentsByTeacherId("id,name,code,center_student_code,group_id,grade_id,is_suspended,suspended_until,suspension_reason,created_at,group_join_date"),
             GradesService.getGradesByTeacherId(currentUser.id),
-            AttendanceService.getAttendanceRecords(tm, ty),
+            fetchAttendance(currentUser.id, 0), AttendanceService.getContext(),
           ]);
           if (cancelled) return;
-          setGroups(grpData);
+          setGroups(contextGroups(grpData,context)); setMemberships(context.memberships);
+          OfflineCache.saveAttendanceContext(context);
           setStudents(stData);
           setGrades(grdData);
           setAttendance(initialAtt || []);
           OfflineCache.saveStudents(stData);
-          OfflineCache.saveGroups(grpData);
+          OfflineCache.saveGroups(contextGroups(grpData,context));
           OfflineCache.saveGrades(grdData);
           OfflineCache.setLastSync();
         }
       } catch {
         if (!cancelled) {
+          if(navigator.onLine) setError("تعذر تحميل بيانات الحضور؛ أعد المحاولة.");
           setGroups(OfflineCache.loadGroups());
           setStudents(OfflineCache.loadStudents());
           setGrades(OfflineCache.loadGrades());
@@ -91,6 +96,7 @@ export function useAttendanceData() {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
 
+
     const months = new Set<string>();
     months.add(`${weekStart.getFullYear()}-${weekStart.getMonth() + 1}`);
     months.add(`${weekEnd.getFullYear()}-${weekEnd.getMonth() + 1}`);
@@ -98,16 +104,18 @@ export function useAttendanceData() {
     const results = await Promise.all(
       Array.from(months).map(key => {
         const [y, m] = key.split("-").map(Number);
-        return AttendanceService.getAttendanceRecords(m, y);
+        return navigator.onLine ? AttendanceService.getAttendanceRecords(m, y).then(rows=>{OfflineCache.replaceAttendanceMonth(uid,m,y,rows);return rows;}) : Promise.resolve(OfflineCache.loadAttendanceRecords().filter(r=>r.teacher_id===uid && r.month===m && r.year===y));
       })
     );
     if (signal?.aborted) return;
+    setSelectedMonth(weekEnd.getMonth()+1); setSelectedYear(weekEnd.getFullYear());
     const allRecords = results.flat();
-    const queued = AttendanceQueue.getAll();
+    const queued = AttendanceQueue.getAll().filter(q => q.teacher_id === uid && !q._error);
     const merged = [...allRecords];
     for (const q of queued) {
-      const exists = merged.some(r => r.student_id === q.student_id && r.session_date === q.session_date);
-      if (!exists) {
+      const existing = merged.findIndex(r => r.student_id === q.student_id && r.session_date === q.session_date);
+      if (existing >= 0) merged.splice(existing,1);
+      {
         merged.push({ ...q, id: `offline-${q.student_id}-${q.session_date}`, created_at: q._queuedAt } as AttendanceRecord);
       }
     }
@@ -116,11 +124,12 @@ export function useAttendanceData() {
 
   // إعادة جلب الـ attendance عند تغيير الأسبوع (weekOffset)
   useEffect(() => {
-    if (!userId || weekOffset === 0) return; // weekOffset=0 جُلب بالفعل في load()
+    if (!userId) return; // weekOffset=0 جُلب بالفعل في load()
     const controller = new AbortController();
+
     fetchAttendance(userId, weekOffset, controller.signal)
-      .then(merged => { if (merged) setAttendance(merged); })
-      .catch(() => {});
+      .then(merged => { if (merged) { setAttendance(merged); setLoadedWeek(weekOffset); } })
+      .catch(() => { if (!controller?.signal.aborted) setError("تعذر تحميل الحضور؛ أعد فتح الصفحة للمحاولة."); });
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, weekOffset]);
@@ -134,8 +143,8 @@ export function useAttendanceData() {
       controller?.abort();
       controller = new AbortController();
       fetchAttendance(userId, weekOffset, controller.signal)
-        .then(merged => { if (merged) setAttendance(merged); })
-        .catch(() => {});
+        .then(merged => { if (merged) { setAttendance(merged); setLoadedWeek(weekOffset); } })
+        .catch(() => { if (!controller?.signal.aborted) setError("تعذر تحميل الحضور؛ أعد فتح الصفحة للمحاولة."); });
     };
     return () => { controller?.abort(); bc.close(); };
   }, [userId, weekOffset]);
@@ -154,7 +163,11 @@ export function useAttendanceData() {
     OfflineCache.saveGroups(cached.map(g => g.id === updated.id ? updated : g));
   };
 
-  const filteredStudents = students.filter(s => {
+  const weekStart = new Date(getTodayCairo()+"T12:00:00Z"); weekStart.setUTCDate(weekStart.getUTCDate()-((weekStart.getUTCDay()+1)%7)+weekOffset*7);
+  const weekEnd=new Date(weekStart);weekEnd.setUTCDate(weekEnd.getUTCDate()+6);
+  const periodStudents=studentsForPeriod(students,memberships,weekStart.toISOString().slice(0,10),weekEnd.toISOString().slice(0,10),attendance);
+  const monthlyStudents=studentsForPeriod(students,memberships,`${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`,`${selectedYear}-${String(selectedMonth).padStart(2,"0")}-31`,attendance);
+  const filteredStudents = periodStudents.filter(s => {
     const effectiveGradeId = s.grade_id || groups.find(g => g.id === s.group_id)?.grade_id;
     if (selectedGradeId !== "all" && effectiveGradeId !== selectedGradeId) return false;
     if (selectedGroupId !== "all" && s.group_id !== selectedGroupId) return false;
@@ -186,7 +199,7 @@ export function useAttendanceData() {
   }, [groups, selectedGroupId, selectedGradeId, selectedMonth, selectedYear]);
 
   return {
-    loading, error, userId,
+    loading:loading || (!error && loadedWeek !== weekOffset), error, userId,
     groups, setGroups, students, grades,
     attendance, setAttendance,
     selectedGradeId, setSelectedGradeId,
@@ -195,6 +208,7 @@ export function useAttendanceData() {
     selectedYear, setSelectedYear,
     weekOffset, setWeekOffset,
     filteredStudents,
+    monthlyStudents: monthlyStudents.filter(s=>(selectedGroupId === "all" || s.group_id===selectedGroupId) && (selectedGradeId === "all" || s.grade_id===selectedGradeId)),
     sessionDates,
     monthSessionDates,
     loadAttendance,

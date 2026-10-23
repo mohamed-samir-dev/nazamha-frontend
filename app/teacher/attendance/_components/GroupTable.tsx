@@ -126,10 +126,10 @@ export function GroupTable({
               <tbody>
                 {students.map((student, i) => {
                   const joinDate = student.group_join_date || student.created_at?.slice(0, 10);
-                  const pct = getAttendancePercent(student.id, activeDates, joinDate);
+                  const pct = getAttendancePercent(student.id, activeDates.filter(d=>(!student.attendance_ends_on || d<=student.attendance_ends_on)&&!student.attendance_excluded_dates?.includes(d)), joinDate);
                   const pctColor = pct >= 75 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
                   return (
-                    <tr key={student.id} className="transition-colors hover:[&>td]:bg-white/[0.02]">
+                    <tr key={`${student.id}-${student.group_id}-${student.group_join_date}`} className="transition-colors hover:[&>td]:bg-white/[0.02]">
                       <td className="text-center text-slate-500 font-semibold text-[0.78rem] px-1 py-2 border-b border-white/[0.04]">{startIndex + i + 1}</td>
                       <td className="text-center font-mono text-[0.78rem] text-slate-400 whitespace-nowrap px-1 py-2 border-b border-white/[0.04]">{student.code || "—"}</td>
                       <td className="whitespace-nowrap px-1.5 py-2 border-b border-white/[0.04]">
@@ -137,7 +137,7 @@ export function GroupTable({
                       </td>
                       {sessionDates.map(d => {
                         const joinDate = student.group_join_date || student.created_at?.slice(0, 10);
-                        const beforeJoin = joinDate ? d < joinDate : false;
+                        const beforeJoin = !!student.attendance_excluded_dates?.includes(d) || (joinDate ? d < joinDate : false) || !!(student.attendance_ends_on && d > student.attendance_ends_on);
                         if (beforeJoin) {
                           return (
                             <td key={d} className="text-center px-1.5 py-2 border-b border-white/[0.04]">

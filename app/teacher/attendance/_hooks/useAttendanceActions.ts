@@ -16,6 +16,7 @@ const isOfflineRecord = (id: string) => id.startsWith("offline-") || id.startsWi
 
 const deleteRecord = async (record: AttendanceRecord) => {
   if (isOfflineRecord(record.id)) {
+    if(AttendanceService.isSyncing()) throw new Error("انتظر انتهاء المزامنة قبل إلغاء الحضور");
     AttendanceQueue.remove(record.student_id, record.session_date!);
   } else {
     await AttendanceService.deleteAttendanceRecord(record.id);
@@ -36,6 +37,7 @@ export function useAttendanceActions({
   userId, attendance, setAttendance, filteredStudents, showToast, updateGroupLocally, weekOffset,
 }: Props) {
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
+  const savingRef = useRef(new Set<string>());
   const isSaving = (groupId: string, dateStr: string) => savingKeys.has(`${groupId}-${dateStr}`);
   const addSaving = (groupId: string, dateStr: string) => setSavingKeys(prev => new Set(prev).add(`${groupId}-${dateStr}`));
   const removeSaving = (groupId: string, dateStr: string) => setSavingKeys(prev => { const s = new Set(prev); s.delete(`${groupId}-${dateStr}`); return s; });
@@ -46,13 +48,10 @@ export function useAttendanceActions({
   const isPresent = (studentId: string, dateStr: string) =>
     attendance.some(a => a.student_id === studentId && a.session_date === dateStr && a.status === "present");
 
-  const getRecord = (studentId: string, dateStr: string) =>
-    attendance.find(a => a.student_id === studentId && a.session_date === dateStr);
-
   const getAttendancePercent = (studentId: string, activeDates: string[], studentJoinDate?: string) => {
     const relevantDates = studentJoinDate
-      ? activeDates.filter(d => d >= studentJoinDate)
-      : activeDates;
+      ? activeDates.filter(d => d >= studentJoinDate && d <= today)
+      : activeDates.filter(d => d <= today);
     if (relevantDates.length === 0) return 0;
     const present = attendance.filter(
       a => a.student_id === studentId && a.status === "present" && relevantDates.includes(a.session_date)
@@ -71,6 +70,7 @@ export function useAttendanceActions({
     if (dateStr > today) { showToast("لا يمكن تسجيل حضور في تاريخ مستقبلي", "error"); return; }
 
     const key = `${student.id}-${dateStr}`;
+    if(savingRef.current.has(`${student.group_id || ""}-${dateStr}`)) { showToast("انتظر انتهاء حفظ الحصة","error"); return; }
     if (pendingKeys.current.has(key)) return; // منع double-click
     pendingKeys.current.add(key);
 
@@ -78,7 +78,7 @@ export function useAttendanceActions({
       a => a.student_id === student.id && a.session_date === dateStr
     );
 
-    if (existing) {
+    if (existing?.status === "present") {
       setAttendance(prev => prev.filter(a => a.id !== existing.id));
     try { await deleteRecord(existing); invalidateAllTimeCache(userId); }
       catch {
@@ -100,7 +100,7 @@ export function useAttendanceActions({
         status: "present",
         created_at: new Date().toISOString(),
       };
-      setAttendance(prev => [...prev, optimisticRecord]);
+      setAttendance(prev => [...prev.filter(a => a.id !== existing?.id), optimisticRecord]);
       try {
         const newRecord = await AttendanceService.addAttendanceRecord({
           teacher_id: userId,
@@ -115,6 +115,7 @@ export function useAttendanceActions({
         invalidateAllTimeCache(userId);
       } catch (err) {
         setAttendance(prev => prev.filter(a => a.id !== optimisticId));
+        if (existing) setAttendance(prev => [...prev, existing]);
         showToast(getErrorMessage(err, "حدث خطأ أثناء تسجيل الحضور."), "error");
       } finally { pendingKeys.current.delete(key); }
     }
@@ -129,7 +130,7 @@ export function useAttendanceActions({
       await deleteRecord(pendingDelete.record);
       if (userId) invalidateAllTimeCache(userId);
     } catch {
-      setAttendance(attendance);
+      setAttendance(prev => prev.some(r => r.id === pendingDelete.record.id) ? prev : [...prev, pendingDelete.record]);
       showToast("حدث خطأ أثناء حذف الحضور.", "error");
     }
   };
@@ -138,30 +139,19 @@ export function useAttendanceActions({
     if (!userId) return;
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن تحضير تاريخ مستقبلي", "error"); return; }
+    const savingKey = `${groupId}-${dateStr}`;
+    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}-${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
+    if (savingRef.current.has(savingKey)) return;
+    savingRef.current.add(savingKey);
     addSaving(groupId, dateStr);
     const sessionMonth = parseInt(dateStr.split("-")[1], 10);
     const sessionYear = parseInt(dateStr.split("-")[0], 10);
     const groupStudents = groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents;
-    const absentStudents = groupStudents.filter(s =>
+    const absentStudents = groupStudents.filter(s => (!s.attendance_ends_on || dateStr<=s.attendance_ends_on) && !s.attendance_excluded_dates?.includes(dateStr)).filter(s => !(s.is_suspended && (!s.suspended_until || new Date(s.suspended_until) > new Date())) && (s.group_join_date || s.created_at?.slice(0,10) || "") <= dateStr).filter(s =>
       !attendanceRef.current.some(a => a.student_id === s.id && a.session_date === dateStr && a.status === "present")
     );
-    let optimisticRecords: AttendanceRecord[] = [];
     try {
-      if (absentStudents.length === 0) { removeSaving(groupId, dateStr); showToast("جميع الطلاب محضّرون بالفعل"); return; }
-
-      // optimistic update فوري
-      optimisticRecords = absentStudents.map(s => ({
-        id: `optimistic-${s.id}-${dateStr}`,
-        teacher_id: userId,
-        student_id: s.id,
-        group_id: s.group_id,
-        session_date: dateStr,
-        month: sessionMonth,
-        year: sessionYear,
-        status: "present" as const,
-        created_at: new Date().toISOString(),
-      }));
-      setAttendance(prev => [...prev, ...optimisticRecords]);
+      if (absentStudents.length === 0) { showToast("جميع الطلاب المتاحين محضّرون بالفعل"); return; }
 
       const toInsert = absentStudents.map(s => ({
         teacher_id: userId,
@@ -172,21 +162,21 @@ export function useAttendanceActions({
         year: sessionYear,
         status: "present" as const,
       }));
-      const newRecords = await AttendanceService.addAttendanceRecords(toInsert);
-      // استبدل الـ optimistic بالـ real records — لو الـ API رجع فاضي نفضل بالـ optimistic
+      const result = await AttendanceService.addAttendanceRecords(toInsert);
+      const newRecords = result.data;
+      // Replace each authoritative student/date row with its persisted record.
       if (newRecords.length > 0) {
         setAttendance((prev: AttendanceRecord[]) => [
-          ...prev.filter(a => !optimisticRecords.some(o => o.id === a.id)),
+          ...prev.filter(a => !newRecords.some(o => o.student_id === a.student_id && o.session_date === a.session_date)),
           ...newRecords,
         ]);
       }
       invalidateAllTimeCache(userId);
-      showToast(`✓ تم تحضير ${absentStudents.length} طالب`);
+      showToast(`تم تحضير ${newRecords.length} طالب${result.suspended_skipped.length ? ` — تم استبعاد ${result.suspended_skipped.length} موقوف` : ""}`);
     } catch (err) {
-      // rollback — شيل الـ optimistic بس
-      setAttendance((prev: AttendanceRecord[]) => prev.filter(a => !optimisticRecords.some(o => o.id === a.id)));
       showToast(getErrorMessage(err, "حدث خطأ أثناء التحضير الجماعي."), "error");
     } finally {
+      savingRef.current.delete(savingKey);
       removeSaving(groupId, dateStr);
     }
   };
@@ -195,19 +185,25 @@ export function useAttendanceActions({
     if (!userId) return;
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن مسح حصة مستقبلية", "error"); return; }
+    const savingKey = `${groupId}-${dateStr}`;
+    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}-${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
+    if (savingRef.current.has(savingKey) || !window.confirm("إلغاء حضور جميع طلاب هذه الحصة؟")) return;
+    savingRef.current.add(savingKey);
     addSaving(groupId, dateStr);
     try {
       const groupStudents = groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents;
       const toDelete = attendanceRef.current.filter(
-        a => a.session_date === dateStr && groupStudents.some(s => s.id === a.student_id)
+        a => a.session_date === dateStr && (!groupId || a.group_id===groupId) && groupStudents.some(s => s.id === a.student_id)
       );
-      await Promise.all(toDelete.map(r => deleteRecord(r)));
-      setAttendance(prev => prev.filter(a => !toDelete.some(d => d.id === a.id)));
+      const results = await Promise.allSettled(toDelete.map(r => deleteRecord(r)));
+      const deleted = toDelete.filter((_, i) => results[i].status === "fulfilled");
+      setAttendance(prev => prev.filter(a => !deleted.some(d => d.id === a.id)));
       invalidateAllTimeCache(userId);
-      showToast(`تم مسح حضور ${toDelete.length} طالب`);
+      showToast(`تم مسح ${deleted.length} سجل${deleted.length < toDelete.length ? " — تعذر حذف بعض السجلات؛ حاول مجددًا" : ""}`, deleted.length < toDelete.length ? "error" : "success");
     } catch {
       showToast("حدث خطأ أثناء مسح الحصة.", "error");
     } finally {
+      savingRef.current.delete(savingKey);
       removeSaving(groupId, dateStr);
     }
   };

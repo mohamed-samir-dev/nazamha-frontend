@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { studentsForPeriod, contextGroups, AttendanceMembership } from "@/lib/utils/attendancePeriod";
 import { AuthService } from "@/lib/services/authService";
 import { StudentsService } from "@/lib/services/studentsService";
 import { GroupsService } from "@/lib/services/groupsService";
 import { GradesService } from "@/lib/services/gradesService";
 import { AttendanceService } from "@/lib/services/attendanceService";
 import { Student, Group, Grade, AttendanceRecord } from "@/lib/types";
-import { getGroupSessionDates } from "../../_utils/sessionDates";
+import { getGroupSessionDates, isSessionExpired, sessionTime } from "../../_utils/sessionDates";
 
 export interface StudentReportRow {
   student: Student;
@@ -39,7 +40,10 @@ export interface AbsenteeRow {
 export function useAttendanceReports() {
   const now = new Date();
   const [loading, setLoading] = useState(true);
+  const [loadedPeriod,setLoadedPeriod]=useState(`${now.getFullYear()}-${now.getMonth()+1}`);
+  const [error, setError] = useState<string|null>(null);
   const [students, setStudents] = useState<Student[]>([]);
+  const [memberships,setMemberships]=useState<AttendanceMembership[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -57,18 +61,18 @@ export function useAttendanceReports() {
       try {
         const user = await AuthService.getUser();
         if (!user) return;
-        const [grp, stu, grd, att] = await Promise.all([
+        const [grp, stu, grd, att, context] = await Promise.all([
           GroupsService.getGroupsByTeacherId(),
-          StudentsService.getStudentsByTeacherId("id,name,code,group_id,grade_id,is_suspended,suspended_until,suspension_reason,created_at,group_join_date"),
+          StudentsService.getStudentsByTeacherId("id,name,code,center_student_code,parent_phone,group_id,grade_id,is_suspended,suspended_until,suspension_reason,created_at,group_join_date"),
           GradesService.getGradesByTeacherId(user.id),
-          AttendanceService.getAttendanceRecords(now.getMonth() + 1, now.getFullYear()),
+          AttendanceService.getAttendanceRecords(now.getMonth() + 1, now.getFullYear()), AttendanceService.getContext(),
         ]);
-        setGroups(grp);
+        setGroups(contextGroups(grp,context)); setMemberships(context.memberships);
         setStudents(stu);
         setGrades(grd);
         setAttendance(att);
       } catch {
-        /* silent */
+        setError("تعذر تحميل التقرير؛ أعد المحاولة");
       } finally {
         setLoading(false);
       }
@@ -80,21 +84,25 @@ export function useAttendanceReports() {
   // إعادة جلب الـ attendance عند تغيير الشهر/السنة فقط (ليس عند أول load)
   useEffect(() => {
     if (isInitialMount.current) { isInitialMount.current = false; return; }
+    let active = true;
+
     AttendanceService.getAttendanceRecords(selectedMonth, selectedYear)
-      .then(setAttendance)
-      .catch(() => {});
+      .then(data => { if (active) { setAttendance(data); setLoadedPeriod(`${selectedYear}-${selectedMonth}`); } })
+      .catch(() => { if(active) setError("تعذر تحميل الفترة المطلوبة"); });
+    return () => { active=false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth, selectedYear]);
 
+  const periodStudents=useMemo(()=>studentsForPeriod(students,memberships,`${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`,`${selectedYear}-${String(selectedMonth).padStart(2,"0")}-31`,attendance),[students,memberships,selectedMonth,selectedYear,attendance]);
   const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
+    return periodStudents.filter((s) => {
       const grp = groups.find((g) => g.id === s.group_id);
       const effectiveGradeId = s.grade_id || grp?.grade_id;
       if (selectedGradeId !== "all" && effectiveGradeId !== selectedGradeId) return false;
       if (selectedGroupId !== "all" && s.group_id !== selectedGroupId) return false;
       return true;
     });
-  }, [students, groups, selectedGradeId, selectedGroupId]);
+  }, [periodStudents, groups, selectedGradeId, selectedGroupId]);
 
   const filteredGroups = useMemo(() => {
     return groups.filter((g) => {
@@ -118,12 +126,11 @@ export function useAttendanceReports() {
 
   // map: group_id -> active session dates for selected month (past + today only)
   const groupSessionDatesMap = useMemo(() => {
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
     const map = new Map<string, string[]>();
     for (const g of groups) {
       const allDates = getGroupSessionDates(g, selectedMonth, selectedYear);
       const cancelledSet = new Set(g.cancelled_sessions ?? []);
-      map.set(g.id, allDates.filter((d) => !cancelledSet.has(d) && d <= today));
+      map.set(g.id, allDates.filter((d) => !cancelledSet.has(d) && isSessionExpired(d, sessionTime(g,d))));
     }
     return map;
   }, [groups, selectedMonth, selectedYear]);
@@ -132,13 +139,13 @@ export function useAttendanceReports() {
     return filteredStudents.map((s) => {
       const grp = groups.find((g) => g.id === s.group_id);
       const att = attendanceMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
-      const joinDate = s.group_join_date?.slice(0, 10) ?? null;
+      const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0,10) || null;
       // عدد الحصص الفعلية للمجموعة في الشهر بعد تاريخ الانضمام
       const grpActiveDates = grp ? (groupSessionDatesMap.get(grp.id) ?? []) : [];
-      const relevantDates = joinDate ? grpActiveDates.filter((d) => d >= joinDate) : grpActiveDates;
+      const relevantDates = grpActiveDates.filter(d=>(!joinDate||d>=joinDate)&&(!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d));
       const relevantSet = new Set(relevantDates);
       const present = [...att.presentDates].filter((d) => relevantSet.has(d)).length;
-      const absent = [...att.absentDates].filter((d) => relevantSet.has(d)).length;
+      const absent = relevantDates.filter(d => !att.presentDates.has(d)).length;
       const total = relevantDates.length;
       const pct = total > 0 ? Math.round((present / total) * 100) : 0;
       return {
@@ -156,15 +163,15 @@ export function useAttendanceReports() {
   const groupRows: GroupReportRow[] = useMemo(() => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
     return filteredGroups.map((g) => {
-      const grpStudents = students.filter((s) => s.group_id === g.id);
+      const grpStudents = periodStudents.filter((s) => s.group_id === g.id);
       const allSessionDates = getGroupSessionDates(g, selectedMonth, selectedYear);
       const cancelledSet = new Set(g.cancelled_sessions ?? []);
-      const activeSessions = allSessionDates.filter((d) => !cancelledSet.has(d) && d <= today);
+      const activeSessions = allSessionDates.filter((d) => !cancelledSet.has(d) && isSessionExpired(d, sessionTime(g,d)));
 
       const pcts = grpStudents.map((s) => {
         const att = attendanceMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
-        const joinDate = s.group_join_date?.slice(0, 10) ?? null;
-        const relevantDates = joinDate ? activeSessions.filter((d) => d >= joinDate) : activeSessions;
+        const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0,10) || null;
+        const relevantDates = activeSessions.filter(d=>(!joinDate||d>=joinDate)&&(!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d));
         const relevantSet = new Set(relevantDates);
         const present = [...att.presentDates].filter((d) => relevantSet.has(d)).length;
         const total = relevantDates.length;
@@ -185,15 +192,15 @@ export function useAttendanceReports() {
         cancelledSessions: pastDates.filter((d) => cancelledSet.has(d)).length,
       };
     });
-  }, [filteredGroups, students, attendanceMap, grades, selectedMonth, selectedYear]);
+  }, [filteredGroups, periodStudents, attendanceMap, grades, selectedMonth, selectedYear]);
 
   const absenteeRows: AbsenteeRow[] = useMemo(() => {
     return filteredStudents
       .map((s) => {
         const att = attendanceMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
         const grp = groups.find((g) => g.id === s.group_id);
-        const joinDate = s.group_join_date?.slice(0, 10) ?? null;
-        const absentDates = [...att.absentDates].filter((d) => !joinDate || d >= joinDate);
+        const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0,10) || null;
+        const absentDates = (groupSessionDatesMap.get(s.group_id || "") || []).filter(d => (!joinDate || d >= joinDate) && (!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d) && !att.presentDates.has(d));
         const sortedDates = [...absentDates].sort().reverse();
         return {
           student: s,
@@ -204,22 +211,21 @@ export function useAttendanceReports() {
       })
       .filter((r) => r.absentCount >= absentThreshold)
       .sort((a, b) => b.absentCount - a.absentCount);
-  }, [filteredStudents, attendanceMap, groups, absentThreshold]);
+  }, [filteredStudents, attendanceMap, groups, absentThreshold, groupSessionDatesMap]);
 
   const fetchLastSessionIfNeeded = useCallback(async () => {
     if (lastSessionFetchedRef.current) return;
-    lastSessionFetchedRef.current = true;
     try {
       const data = await AttendanceService.getLastSessionAbsentees();
-      setLastSessionData(data);
-    } catch { /* silent */ }
-  }, []);
+      setLastSessionData(data); lastSessionFetchedRef.current = true;
+    } catch { setError("تعذر تحميل التقرير؛ أعد المحاولة"); }
+  }, [setError,setLastSessionData]);
 
   const getLastSessionAbsentees = useCallback((groupId: string) => {
     const entry = lastSessionData[groupId];
     if (!entry) return { absentees: [], sessionDate: null };
     const absentees = entry.absentees.map((a) => ({
-      student: { id: a.id, name: a.name, code: a.code } as any,
+      student: { id: a.id, name: a.name, code: a.code } as Student,
       sessionDate: entry.sessionDate,
     }));
     return { absentees, sessionDate: entry.sessionDate };
@@ -244,7 +250,7 @@ export function useAttendanceReports() {
   }, [grades, groups]);
 
   return {
-    loading,
+    loading:loading || (!error && loadedPeriod !== `${selectedYear}-${selectedMonth}`), error,
     students, groups, grades, availableGrades,
     selectedMonth, setSelectedMonth,
     selectedYear, setSelectedYear,

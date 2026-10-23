@@ -50,7 +50,7 @@ export default function AttendancePage() {
   const cancelledSet = new Set(
     data.selectedGroupId !== "all"
       ? (selectedGroup?.cancelled_sessions ?? [])
-      : data.groups.flatMap(g => g.cancelled_sessions ?? [])
+      : []
   );
 
   const activeDates = data.sessionDates.filter(d => !cancelledSet.has(d));
@@ -60,7 +60,7 @@ export default function AttendancePage() {
   if (data.error) {
     return (
       <div className="text-center py-12 text-red-400">
-        <p>{data.error}</p>
+        <p>{data.error}</p><button className="btn btn-secondary mt-3" onClick={() => window.location.reload()}>إعادة المحاولة</button>
       </div>
     );
   }
@@ -89,7 +89,7 @@ export default function AttendancePage() {
             <button
               className="inline-flex items-center gap-1.5 px-3 py-2 sm:px-4 rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-300 text-sm font-semibold cursor-pointer transition-all hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-400"
               onClick={() => exportAttendancePrint(
-                data.filteredStudents,
+                data.monthlyStudents,
                 data.monthSessionDates,
                 data.attendance,
                 data.selectedMonth,
@@ -125,7 +125,8 @@ export default function AttendancePage() {
 
       {/* Stats */}
       <AttendanceStats
-        students={data.filteredStudents}
+        groups={data.groups}
+        students={data.monthlyStudents}
         monthDates={data.monthSessionDates}
         cancelledSessions={cancelledSet}
         attendance={data.attendance}
@@ -135,7 +136,7 @@ export default function AttendancePage() {
 
       {/* Table */}
       <div className="glass-panel overflow-hidden py-4">
-        <AttendanceTable
+        <AttendanceTable key={`${data.selectedGradeId}-${data.selectedGroupId}-${data.weekOffset}`}
           students={data.filteredStudents}
           sessionDates={data.sessionDates}
           attendance={data.attendance}

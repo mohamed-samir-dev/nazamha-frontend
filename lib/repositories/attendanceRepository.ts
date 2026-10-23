@@ -1,14 +1,27 @@
 import { api } from "@/lib/apiClient";
 import { AttendanceRecord } from "@/lib/types";
-import { AttendanceQueue } from "@/lib/offlineQueue";
+import { AttendanceQueue, OfflineCache } from "@/lib/offlineQueue";
+import { appCache } from "@/lib/appCache";
+
+export type AttendanceSaveResult = { state: "saved"; record: AttendanceRecord } | { state: "queued" };
+export interface AttendanceBulkResult { data: AttendanceRecord[]; suspended_skipped: string[] }
+let syncPromise: Promise<number> | null = null;
+const broadcast = () => { if (typeof BroadcastChannel !== "undefined") { const channel = new BroadcastChannel("attendance"); channel.postMessage("refresh"); channel.close(); } };
 
 export const AttendanceRepository = {
+  isSyncing() { return syncPromise !== null; },
   async getAttendanceRecords(month: number, year: number): Promise<AttendanceRecord[]> {
     return api.get<AttendanceRecord[]>(`/attendance?month=${month}&year=${year}`);
   },
 
   async getAllAttendanceRecords(): Promise<AttendanceRecord[]> {
-    return api.get<AttendanceRecord[]>(`/attendance?all=true`);
+    const records: AttendanceRecord[] = [];
+    let page = 1;
+    while (true) {
+      const result = await api.get<AttendanceRecord[]>(`/attendance?all=true&limit=1000&page=${page++}`);
+      records.push(...result);
+      if (result.length < 1000) return records;
+    }
   },
 
   async getLastSessionAbsentees(): Promise<Record<string, { sessionDate: string; absentees: { id: string; name: string; code: string | null }[] }>> {
@@ -20,36 +33,40 @@ export const AttendanceRepository = {
   },
 
   async addAttendanceRecord(record: Omit<AttendanceRecord, "id" | "created_at">): Promise<AttendanceRecord> {
-    return api.post<AttendanceRecord>("/attendance", record);
+    const result=await api.post<AttendanceRecord>("/attendance", record); OfflineCache.saveAttendanceRecords([result]); broadcast(); return result;
   },
 
-  async upsertAttendanceRecord(record: Omit<AttendanceRecord, "id" | "created_at">): Promise<void> {
+  async upsertAttendanceRecord(record: Omit<AttendanceRecord, "id" | "created_at">): Promise<AttendanceSaveResult> {
+    const generation = appCache.generation();
     if (!navigator.onLine) {
       AttendanceQueue.add(record);
-      return;
+      return { state: "queued" };
     }
     try {
-      await api.post("/attendance", record);
+      const saved = await api.post<AttendanceRecord>("/attendance", record);
+      OfflineCache.saveAttendanceRecords([saved]);
+      broadcast();
+      return { state: "saved", record: saved };
     } catch (error: unknown) {
       // إذا كان الخطأ تعليق طالب، لا نحفظه في الـ queue ونرمي الخطأ للـ UI
-      if (error instanceof Error && (error.message.includes("محظور") || error.message.includes("موقوف"))) {
-        throw error;
-      }
-      // أي خطأ آخر (network, server) → نحفظ في الـ queue بصمت
-      AttendanceQueue.add(record);
+      // Only an actual offline state can be queued. A lost online response is
+      // uncertain and must be retried/reconciled, never announced as saved.
+      if (navigator.onLine || generation !== appCache.generation() || (error && typeof error === "object" && "status" in error)) throw error;
+      AttendanceQueue.add(record); return { state: "queued" };
     }
   },
 
-  async addAttendanceRecords(records: Omit<AttendanceRecord, "id" | "created_at">[]): Promise<AttendanceRecord[]> {
-    const res = await api.post<AttendanceRecord[] | { data: AttendanceRecord[] } | null>("/attendance/bulk", { records });
-    if (!res) return [];
-    if (Array.isArray(res)) return res;
-    if (typeof res === "object" && "data" in res && Array.isArray(res.data)) return res.data;
-    return [];
+  async addAttendanceRecords(records: Omit<AttendanceRecord, "id" | "created_at">[]): Promise<AttendanceBulkResult> {
+    const result = await api.post<AttendanceBulkResult>("/attendance/bulk", { records });
+    if (!result || !Array.isArray(result.data)) throw new Error("تعذر تأكيد نتيجة التحضير؛ أعد تحميل الحصة للتحقق.");
+    OfflineCache.saveAttendanceRecords(result.data);
+    broadcast(); return result;
   },
 
   async deleteAttendanceRecord(id: string): Promise<void> {
     await api.delete(`/attendance/${id}`);
+    OfflineCache.removeAttendanceRecord(id);
+    broadcast();
   },
 
   async autoMarkAbsent(group_id: string, session_date: string): Promise<number> {
@@ -63,28 +80,45 @@ export const AttendanceRepository = {
   },
 
   async syncQueue(): Promise<number> {
+    if (syncPromise) return syncPromise;
+    syncPromise = AttendanceRepository.flushQueue().finally(() => { syncPromise = null; });
+    return syncPromise;
+  },
+
+  async flushQueue(): Promise<number> {
     const queue = AttendanceQueue.getAll();
     if (queue.length === 0) return 0;
 
     let synced = 0;
-    // نبعت كل السجلات بـ bulk endpoint بدل loop فردي
-    const records = queue.map(({ _queuedAt: _, ...r }) => r);
-    try {
-      await api.post("/attendance/bulk", { records });
-      AttendanceQueue.clear();
-      synced = records.length;
-    } catch {
-      // fallback: حاول كل سجل لوحده
-      for (const { _queuedAt: _, ...record } of queue) {
-        try {
-          await api.post("/attendance", record);
-          AttendanceQueue.remove(record.student_id, record.session_date!);
-          synced++;
-        } catch {
-          // keep in queue
+    const generation = appCache.generation();
+    for (let offset=0;offset<queue.length;offset+=1000) {
+      if (generation !== appCache.generation()) break;
+      const chunk=queue.slice(offset,offset+1000);
+      const records=chunk.map(({_queuedAt,_queueId,_error,...record})=>record);
+      try {
+        const result=await AttendanceRepository.addAttendanceRecords(records);
+        if(generation!==appCache.generation()) break;
+        const saved=new Set(result.data.map(r=>`${r.student_id}|${r.scanner_session_date || r.session_date}`));
+        const acknowledged=chunk.filter(r=>saved.has(`${r.student_id}|${r.session_date}`));
+        AttendanceQueue.acknowledge(acknowledged);synced+=acknowledged.length;
+        for(const record of chunk.filter(r=>!saved.has(`${r.student_id}|${r.session_date}`))) AttendanceQueue.reject(record,"لم يؤكد الخادم السجل؛ راجع إيقاف الطالب وأهلية الجلسة.");
+      } catch(error) {
+        if(generation!==appCache.generation())break;
+        // A rejected batch may contain individually valid rows. Never retry a
+        // lost network response in an unbounded per-row loop.
+        if(error && typeof error === "object" && "status" in error && [400,409].includes(Number(error.status))) {
+          for(let i=0;i<chunk.length;i+=4) await Promise.all(chunk.slice(i,i+4).map(async queued=>{
+            if(generation!==appCache.generation())return;
+            const {_queuedAt,_queueId,_error,...record}=queued;
+            try { await api.post("/attendance",record); if(generation===appCache.generation()){AttendanceQueue.acknowledge([queued]);synced++;} }
+            catch(err){if(generation===appCache.generation())AttendanceQueue.reject(queued,err instanceof Error?err.message:"تعذر رفع الحضور");}
+          }));
+        } else {
+          for(const queued of chunk) AttendanceQueue.reject(queued,error instanceof Error?error.message:"تعذر رفع الحضور");
         }
       }
     }
+    if (synced) broadcast();
     return synced;
   },
 };

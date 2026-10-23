@@ -43,7 +43,7 @@ export function ScannerPanel({
 
       {lastScan && (
         <div className={`w-full max-w-[480px] px-4 py-3 rounded-xl font-bold text-sm flex items-start gap-2 shadow-[0_4px_15px_rgba(0,0,0,0.3)] animate-[slideUp_0.3s_ease] ${
-          lastScan.success
+          lastScan.pending ? "bg-amber-500/15 border border-amber-500/40 text-amber-300" : lastScan.success
             ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-400"
             : "bg-red-500/15 border border-red-500/40 text-red-400"
         }`}>
@@ -63,12 +63,12 @@ export function ScannerPanel({
             width: "100%",
             borderRadius: 16,
             overflow: "hidden",
-            minHeight: scanning ? 300 : 0,
+            minHeight: scanning || crossGroupConfirm ? 440 : 0,
           }}
         />
 
         {crossGroupConfirm && (
-          <div className="absolute inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-6 text-center rounded-2xl backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" className="absolute inset-0 overflow-y-auto bg-black/90 z-50 flex flex-col items-center p-4 sm:p-6 text-center rounded-2xl backdrop-blur-sm">
             <AlertCircle size={40} className="text-amber-400 mb-3 flex-shrink-0" />
             <h3 className="text-white mb-3 font-bold text-lg">تسجيل حضور خارج المجموعة</h3>
             

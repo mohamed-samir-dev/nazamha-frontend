@@ -10,6 +10,7 @@ import {
 import {
   isSessionExpired, isSessionFuture,
   getGroupSessionDatesForWeek, getWeekLabel,
+  sessionTime,
 } from "../_utils/sessionDates";
 import { SessionState } from "./SessionHeaderCell";
 import { GroupTable } from "./GroupTable";
@@ -42,13 +43,13 @@ function buildGroupBlocks(
     const cancelled = group?.cancelled_sessions ?? [];
     const states: Record<string, SessionState> = {};
     for (const d of sessionDates)
-      states[d] = getSessionState(d, group?.time ?? "00:00", cancelled.includes(d));
+      states[d] = getSessionState(d, group ? sessionTime(group,d) : "00:00", cancelled.includes(d));
     return [{
       group, groupId: group?.id ?? "single",
       students,
       sessionDates,
       sessionStates: states,
-      activeDates: sessionDates.filter(d => states[d] !== "cancelled"),
+      activeDates: sessionDates.filter(d => states[d] === "expired"),
     }];
   }
 
@@ -65,13 +66,13 @@ function buildGroupBlocks(
     const cancelled = group?.cancelled_sessions ?? [];
     const states: Record<string, SessionState> = {};
     for (const d of grpDates)
-      states[d] = getSessionState(d, group?.time ?? "00:00", cancelled.includes(d));
+      states[d] = getSessionState(d, group ? sessionTime(group,d) : "00:00", cancelled.includes(d));
     return {
       group, groupId: gid,
       students: grpStudents,
       sessionDates: grpDates,
       sessionStates: states,
-      activeDates: grpDates.filter(d => states[d] !== "cancelled"),
+      activeDates: grpDates.filter(d => states[d] === "expired"),
     };
   });
 }
@@ -106,6 +107,7 @@ export function AttendanceTable({
   onToggle, onMarkAll, onClearSession, onCancelSession, onShowQR, onShowToast, isSaving,
 }: TableProps) {
   const [page, setPage] = useState(1);
+
   const isPastWeek = weekOffset < 0;
 
   const weekNav = (

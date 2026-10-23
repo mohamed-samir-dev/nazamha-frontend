@@ -81,6 +81,7 @@ export function StudentReportTab({ rows, selectedMonth, selectedYear }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
 
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
@@ -149,7 +150,7 @@ export function StudentReportTab({ rows, selectedMonth, selectedYear }: Props) {
                 ? `https://wa.me/${formatPhone(row.student.parent_phone)}?text=${encodeURIComponent(buildWhatsAppMessage(row, selectedMonth, selectedYear))}`
                 : null;
               return (
-                <tr key={row.student.id} className={`transition-colors hover:bg-white/[0.025] ${rowBg}`}>
+                <tr key={`${row.student.id}-${row.student.group_id}-${row.student.group_join_date}`} className={`transition-colors hover:bg-white/[0.025] ${rowBg}`}>
                   <td className={`${tdCls} text-center text-slate-600 font-semibold text-xs`}>
                     {(page - 1) * PAGE_SIZE + i + 1}
                   </td>

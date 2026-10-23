@@ -1,20 +1,21 @@
 import { Group } from "@/lib/types";
 
 const DAYS_AR = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-const DAYS_SORT_ORDER = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
+
+export function sessionTime(group:Group,date:string) { return group.attendance_sessions?.find(s=>s.session_date===date)?.time || group.time || "23:59"; }
 
 /** حساب كل تواريخ حصص مجموعة في شهر معين */
 export function getGroupSessionDates(group: Group, month: number, year: number): string[] {
   const days = group.day_of_week
     .split(/\s*[,،]\s*|\s+/)
-    .map(d => d.trim())
+    .map(d => d.trim().replace(/^الاثنين$/, "الإثنين"))
     .filter(Boolean);
 
   const dayIndices = days
     .map(d => DAYS_AR.indexOf(d))
     .filter(i => i !== -1);
 
-  if (dayIndices.length === 0) return [];
+
 
   const startDate = group.start_date ?? (group.created_at
     ? new Date(group.created_at).toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" })
@@ -31,7 +32,10 @@ export function getGroupSessionDates(group: Group, month: number, year: number):
     }
   }
 
-  return dates;
+  const frozen=group.attendance_sessions||[];
+  const latest=frozen.map(s=>s.session_date).sort().at(-1);
+  const earliest=frozen.map(s=>s.session_date).sort()[0];
+  return [...new Set([...dates.filter(d=>!latest||d>latest||d<earliest),...frozen.map(s=>s.session_date).filter(d=>d.startsWith(`${year}-${String(month).padStart(2,"0")}-`))])].sort();
 }
 
 /** بداية الأسبوع (السبت) لتاريخ معين */
@@ -52,34 +56,10 @@ export function getGroupSessionDatesForWeek(group: Group, weekOffset: number): s
   weekStart.setDate(weekStart.getDate() + weekOffset * 7);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
+  const startStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth()+1).padStart(2,"0")}-${String(weekStart.getDate()).padStart(2,"0")}`;
+  const endStr = `${weekEnd.getFullYear()}-${String(weekEnd.getMonth()+1).padStart(2,"0")}-${String(weekEnd.getDate()).padStart(2,"0")}`;
+  return [...new Set([...getGroupSessionDates(group,weekStart.getMonth()+1,weekStart.getFullYear()),...getGroupSessionDates(group,weekEnd.getMonth()+1,weekEnd.getFullYear())])].filter(d=>d>=startStr&&d<=endStr).sort();
 
-  const days = group.day_of_week
-    .split(/\s*[,،]\s*|\s+/)
-    .map(d => d.trim())
-    .filter(Boolean);
-  const dayIndices = days.map(d => DAYS_AR.indexOf(d)).filter(i => i !== -1);
-  if (dayIndices.length === 0) return [];
-
-  const startDate = group.start_date ?? (group.created_at
-    ? new Date(group.created_at).toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" })
-    : null);
-
-  const dates: string[] = [];
-  for (let d = new Date(weekStart); d <= weekEnd; d.setDate(d.getDate() + 1)) {
-    if (dayIndices.includes(d.getDay())) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const dateStr = `${y}-${m}-${day}`;
-      if (!startDate || dateStr >= startDate) dates.push(dateStr);
-    }
-  }
-  return dates.sort((a, b) => {
-    const dayA = DAYS_SORT_ORDER.indexOf(DAYS_AR[new Date(a + "T00:00:00").getDay()]);
-    const dayB = DAYS_SORT_ORDER.indexOf(DAYS_AR[new Date(b + "T00:00:00").getDay()]);
-    if (dayA !== dayB) return dayA - dayB;
-    return a.localeCompare(b);
-  });
 }
 
 /** label للأسبوع: "١٢ - ١٨ يناير" */

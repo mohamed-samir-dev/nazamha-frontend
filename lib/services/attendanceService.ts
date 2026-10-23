@@ -1,7 +1,12 @@
 import { AttendanceRepository } from "@/lib/repositories/attendanceRepository";
+import type { AttendanceSaveResult, AttendanceBulkResult } from "@/lib/repositories/attendanceRepository";
+import { api } from "@/lib/apiClient";
+import type {AttendanceContext} from "@/lib/utils/attendancePeriod";
 import { AttendanceRecord, Student, Grade } from "@/lib/types";
 
 export const AttendanceService = {
+  isSyncing: () => AttendanceRepository.isSyncing(),
+  getContext(): Promise<AttendanceContext> { return api.get("/attendance/context"); },
   async getAttendanceRecords(month: number, year: number): Promise<AttendanceRecord[]> {
     return AttendanceRepository.getAttendanceRecords(month, year);
   },
@@ -22,11 +27,11 @@ export const AttendanceService = {
     return AttendanceRepository.addAttendanceRecord(record);
   },
 
-  async upsertAttendanceRecord(record: Omit<AttendanceRecord, "id" | "created_at">): Promise<void> {
+  async upsertAttendanceRecord(record: Omit<AttendanceRecord, "id" | "created_at">): Promise<AttendanceSaveResult> {
     return AttendanceRepository.upsertAttendanceRecord(record);
   },
 
-  async addAttendanceRecords(records: Omit<AttendanceRecord, "id" | "created_at">[]): Promise<AttendanceRecord[]> {
+  async addAttendanceRecords(records: Omit<AttendanceRecord, "id" | "created_at">[]): Promise<AttendanceBulkResult> {
     return AttendanceRepository.addAttendanceRecords(records);
   },
 

@@ -175,7 +175,7 @@ export function SessionConfig({
             )}
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
               <Info size={11} />
-              <span>أيام الأسبوع الحالي فقط</span>
+              <span>الحصص المتاحة حتى اليوم من هذا الأسبوع والأسبوع السابق</span>
             </div>
           </>
         ) : selectedGroupId ? (
@@ -248,7 +248,7 @@ export function SessionConfig({
             )}
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="text"
               placeholder="0001"
               className="border-none bg-transparent shadow-none rounded-none px-2.5 py-2 flex-1 min-w-0 text-slate-100 text-sm outline-none"
               value={manualCode}
