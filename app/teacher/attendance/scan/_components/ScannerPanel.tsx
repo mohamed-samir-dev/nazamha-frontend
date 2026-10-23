@@ -14,13 +14,14 @@ import {
 } from "lucide-react";
 import type { CrossGroupConfirm, LastScan } from "../_hooks/useScanSession";
 import styles from "../scan.module.css";
+import {CrossGroupOptions,type CrossGroupChoice} from "./CrossGroupOptions";
 interface Props {
   scanning: boolean;
   selectedGroupId: string;
   scannerDivId: string;
   lastScan: LastScan | null;
   crossGroupConfirm: CrossGroupConfirm | null;
-  onConfirmCrossGroup: () => void;
+  onConfirmCrossGroup: (choice?:CrossGroupChoice) => void;
   onCancelCrossGroup: () => void;
   busy?: string | null;
   queuedScans?: number;
@@ -54,8 +55,8 @@ export function ScannerPanel(p: Props) {
   function handleKeys(event: React.KeyboardEvent) {
     if (event.key === "Escape" && !p.busy) p.onCancelCrossGroup();
     if (event.key !== "Tab") return;
-    const buttons = dialog.current?.querySelectorAll<HTMLButtonElement>(
-      "button:not(:disabled)",
+    const buttons = dialog.current?.querySelectorAll<HTMLElement>(
+      "button:not(:disabled),select:not(:disabled),textarea:not(:disabled),input:not(:disabled)",
     );
     if (!buttons?.length) {
       event.preventDefault();
@@ -156,62 +157,8 @@ export function ScannerPanel(p: Props) {
             onKeyDown={handleKeys}
             className={styles.confirmation}
           >
-            <div className={styles.confirmContent}>
-              <div className={styles.confirmHeader}>
-                <AlertCircle size={24} />
-                <h2 id="cross-group-title">الطالب من مجموعة أخرى</h2>
-              </div>
-              <strong className={styles.studentName}>
-                {p.crossGroupConfirm.student.name}
-              </strong>
-              <span dir="ltr" className={styles.muted}>
-                {p.crossGroupConfirm.student.code ||
-                  p.crossGroupConfirm.student.center_student_code}
-              </span>
-              <dl className={styles.identity}>
-                <div>
-                  <dt>مجموعته الأصلية</dt>
-                  <dd>{p.crossGroupConfirm.originalGroupName}</dd>
-                </div>
-                <div>
-                  <dt>موعد المجموعة</dt>
-                  <dd>{p.crossGroupConfirm.originalGroupSchedule}</dd>
-                </div>
-                {p.crossGroupConfirm.nextScheduledDate && (
-                  <div>
-                    <dt>الحصة المحتسب عليها الحضور</dt>
-                    <dd dir="ltr" className={styles.dateValue}>
-                      {p.crossGroupConfirm.nextScheduledDate}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-              <p id="cross-group-reason">{p.crossGroupConfirm.reason}</p>
-              <p className={styles.muted}>
-                المسح متوقف لحين إتمام قرار هذا الطالب.
-              </p>
-              {p.lastScan && (
-                <p role="alert" className={styles.warning}>
-                  {p.lastScan.name}
-                </p>
-              )}
-            </div>
-            <div className={styles.confirmActions}>
-              <button
-                className={styles.secondary}
-                disabled={!!p.busy}
-                onClick={p.onCancelCrossGroup}
-              >
-                إلغاء
-              </button>
-              <button
-                className={styles.primary}
-                disabled={!!p.busy}
-                onClick={p.onConfirmCrossGroup}
-              >
-                {p.busy ? "جاري التسجيل…" : "تأكيد الحضور"}
-              </button>
-            </div>
+            <CrossGroupOptions key={`${p.crossGroupConfirm.student.id}-${p.crossGroupConfirm.context.selectedGroupId}-${p.crossGroupConfirm.context.sessionDate}`} confirmation={p.crossGroupConfirm} busy={!!p.busy} onConfirm={p.onConfirmCrossGroup} onCancel={p.onCancelCrossGroup}/>
+            {p.lastScan && <p role="alert" className={styles.warning}>{p.lastScan.name}</p>}
           </div>
         )}
       </div>

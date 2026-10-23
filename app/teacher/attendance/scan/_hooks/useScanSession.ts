@@ -995,7 +995,7 @@ export function useScanSession() {
           `${student.name} — الطالب موقوف${student.suspension_reason ? " — " + student.suspension_reason : ""}`,
         );
       if (
-        stateRef.current.scannedToday.some((e) => e.studentId === student.id)
+        student.group_id === context.selectedGroupId && stateRef.current.scannedToday.some((e) => e.studentId === student.id)
       ) {
         const queued = stateRef.current.scannedToday.some(
           (e) => e.studentId === student.id && e.queued,

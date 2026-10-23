@@ -9,6 +9,7 @@ let syncPromise: Promise<number> | null = null;
 const broadcast = () => { if (typeof BroadcastChannel !== "undefined") { const channel = new BroadcastChannel("attendance"); channel.postMessage("refresh"); channel.close(); } };
 
 export const AttendanceRepository = {
+  async revokeSubstitution(id:string,reason:string){await api.post(`/attendance/substitutions/${id}/revoke`,{reason});appCache.invalidate("allTimeAttendanceMap");broadcast();},
   isSyncing() { return syncPromise !== null; },
   async getAttendanceRecords(month: number, year: number): Promise<AttendanceRecord[]> {
     return api.get<AttendanceRecord[]>(`/attendance?month=${month}&year=${year}`);
@@ -39,6 +40,7 @@ export const AttendanceRepository = {
   async upsertAttendanceRecord(record: Omit<AttendanceRecord, "id" | "created_at">): Promise<AttendanceSaveResult> {
     const generation = appCache.generation();
     if (!navigator.onLine) {
+      if(record.cross_group_action)throw new Error("الحضور خارج المجموعة والتعويض يحتاجان اتصالًا بالخادم");
       AttendanceQueue.add(record);
       return { state: "queued" };
     }
@@ -51,7 +53,7 @@ export const AttendanceRepository = {
       // إذا كان الخطأ تعليق طالب، لا نحفظه في الـ queue ونرمي الخطأ للـ UI
       // Only an actual offline state can be queued. A lost online response is
       // uncertain and must be retried/reconciled, never announced as saved.
-      if (navigator.onLine || generation !== appCache.generation() || (error && typeof error === "object" && "status" in error)) throw error;
+      if (record.cross_group_action || navigator.onLine || generation !== appCache.generation() || (error && typeof error === "object" && "status" in error)) throw error;
       AttendanceQueue.add(record); return { state: "queued" };
     }
   },
