@@ -53,6 +53,9 @@ export interface LastScan {
   info?: boolean;
 }
 export interface CrossGroupConfirm {
+  validation?: import("@/lib/types").CrossGroupValidation;
+  qrText?:string;
+  manual?:boolean;
   context: {
     userId: string | null;
     selectedGroupId: string;
@@ -873,7 +876,9 @@ export function useScanSession() {
     async (
       student: Student,
       context = { ...stateRef.current },
-      confirmed = false,
+    confirmed = false,
+    crossGroup?:{action:"guest"|"compensate"|"exempt";target_date?:string;reason?:string;qr_text?:string},
+    qrText?:string,
     ) => {
       const { userId, sessionDate, selectedGroupId } = context;
       if (
@@ -899,6 +904,7 @@ export function useScanSession() {
         group_id: student.group_id || "",
         scanner_group_id: selectedGroupId,
         cross_group_confirmed: confirmed,
+      ...(crossGroup?{cross_group_action:crossGroup.action,target_date:crossGroup.target_date,reason:crossGroup.reason,qr_text:crossGroup.qr_text}:{qr_text:qrText}),
         session_date: sessionDate,
         month: smonth,
         year: syear,
@@ -1010,12 +1016,17 @@ export function useScanSession() {
           student_id: student.id,
           scanner_group_id: context.selectedGroupId,
           requested_date: context.sessionDate,
+          teacher_id:context.userId,
+          qr_text:item.manual?undefined:item.text,
         });
         if (!active()) return;
         if (validation.decision === "deny")
           throw new Error(`${student.name} — ${validation.reason}`);
         if (validation.decision === "confirm") {
           const confirmation = {
+            validation,
+            qrText:item.manual?undefined:item.text,
+            manual:item.manual,
             student,
             context,
             originalGroupName: validation.studentGroupName,
@@ -1034,7 +1045,7 @@ export function useScanSession() {
         }
       }
       setBusy(`جاري تسجيل ${student.name}…`);
-      const saved = await commitAttendance(student, context);
+      const saved = await commitAttendance(student, context,false,undefined,item.manual?undefined:item.text);
       if (item.manual && active() && saved) setManualCode("");
       if (active() && saved)
         showLastScan(
@@ -1193,7 +1204,7 @@ export function useScanSession() {
     [validSessionDates, stopScanner, resetOperation],
   );
 
-  const handleConfirmCrossGroup = useCallback(async () => {
+  const handleConfirmCrossGroup = useCallback(async (choice?:{action:"guest"|"compensate"|"exempt";target_date?:string;reason?:string}) => {
     const confirmation = confirmRef.current;
     if (!confirmation || operationRef.current) return;
     unlockSound();
@@ -1201,16 +1212,19 @@ export function useScanSession() {
     const epoch = epochRef.current;
     setBusy(`جاري تسجيل ${confirmation.student.name}…`);
     try {
+      if(!choice)throw new Error("اختر طريقة تسجيل الحضور أولًا");
+      if(!navigator.onLine)throw new Error("التعويض والحضور خارج المجموعة يحتاجان اتصالًا للتحقق والحفظ");
       const saved = await commitAttendance(
         confirmation.student,
         { ...stateRef.current, ...confirmation.context },
         true,
+        {...choice,qr_text:confirmation.qrText},
       );
       if (epoch === epochRef.current && saved)
         showLastScan(
           saved.state === "queued"
             ? `${confirmation.student.name} — في انتظار المزامنة`
-            : `تم تسجيل حضور ${confirmation.student.name}`,
+            : choice.action==="guest"?`تم تسجيل ${confirmation.student.name} كضيف. لم تتغير أي حصة أخرى.`:choice.action==="compensate"?`تم الحضور وتعويض غياب الحصة ${choice.target_date}. سجل الغياب الأصلي محفوظ.`:`تم الحضور وإعفاء الحصة ${choice.target_date} من الغياب، دون تسجيل حضور فعلي لها.`,
           saved.state === "saved",
           saved.state === "queued",
         );

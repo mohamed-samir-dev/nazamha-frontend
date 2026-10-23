@@ -308,6 +308,15 @@ export interface AcademicYearSettings {
 }
 
 export interface AttendanceRecord {
+  attendance_kind?: "regular" | "guest" | "substitute";
+  original_group_id?: string;
+  session_id?: string;
+  qr_text?: string;
+  cross_group_action?: "guest" | "compensate" | "exempt";
+  target_date?: string;
+  reason?: string;
+  resolution?: "compensated" | "exempt";
+  substitution_id?: string;
   scanner_group_id?: string;
   scanner_session_date?: string;
   cross_group_confirmed?: boolean;
@@ -436,6 +445,13 @@ export interface ScannedEntry {
 }
 
 export interface CrossGroupValidation {
+  destinationGroupName?:string;
+  actualLesson?:{date:string;time:string;group_id:string};
+  alreadyPresent?:boolean;
+  previous?:CrossGroupLessonOption[];
+  future?:CrossGroupLessonOption[];
+  previousUnavailable?:string;
+  futureUnavailable?:string;
   decision: "allow" | "deny" | "confirm";
   reason: string;
   studentGroupId: string | null;
@@ -447,6 +463,8 @@ export interface CrossGroupValidation {
   scheduledDateInCurrentWeek: boolean;
   scheduledDateInNextWeek: boolean;
 }
+
+export interface CrossGroupLessonOption {date:string;time:string;group_id:string;group_name:string;subject:string;status:"absent"|"unrecorded";session_id?:string}
 
 export interface Exam {
   id: string;
