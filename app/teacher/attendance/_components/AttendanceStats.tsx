@@ -33,7 +33,7 @@ export function AttendanceStats({ students, groups = [], monthDates, cancelledSe
   const presentSet = useMemo(() => {
     const set = new Set<string>();
     for (const a of attendance) {
-      if (a.status === "present") set.add(`${a.student_id}|${a.session_date}`);
+      if (a.status === "present" && a.attendance_kind!=="guest" && a.attendance_kind!=="substitute") set.add(`${a.student_id}|${a.group_id||""}|${a.session_date}`);
     }
     return set;
   }, [attendance]);
@@ -43,8 +43,8 @@ export function AttendanceStats({ students, groups = [], monthDates, cancelledSe
     students.forEach(s => {
       const group = groups.find(g => g.id === s.group_id);
       const joined = s.group_join_date || s.created_at?.slice(0,10) || "";
-      const dates = (group ? getGroupSessionDates(group,selectedMonth,selectedYear).filter(d => !group.cancelled_sessions?.includes(d)) : activeDates).filter(d => !s.attendance_excluded_dates?.includes(d) && d >= joined && (!s.attendance_ends_on || d <= s.attendance_ends_on) && isSessionExpired(d, group ? sessionTime(group,d) : "23:59"));
-      const p = dates.filter(d => presentSet.has(`${s.id}|${d}`)).length;
+      const dates = (group ? getGroupSessionDates(group,selectedMonth,selectedYear).filter(d => !group.cancelled_sessions?.includes(d)) : activeDates).filter(d => !s.attendance_excluded_dates?.includes(d) && !s.attendance_resolutions?.[d] && d >= joined && (!s.attendance_ends_on || d <= s.attendance_ends_on) && isSessionExpired(d, group ? sessionTime(group,d) : "23:59"));
+      const p = dates.filter(d => (presentSet.has(`${s.id}|${s.group_id||""}|${d}`)||presentSet.has(`${s.id}||${d}`))).length;
       const total=totals.get(s.id)||{present:0,total:0}; totals.set(s.id,{present:total.present+p,total:total.total+dates.length});
     });
     const percents=[...totals.values()].filter(s=>s.total>0).map(s=>Math.round(s.present/s.total*100));

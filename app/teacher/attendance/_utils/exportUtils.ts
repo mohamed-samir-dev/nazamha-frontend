@@ -3,6 +3,7 @@ import { getGroupSessionDates, isSessionExpired, sessionTime } from "../_utils/s
 import { AttendanceService } from "@/lib/services/attendanceService";
 import { AttendanceQueue } from "@/lib/offlineQueue";
 import { printHtml } from "@/lib/printHtml";
+import {attendanceSlot} from "@/lib/utils/attendanceResolution";
 import { getTodayCairo } from "@/lib/utils/dateUtils";
 
 const arabicMonths = [
@@ -31,7 +32,7 @@ function buildGroupTable(
   group?: Group,
 ): string {
   const isPresent = (sid: string, d: string) =>
-    attendance.some(a => a.student_id === sid && a.session_date === d && a.status === "present");
+    attendanceSlot(attendance,sid,d,group?.id)?.status === "present";
 
   const activeDates = grpDates.filter(d => !cancelledSessions.has(d));
 
@@ -44,10 +45,12 @@ function buildGroupTable(
     const joinDate = s.group_join_date || s.created_at?.slice(0, 10) || null;
     const cells = activeDates.map(d => {
       const p = isPresent(s.id, d);
-      const neutral = !!s.attendance_excluded_dates?.includes(d) || !!(s.attendance_ends_on && d > s.attendance_ends_on) || !isSessionExpired(d, group ? sessionTime(group,d) : "23:59") || (joinDate != null && d < joinDate);
+      const resolution=attendanceSlot(attendance,s.id,d,group?.id)?.resolution;
+      if(resolution)return `<td class="cell-center">${resolution==="compensated"?"معوّض":"معفى"}</td>`;
+      const neutral = !!s.attendance_excluded_dates?.includes(d)&&!attendanceSlot(attendance,s.id,d,group?.id)?.resolution || !!(s.attendance_ends_on && d > s.attendance_ends_on) || !isSessionExpired(d, group ? sessionTime(group,d) : "23:59") || (joinDate != null && d < joinDate);
       return `<td class="cell-center" style="color:${p ? "#0d9488" : neutral ? "#aaa" : "#dc2626"};font-weight:700">${p ? "✓" : neutral ? "—" : "✗"}</td>`;
     }).join("");
-    const relevantDates = activeDates.filter(d => !s.attendance_excluded_dates?.includes(d) && (!joinDate || d >= joinDate) && (!s.attendance_ends_on || d<=s.attendance_ends_on) && isSessionExpired(d, group ? sessionTime(group,d) : "23:59"));
+    const relevantDates = activeDates.filter(d => !s.attendance_excluded_dates?.includes(d)&&!attendanceSlot(attendance,s.id,d,group?.id)?.resolution && (!joinDate || d >= joinDate) && (!s.attendance_ends_on || d<=s.attendance_ends_on) && isSessionExpired(d, group ? sessionTime(group,d) : "23:59"));
     const present = relevantDates.filter(d => isPresent(s.id, d)).length;
     const pct = relevantDates.length > 0 ? Math.round((present / relevantDates.length) * 100) : 0;
     return `<tr>

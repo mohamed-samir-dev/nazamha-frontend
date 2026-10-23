@@ -116,10 +116,12 @@ export function useAttendanceReports() {
   const attendanceMap = useMemo(() => {
     const map = new Map<string, { presentDates: Set<string>; absentDates: Set<string> }>();
     for (const r of attendance) {
-      const cur = map.get(r.student_id) ?? { presentDates: new Set(), absentDates: new Set() };
+      const key=`${r.student_id}|${r.group_id||""}`;
+      if(r.attendance_kind==="guest"||r.attendance_kind==="substitute")continue;
+      const cur = map.get(key) ?? { presentDates: new Set(), absentDates: new Set() };
       if (r.status === "present") cur.presentDates.add(r.session_date);
       else cur.absentDates.add(r.session_date);
-      map.set(r.student_id, cur);
+      map.set(key, cur);
     }
     return map;
   }, [attendance]);
@@ -138,11 +140,11 @@ export function useAttendanceReports() {
   const studentRows: StudentReportRow[] = useMemo(() => {
     return filteredStudents.map((s) => {
       const grp = groups.find((g) => g.id === s.group_id);
-      const att = attendanceMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
+      const att = attendanceMap.get(`${s.id}|${s.group_id||""}`) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
       const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0,10) || null;
       // عدد الحصص الفعلية للمجموعة في الشهر بعد تاريخ الانضمام
       const grpActiveDates = grp ? (groupSessionDatesMap.get(grp.id) ?? []) : [];
-      const relevantDates = grpActiveDates.filter(d=>(!joinDate||d>=joinDate)&&(!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d));
+      const relevantDates = grpActiveDates.filter(d=>(!joinDate||d>=joinDate)&&(!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d)&&!s.attendance_resolutions?.[d]);
       const relevantSet = new Set(relevantDates);
       const present = [...att.presentDates].filter((d) => relevantSet.has(d)).length;
       const absent = relevantDates.filter(d => !att.presentDates.has(d)).length;
@@ -169,9 +171,9 @@ export function useAttendanceReports() {
       const activeSessions = allSessionDates.filter((d) => !cancelledSet.has(d) && isSessionExpired(d, sessionTime(g,d)));
 
       const pcts = grpStudents.map((s) => {
-        const att = attendanceMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
+        const att = attendanceMap.get(`${s.id}|${s.group_id||""}`) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
         const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0,10) || null;
-        const relevantDates = activeSessions.filter(d=>(!joinDate||d>=joinDate)&&(!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d));
+        const relevantDates = activeSessions.filter(d=>(!joinDate||d>=joinDate)&&(!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d)&&!s.attendance_resolutions?.[d]);
         const relevantSet = new Set(relevantDates);
         const present = [...att.presentDates].filter((d) => relevantSet.has(d)).length;
         const total = relevantDates.length;
@@ -197,10 +199,10 @@ export function useAttendanceReports() {
   const absenteeRows: AbsenteeRow[] = useMemo(() => {
     return filteredStudents
       .map((s) => {
-        const att = attendanceMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
+        const att = attendanceMap.get(`${s.id}|${s.group_id||""}`) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
         const grp = groups.find((g) => g.id === s.group_id);
         const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0,10) || null;
-        const absentDates = (groupSessionDatesMap.get(s.group_id || "") || []).filter(d => (!joinDate || d >= joinDate) && (!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d) && !att.presentDates.has(d));
+        const absentDates = (groupSessionDatesMap.get(s.group_id || "") || []).filter(d => (!joinDate || d >= joinDate) && (!s.attendance_ends_on||d<=s.attendance_ends_on)&&!s.attendance_excluded_dates?.includes(d)&&!s.attendance_resolutions?.[d] && !att.presentDates.has(d));
         const sortedDates = [...absentDates].sort().reverse();
         return {
           student: s,

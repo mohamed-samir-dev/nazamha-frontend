@@ -21,6 +21,8 @@ export function AttendanceCell({
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
   const isFuture = dateStr > today;
+  const resolution=student.attendance_resolutions?.[dateStr];
+  if(resolution)return <td className="text-center px-1 py-1.5"><span className="text-amber-400 text-xs" title={resolution==="compensated"?"غياب معوّض بحضور حصة أخرى؛ ليس حضورًا فعليًا هنا":"إعفاء معتمد من الغياب؛ ليس حضورًا فعليًا هنا"}>{resolution==="compensated"?"معوّض":"معفى"}</span></td>;
   const isSuspended = student.is_suspended && (!student.suspended_until || new Date(student.suspended_until) > new Date());
   const canEdit = !isPastWeek && !isFuture && !isSuspended && (state === "active" || state === "expired");
 

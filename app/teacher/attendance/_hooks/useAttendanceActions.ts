@@ -8,6 +8,7 @@ import { AttendanceQueue } from "@/lib/offlineQueue";
 import { appCache } from "@/lib/appCache";
 import { getErrorMessage } from "@/lib/errors";
 import { getTodayCairo } from "@/lib/utils/dateUtils";
+import {attendanceSlot,attendanceForDates} from "@/lib/utils/attendanceResolution";
 
 const ALL_TIME_ATT_KEY = (teacherId: string) => `allTimeAttendanceMap:${teacherId}`;
 const invalidateAllTimeCache = (teacherId: string) => appCache.invalidate(ALL_TIME_ATT_KEY(teacherId));
@@ -45,18 +46,14 @@ export function useAttendanceActions({
 
   const today = getTodayCairo();
 
-  const isPresent = (studentId: string, dateStr: string) =>
-    attendance.some(a => a.student_id === studentId && a.session_date === dateStr && a.status === "present");
+  const isPresent = (studentId: string, dateStr: string,groupId?:string|null) => attendanceSlot(attendance,studentId,dateStr,groupId)?.status==="present";
 
-  const getAttendancePercent = (studentId: string, activeDates: string[], studentJoinDate?: string) => {
+  const getAttendancePercent = (studentId: string, activeDates: string[], studentJoinDate?: string,groupId?:string|null) => {
     const relevantDates = studentJoinDate
       ? activeDates.filter(d => d >= studentJoinDate && d <= today)
       : activeDates.filter(d => d <= today);
     if (relevantDates.length === 0) return 0;
-    const present = attendance.filter(
-      a => a.student_id === studentId && a.status === "present" && relevantDates.includes(a.session_date)
-    ).length;
-    return Math.round((present / relevantDates.length) * 100);
+    return attendanceForDates(attendance,studentId,relevantDates,groupId).percent;
   };
 
   const attendanceRef = useRef(attendance);
@@ -75,7 +72,7 @@ export function useAttendanceActions({
     pendingKeys.current.add(key);
 
     const existing = attendanceRef.current.find(
-      a => a.student_id === student.id && a.session_date === dateStr
+      a => a.student_id === student.id && a.session_date === dateStr && (!a.group_id||a.group_id===student.group_id)
     );
 
     if (existing?.status === "present") {
