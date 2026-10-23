@@ -121,6 +121,8 @@ export function useScanSession() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadRevision, setLoadRevision] = useState(0);
+  const [studentsReady,setStudentsReady]=useState(false);
+  const studentsReadyRef=useRef(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [queuedScans, setQueuedScans] = useState(0);
   const [pastDateAcknowledged, setPastDateAcknowledged] = useState(false);
@@ -131,7 +133,7 @@ export function useScanSession() {
   const [cameraTools, setCameraTools] = useState<{torch:boolean; zoom?:{min:number;max:number}}>({torch:false});
   const [torchOn, setTorchOn] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const { soundEnabled, toggleSound, unlockSound, playSuccess } = useScanSound();
+  const { soundEnabled, soundReady, toggleSound, unlockSound, playSuccess } = useScanSound();
   const [userId, setUserId] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -316,17 +318,28 @@ export function useScanSession() {
 
         let grpData: Group[], stData: Student[], grdData: Grade[];
         if (navigator.onLine) {
-          [grpData, stData, grdData] = await Promise.all([
-            GroupsService.getGroupsByTeacherId(),
-            StudentsService.getStudentsByTeacherId("id,name,code,center_student_code,group_id,grade_id,is_suspended,suspended_until,suspension_reason,created_at"),
-            GradesService.getGradesByTeacherId(currentUser.id),
-          ]);
-          if (cancelled) return;
-          OfflineCache.saveStudents(stData);
-          OfflineCache.saveGroups(grpData);
-          OfflineCache.saveGrades(grdData);
-          OfflineCache.setLastSync();
+          // A large student roster must not delay choosing a session or opening the online QR reader.
+          const studentsRequest=Promise.allSettled([StudentsService.getStudentsByTeacherId("id,name,code,center_student_code,group_id,grade_id,is_suspended,suspended_until,suspension_reason,created_at")]);
+          const [groupResult,gradeResult]=await Promise.allSettled([GroupsService.getGroupsByTeacherId(),GradesService.getGradesByTeacherId(currentUser.id)]);
+          if(cancelled) return;
+          grpData=groupResult.status==="fulfilled" ? groupResult.value : OfflineCache.loadGroups();
+          grdData=gradeResult.status==="fulfilled" ? gradeResult.value : OfflineCache.loadGrades();
+          setGroups(grpData);setGrades(grdData);stateRef.current.groups=grpData;stateRef.current.grades=grdData;
+          setLoading(false);
+          const [studentResult]=await studentsRequest;
+          if(cancelled) return;
+          stData=studentResult.status==="fulfilled" ? studentResult.value : OfflineCache.loadStudents();
+          studentsReadyRef.current=studentResult.status==="fulfilled";setStudentsReady(studentsReadyRef.current);
+          const responses=[groupResult,studentResult,gradeResult];
+          if(responses.some(r=>r.status==="rejected")) setLoadError("تعذر تحديث بعض بيانات السكان؛ المتاح ظاهر أمامك. أعد المحاولة لتحديث البيانات.");
+          try {
+            if(studentResult.status==="fulfilled") OfflineCache.saveStudents(stData);
+            if(groupResult.status==="fulfilled") OfflineCache.saveGroups(grpData);
+            if(gradeResult.status==="fulfilled") OfflineCache.saveGrades(grdData);
+            OfflineCache.setLastSync();
+          } catch {setLoadError("تعذر حفظ نسخة البيانات على الجهاز؛ يلزم الإنترنت للتعرف على البطاقات.");}
         } else {
+          studentsReadyRef.current=true;setStudentsReady(true);
           grpData = OfflineCache.loadGroups();
           stData = OfflineCache.loadStudents();
           grdData = OfflineCache.loadGrades();
@@ -367,11 +380,13 @@ export function useScanSession() {
   const searchParams = useSearchParams();
   const urlGroupId = searchParams.get("group");
 
+  const appliedUrlRef=useRef<string|null>(null);
   // ── Apply group from URL param (from dashboard "ابدأ الحضور" button) ──
   useEffect(() => {
-    if (loading || groups.length === 0 || !urlGroupId) return;
+    if (loading || groups.length === 0 || !urlGroupId || appliedUrlRef.current===urlGroupId) return;
     const match = groups.find(g => g.id === urlGroupId);
     if (!match) return;
+    appliedUrlRef.current=urlGroupId;
     manualOverrideRef.current = true;
     autoGroupRef.current = match.id;
     stateRef.current.selectedGroupId = match.id;
@@ -531,7 +546,10 @@ export function useScanSession() {
       if(context.sessionDate < getTodayCairo() && !pastAcknowledgedRef.current) throw new Error("أكد التسجيل في الجلسة السابقة أولًا");
       setBusy("جاري التعرف على الطالب…"); setLastScan(null);
       let student:Student|undefined;
-      if(item.manual) student=resolveManualStudent(context.students,item.text,group);
+      if(item.manual) {
+        if(!studentsReadyRef.current) throw new Error("انتظر اكتمال تحميل قائمة الطلاب أو أعد تحميلها قبل الإدخال اليدوي");
+        student=resolveManualStudent(context.students,item.text,group);
+      }
       if(!student) student=navigator.onLine ? await StudentsService.getStudentByQR(item.text) : findStudentByQR(context.students,item.text);
       if(!active()) return;
       if(!student) throw new Error("الكود غير موجود؛ راجع كود الطالب كاملًا");
@@ -611,6 +629,7 @@ export function useScanSession() {
     if (v) {
       const grp = stateRef.current.groups.find(g => g.id === v);
       if (grp) {
+        if(grp.grade_id) setSelectedGradeId(grp.grade_id);
         const dates = getValidSessionDates(grp);
         setValidSessionDates(dates);
         const nearest = getNearestValidDate(grp);
@@ -631,7 +650,8 @@ export function useScanSession() {
   }, [scanning, isStarting, stopScanner, startScanner,resetOperation]);
 
   const handleSessionDateChange = useCallback((date: string) => {
-    if (!validSessionDates.includes(date)) return;
+    const group=stateRef.current.groups.find(g=>g.id===stateRef.current.selectedGroupId);
+    if (!group || !getValidSessionDates(group).includes(date)) return;
     void stopScanner();
     resetOperation();
     setSessionDateError(null);
@@ -656,7 +676,7 @@ export function useScanSession() {
   },[commitAttendance,showLastScan,unlockSound]);
   const handleCancelCrossGroup=useCallback(()=>{
     if(operationRef.current) return;
-    confirmRef.current=null;setCrossGroupConfirm(null);setScannerPaused(false);stateRef.current.scannerPaused=false;
+    confirmRef.current=null;setCrossGroupConfirm(null);setScannerPaused(false);stateRef.current.scannerPaused=false;setLastScan(null);
     void pumpRef.current();
   },[]);
 
@@ -668,7 +688,8 @@ export function useScanSession() {
     deletingRef.current.add(studentId);setDeletingIds([...deletingRef.current]);
     try {
       if(entry.queued && AttendanceService.isSyncing()) throw new Error("انتظر انتهاء المزامنة قبل إلغاء الحضور");
-      if(entry.queued && AttendanceQueue.getAll().some(r=>r.student_id===studentId && r.session_date===sessionDate)) AttendanceQueue.remove(studentId, sessionDate);
+      const queuedRecord=AttendanceQueue.getAll().find(r=>r.teacher_id===userId && r.student_id===studentId && (r.scanner_group_id||r.group_id)===selectedGroupId && (r.scanner_session_date||r.session_date)===sessionDate);
+      if(entry.queued && queuedRecord) AttendanceQueue.remove(studentId,queuedRecord.session_date);
       else {
         if(!navigator.onLine) throw new Error("يلزم الاتصال لإلغاء سجل محفوظ");
         let id = entry.recordId;
@@ -702,7 +723,7 @@ export function useScanSession() {
   const studentMap=useMemo(()=>new Map(students.map(s=>[s.id,s])),[students]);
   const eligibleStudents=useMemo(()=>studentsForPeriod(students,attendanceContext?.memberships||[],sessionDate,sessionDate).filter(s=>s.group_id===selectedGroupId && (!s.created_at || s.created_at.slice(0,10)<=sessionDate) && (sessionDate!==getTodayCairo() || !s.is_suspended || (!!s.suspended_until && new Date(s.suspended_until)<=new Date()))),[students,attendanceContext,selectedGroupId,sessionDate]);
   const groupStudentsCount=eligibleStudents.length;
-  const remainingCount=useMemo(()=>eligibleStudents.filter(s=>!scannedToday.some(e=>e.studentId===s.id)).length,[eligibleStudents,scannedToday]);
+  const remainingCount=useMemo(()=>{const ids=new Set(scannedToday.map(e=>e.studentId));return eligibleStudents.filter(s=>!ids.has(s.id)).length;},[eligibleStudents,scannedToday]);
   const crossGroupCount=useMemo(()=>scannedToday.filter(e=>studentMap.get(e.studentId)?.group_id!==selectedGroupId).length,[scannedToday,studentMap,selectedGroupId]);
 
   const acknowledgePastDate=()=>{pastAcknowledgedRef.current=true;setPastDateAcknowledged(true);setSessionDateError(null);};
@@ -714,9 +735,9 @@ export function useScanSession() {
   const gradesWithGroups = grades.filter(gr => groups.some(g => g.grade_id === gr.id));
 
   return {
-    loading, userId, loadError, retryLoad:()=>setLoadRevision(v=>v+1),
+    loading, userId, studentsReady, loadError, retryLoad:()=>setLoadRevision(v=>v+1),
     busy, queuedScans, pastDateAcknowledged, acknowledgePastDate, remainingCount, deletingIds,
-    soundEnabled,toggleSound, cameraTools,torchOn,toggleTorch,zoom,
+    soundEnabled,soundReady,toggleSound,unlockSound,cameraTools,torchOn,toggleTorch,zoom,
     setCameraZoom:async(value:number)=>{await applyCameraTool({advanced:[{zoom:value} as MediaTrackConstraintSet]});setZoom(value);},
     dismissLastScan:()=>setLastScan(null),
     groups, students, grades: gradesWithGroups,

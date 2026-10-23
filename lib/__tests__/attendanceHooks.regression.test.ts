@@ -24,6 +24,7 @@ beforeEach(()=>{
  jest.clearAllMocks();localStorage.clear();Object.defineProperty(navigator,"onLine",{configurable:true,value:true});
  (globalThis as any).BroadcastChannel=class{onmessage:any;close(){}postMessage(){}};
  (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
+ jest.spyOn(window,"confirm").mockReturnValue(true);
  (api.get as jest.Mock).mockResolvedValue([]);
  jest.spyOn(AttendanceService,"getContext").mockResolvedValue({memberships:[],groups:[],sessions:[]});
  (AuthService.getUser as jest.Mock).mockResolvedValue({id:"t"});
@@ -56,13 +57,13 @@ test("cross-group removal uses returned record ID",async()=>{
  (api.post as jest.Mock).mockResolvedValue({decision:"allow"});
  jest.spyOn(AttendanceService,"upsertAttendanceRecord").mockResolvedValue({state:"saved",record:{id:"saved-id"} as any});
  const del=jest.spyOn(AttendanceService,"deleteAttendanceRecord").mockResolvedValue();
- const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.setManualCode("0001"));
+ const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.acknowledgePastDate());await act(async()=>h.value.setManualCode("0001"));
  await act(async()=>h.value.handleManualSubmit({preventDefault(){}}));expect(h.value.scannedToday).toHaveLength(1);
  await act(async()=>h.value.handleRemoveScanned("s"));expect(del).toHaveBeenCalledWith("saved-id");expect(h.value.scannedToday).toHaveLength(0);await h.close();
 });
 test("date change during preflight prevents save in either session",async()=>{
  (StudentsService.getStudentsByTeacherId as jest.Mock).mockResolvedValue([{id:"s",name:"S",code:"0001",group_id:"original"}]);
- const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.setManualCode("0001"));
+ const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.acknowledgePastDate());await act(async()=>h.value.setManualCode("0001"));
  let resolve:any;(api.post as jest.Mock).mockImplementation(()=>new Promise(r=>resolve=r));const save=jest.spyOn(AttendanceService,"upsertAttendanceRecord");let pending:any;
  await act(async()=>{pending=h.value.handleManualSubmit({preventDefault(){}});});
  await act(async()=>h.value.handleSessionDateChange(h.value.validSessionDates.find((d:string)=>d!==h.value.sessionDate)));
@@ -70,14 +71,14 @@ test("date change during preflight prevents save in either session",async()=>{
 });
 test("late session response cannot overwrite the new session list",async()=>{
  const h=await harness(useScanSession),pending:any[]=[];(api.get as jest.Mock).mockImplementation(()=>new Promise(r=>pending.push(r)));
- await act(async()=>h.value.handleGroupChange("g"));const date=h.value.sessionDate;
+ await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.acknowledgePastDate());const date=h.value.sessionDate;
  await act(async()=>h.value.handleSessionDateChange(h.value.validSessionDates.find((d:string)=>d!==date)));expect(pending).toHaveLength(2);
  await act(async()=>pending[1]([{student_id:"new",student_name:"New",created_at:"2026-10-19T12:00:00Z"}]));
  await act(async()=>pending[0]([{student_id:"old",student_name:"Old",created_at:"2026-10-12T12:00:00Z"}]));expect(h.value.scannedToday[0].studentId).toBe("new");await h.close();
 });
 test("a session read started before saving cannot erase the newly saved student",async()=>{
  const h=await harness(useScanSession),pending:any[]=[];(api.get as jest.Mock).mockImplementation(()=>new Promise(r=>pending.push(r)));
- await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.setManualCode("0001"));
+ await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.acknowledgePastDate());await act(async()=>h.value.setManualCode("0001"));
  jest.spyOn(AttendanceService,"upsertAttendanceRecord").mockResolvedValue({state:"saved",record:{id:"saved-id"} as any});
  await act(async()=>h.value.handleManualSubmit({preventDefault(){}}));expect(h.value.scannedToday).toHaveLength(1);
  await act(async()=>pending[0]([]));expect(h.value.scannedToday).toHaveLength(1);expect(pending).toHaveLength(2);
@@ -91,7 +92,7 @@ test("attendance cache retains unified center QR identity",async()=>{
 test("camera completing after stop is released and cannot reactivate scanner",async()=>{
  let resolve:any;const camera={start:jest.fn().mockImplementation(()=>new Promise(r=>resolve=r)),stop:jest.fn().mockResolvedValue(undefined),clear:jest.fn()};
  (Html5Qrcode as unknown as jest.Mock).mockImplementation(()=>camera);
- const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));let starting:any;
+ const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.acknowledgePastDate());let starting:any;
  await act(async()=>{starting=h.value.startScanner();});expect(camera.start).toHaveBeenCalledWith({facingMode:"environment"},expect.objectContaining({fps:10}),expect.any(Function),expect.any(Function));
  await act(async()=>h.value.stopScanner());await act(async()=>{resolve();await starting;});expect(h.value.scanning).toBe(false);expect(camera.stop).toHaveBeenCalled();expect(camera.clear).toHaveBeenCalled();await h.close();
 });

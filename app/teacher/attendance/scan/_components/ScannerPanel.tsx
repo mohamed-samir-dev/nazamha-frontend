@@ -6,7 +6,7 @@ import styles from "../scan.module.css";
 interface Props {
  scanning:boolean;selectedGroupId:string;scannerDivId:string;lastScan:LastScan|null;crossGroupConfirm:CrossGroupConfirm|null;
  onConfirmCrossGroup:()=>void;onCancelCrossGroup:()=>void;
- busy?:string|null;queuedScans?:number;isStarting?:boolean;sessionReady?:boolean;soundEnabled?:boolean;
+ busy?:string|null;queuedScans?:number;isStarting?:boolean;sessionReady?:boolean;soundEnabled?:boolean;soundReady?:boolean;onUnlockSound?:()=>void;
  onStart?:()=>void;onStop?:()=>void;onDismiss?:()=>void;onToggleSound?:()=>void;
  torchSupported?:boolean;torchOn?:boolean;onToggleTorch?:()=>void;zoomRange?:{min:number;max:number};zoom?:number;onZoom?:(value:number)=>void;
 }
@@ -57,6 +57,7 @@ export function ScannerPanel(p:Props){
    {p.scanning && p.torchSupported && <button className={styles.iconButton} aria-label="فلاش الكاميرا" aria-pressed={p.torchOn} onClick={p.onToggleTorch}><Flashlight size={20}/></button>}
   </div>
   {p.scanning && p.zoomRange && <label className={styles.zoom}>تقريب الكاميرا<input aria-label="تقريب الكاميرا" type="range" min={p.zoomRange.min} max={p.zoomRange.max} step="0.1" value={p.zoom} onChange={e=>p.onZoom?.(Number(e.target.value))}/></label>}
+  {p.soundEnabled && !p.soundReady && <button className={styles.textButton} onClick={p.onUnlockSound}>اضغط لتفعيل صوت النجاح</button>}
   <p className={styles.cameraFoot} role="status">{p.crossGroupConfirm ? "بانتظار قرارك" : p.queuedScans ? `${p.queuedScans} بطاقة في انتظار المعالجة` : "نتيجة التسجيل تظهر هنا · صوت النجاح للحضور المؤكد فقط"}</p>
  </section>;
 }

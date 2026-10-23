@@ -3,6 +3,7 @@ import {useCallback,useEffect,useRef,useState} from "react";
 
 export function useScanSound(){
   const [soundEnabled,setSoundEnabled]=useState(true);
+  const [soundReady,setSoundReady]=useState(false);
   const enabled=useRef(true),context=useRef<AudioContext|null>(null);
   useEffect(()=>{try {enabled.current=localStorage.getItem("attendance-scan-sound")!=="off";setSoundEnabled(enabled.current);}catch{} return ()=>{void context.current?.close().catch(()=>{});};},[]);
   const unlockSound=useCallback(()=>{
@@ -10,10 +11,11 @@ export function useScanSound(){
     try {
       const Constructor=window.AudioContext || (window as unknown as {webkitAudioContext:typeof AudioContext}).webkitAudioContext;
       if(!Constructor) return;
-      if(!context.current || context.current.state==="closed") context.current=new Constructor();
-      void context.current.resume().catch(()=>{});
+      if(!context.current || context.current.state==="closed") {context.current=new Constructor();context.current.onstatechange=()=>setSoundReady(context.current?.state==="running");}
+      void context.current.resume().then(()=>setSoundReady(context.current?.state==="running")).catch(()=>{});
     }catch { /* Sound must never interrupt attendance. */ }
   },[]);
+  useEffect(()=>{window.addEventListener("pointerdown",unlockSound);window.addEventListener("keydown",unlockSound);return ()=>{window.removeEventListener("pointerdown",unlockSound);window.removeEventListener("keydown",unlockSound);};},[unlockSound]);
   const playSuccess=useCallback(()=>{
     if(!enabled.current) return;
     const audio=context.current;if(!audio || audio.state!=="running") return;
@@ -32,5 +34,5 @@ export function useScanSound(){
     try {localStorage.setItem("attendance-scan-sound",enabled.current?"on":"off");}catch{}
     if(enabled.current) unlockSound();
   },[unlockSound]);
-  return {soundEnabled,toggleSound,unlockSound,playSuccess};
+  return {soundEnabled,soundReady,toggleSound,unlockSound,playSuccess};
 }
