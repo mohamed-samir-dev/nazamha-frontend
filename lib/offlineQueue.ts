@@ -26,7 +26,7 @@ export type QueuedRecord = Omit<AttendanceRecord, "id" | "created_at"> & {
 export const OfflineCache = {
   saveAttendanceRecords(records:AttendanceRecord[]) {
     try {
-      const merged=new Map([...OfflineCache.loadAttendanceRecords(),...records].map(r=>[`${r.teacher_id}|${r.student_id}|${r.session_slot || r.lesson_id || "regular"}|${r.session_date}`,r]));
+      const merged=new Map([...OfflineCache.loadAttendanceRecords(),...records].map(r=>[`${r.teacher_id}|${r.student_id}|${r.session_date}`,r]));
       localStorage.setItem("ot_attendance_records",JSON.stringify([...merged.values()].sort((a,b)=>b.session_date.localeCompare(a.session_date)).slice(0,10000)));
     } catch { /* Attendance is confirmed by the server even if browser storage is full. */ }
   },
@@ -120,14 +120,14 @@ export const AttendanceQueue = {
       const key=`ot_attendance_archive:${teacherId}`;
       const saved:QueuedRecord[]=JSON.parse(localStorage.getItem(key)||"[]");
       const combined=[...saved,...queue.filter(r=>r.teacher_id===teacherId)];
-      localStorage.setItem(key,JSON.stringify([...new Map(combined.map(r=>[`${r.teacher_id}|${r.student_id}|${r.session_slot || r.lesson_id || "regular"}|${r.session_date}`,r])).values()]));
+      localStorage.setItem(key,JSON.stringify([...new Map(combined.map(r=>[`${r.student_id}|${r.session_date}`,r])).values()]));
     }
   },
   restore(teacherId:string) {
     const key=`ot_attendance_archive:${teacherId}`;
     const archived:QueuedRecord[]=JSON.parse(localStorage.getItem(key)||"[]");
     const own=AttendanceQueue.getAll().filter(r=>r.teacher_id===teacherId);
-    localStorage.setItem(KEYS.queue,JSON.stringify([...new Map([...archived,...own].map(r=>[`${r.teacher_id}|${r.student_id}|${r.session_slot || r.lesson_id || "regular"}|${r.session_date}`,r])).values()]));
+    localStorage.setItem(KEYS.queue,JSON.stringify([...new Map([...archived,...own].map(r=>[`${r.student_id}|${r.session_date}`,r])).values()]));
     localStorage.removeItem(key);AttendanceQueue.notify();
   },
   notify() { if (typeof window !== "undefined") window.dispatchEvent(new Event("attendance-queue-changed")); },
@@ -142,7 +142,7 @@ export const AttendanceQueue = {
     const queue = AttendanceQueue.getAll();
     // avoid duplicates (same student + same session_date)
     const exists = queue.some(
-      r => r.teacher_id === record.teacher_id && r.student_id === record.student_id && r.session_date === record.session_date && (r.lesson_id || "") === (record.lesson_id || "")
+      r => r.student_id === record.student_id && r.session_date === record.session_date
     );
     if (exists) return;
     queue.push({ ...record, _queuedAt: new Date().toISOString(), _queueId: crypto.randomUUID() });
@@ -166,7 +166,7 @@ export const AttendanceQueue = {
   },
 
   reject(record: QueuedRecord, message: string) {
-    const queue = AttendanceQueue.getAll().map(r => r.teacher_id === record.teacher_id && r.student_id === record.student_id && r.session_date === record.session_date && (r.lesson_id || "") === (record.lesson_id || "") ? {...r, _error: message} : r);
+    const queue = AttendanceQueue.getAll().map(r => r.student_id === record.student_id && r.session_date === record.session_date ? {...r, _error: message} : r);
     localStorage.setItem(KEYS.queue, JSON.stringify(queue));
     AttendanceQueue.notify();
   },
