@@ -20,7 +20,8 @@ function buildWhatsAppMessage(row: StudentReportRow, month: number, year: number
     `المجموعة: ${row.groupName}\n\n` +
     `✅ أيام الحضور: *${row.present}* يوم\n` +
     `❌ أيام الغياب: *${row.absent}* يوم\n` +
-    `📊 نسبة الحضور: *${row.pct}%*\n\n` +
+    `التعويض: ${row.compensated||0} حصة · الإعفاء: ${row.exempt||0} حصة\n` +
+    `📊 نسبة الحضور للحصص المطلوبة بعد الاستبعاد: *${row.pct}%*\n\n` +
     (row.pct < 75
       ? `⚠️ *تنبيه:* نسبة حضور الطالب أقل من 75%، نرجو الاهتمام بانتظام الحضور.\n\n`
       : row.pct === 100

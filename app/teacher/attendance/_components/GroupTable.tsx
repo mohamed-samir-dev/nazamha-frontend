@@ -126,7 +126,7 @@ export function GroupTable({
               <tbody>
                 {students.map((student, i) => {
                   const joinDate = student.group_join_date || student.created_at?.slice(0, 10);
-                  const pct = getAttendancePercent(student.id, activeDates.filter(d=>(!student.attendance_ends_on || d<=student.attendance_ends_on)&&!student.attendance_excluded_dates?.includes(d)), joinDate);
+                  const pct = getAttendancePercent(student.id, activeDates.filter(d=>(!student.attendance_ends_on || d<=student.attendance_ends_on)&&!student.attendance_excluded_dates?.includes(d)), joinDate,student.group_id);
                   const pctColor = pct >= 75 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
                   return (
                     <tr key={`${student.id}-${student.group_id}-${student.group_join_date}`} className="transition-colors hover:[&>td]:bg-white/[0.02]">

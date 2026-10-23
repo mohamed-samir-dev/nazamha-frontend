@@ -33,6 +33,9 @@ export interface StudentReport {
   site_name?: string;
   site_logo?: string;
   attendance_present: number;
+  attendance_compensated?:number;
+  attendance_exempt?:number;
+  attendance_guest?:number;
   attendance_absent: number;
   attendance_total: number;
   last_exam_title?: string;

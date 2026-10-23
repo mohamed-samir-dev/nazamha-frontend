@@ -15,6 +15,8 @@ export interface StudentReportRow {
   groupName: string;
   gradeName: string;
   present: number;
+  compensated?:number;
+  exempt?:number;
   absent: number;
   total: number;
   pct: number;
@@ -155,6 +157,8 @@ export function useAttendanceReports() {
         groupName: grp?.name ?? "—",
         gradeName: grades.find((g) => g.id === (s.grade_id || grp?.grade_id))?.name ?? "—",
         present,
+        compensated:Object.values(s.attendance_resolutions||{}).filter(v=>v==="compensated").length,
+        exempt:Object.values(s.attendance_resolutions||{}).filter(v=>v==="exempt").length,
         absent,
         total,
         pct,
