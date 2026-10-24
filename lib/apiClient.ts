@@ -248,7 +248,7 @@ function getOnce<T>(path: string): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => getOnce<T>(path),
+  get: <T>(path: string, options?: { signal?: AbortSignal }) => options?.signal ? request<T>(path, { signal: options.signal }) : getOnce<T>(path),
   post: <T>(path: string, body: unknown, idempotencyKey?: string) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body), ...(idempotencyKey ? { headers: { "Idempotency-Key": idempotencyKey } } : {}) }),
   put: <T>(path: string, body: unknown) =>

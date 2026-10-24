@@ -8,7 +8,7 @@ import { AttendanceQueue } from "@/lib/offlineQueue";
 import { appCache } from "@/lib/appCache";
 import { getErrorMessage } from "@/lib/errors";
 import { getTodayCairo } from "@/lib/utils/dateUtils";
-import {attendanceSlot,attendanceForDates} from "@/lib/utils/attendanceResolution";
+import {attendanceSlot,attendanceForDates,attendanceKey,actualAttendanceSlot,mergeAttendance} from "@/lib/utils/attendanceResolution";
 
 const ALL_TIME_ATT_KEY = (teacherId: string) => `allTimeAttendanceMap:${teacherId}`;
 const invalidateAllTimeCache = (teacherId: string) => appCache.invalidate(ALL_TIME_ATT_KEY(teacherId));
@@ -18,7 +18,7 @@ const isOfflineRecord = (id: string) => id.startsWith("offline-") || id.startsWi
 const deleteRecord = async (record: AttendanceRecord) => {
   if (isOfflineRecord(record.id)) {
     if(AttendanceService.isSyncing()) throw new Error("انتظر انتهاء المزامنة قبل إلغاء الحضور");
-    AttendanceQueue.remove(record.student_id, record.session_date!);
+    AttendanceQueue.remove(record.student_id, record.session_date!, record.group_id, record.teacher_id);
   } else {
     await AttendanceService.deleteAttendanceRecord(record.id);
   }
@@ -32,10 +32,12 @@ interface Props {
   showToast: (msg: string, type?: "success" | "error") => void;
   updateGroupLocally: (group: Group) => void;
   weekOffset: number;
+  readOnly?: boolean;
+  onRefresh?: () => Promise<void>;
 }
 
 export function useAttendanceActions({
-  userId, attendance, setAttendance, filteredStudents, showToast, updateGroupLocally, weekOffset,
+  userId, attendance, setAttendance, filteredStudents, showToast, updateGroupLocally, weekOffset, readOnly = false, onRefresh,
 }: Props) {
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const savingRef = useRef(new Set<string>());
@@ -44,7 +46,11 @@ export function useAttendanceActions({
   const removeSaving = (groupId: string, dateStr: string) => setSavingKeys(prev => { const s = new Set(prev); s.delete(`${groupId}-${dateStr}`); return s; });
   const [pendingDelete, setPendingDelete] = useState<{ record: AttendanceRecord; studentName: string } | null>(null);
 
+  const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
   const today = getTodayCairo();
+  const isCellSaving = (sid: string, date: string, gid?: string | null) => pendingCells.has(attendanceKey(sid, gid, date));
+  const beginCell = (key: string) => { pendingKeys.current.add(key); setPendingCells(prev => new Set(prev).add(key)); };
+  const endCell = (key: string) => { pendingKeys.current.delete(key); setPendingCells(prev => { const next = new Set(prev); next.delete(key); return next; }); };
 
   const isPresent = (studentId: string, dateStr: string,groupId?:string|null) => attendanceSlot(attendance,studentId,dateStr,groupId)?.status==="present";
 
@@ -52,8 +58,9 @@ export function useAttendanceActions({
     const relevantDates = studentJoinDate
       ? activeDates.filter(d => d >= studentJoinDate && d <= today)
       : activeDates.filter(d => d <= today);
-    if (relevantDates.length === 0) return 0;
-    return attendanceForDates(attendance,studentId,relevantDates,groupId).percent;
+    if (relevantDates.length === 0) return null;
+    const result = attendanceForDates(attendance,studentId,relevantDates,groupId);
+    return result.total ? result.percent : null;
   };
 
   const attendanceRef = useRef(attendance);
@@ -62,31 +69,29 @@ export function useAttendanceActions({
   const pendingKeys = useRef<Set<string>>(new Set());
 
   const handleToggle = async (student: Student, dateStr: string) => {
-    if (!userId) return;
+    if (!userId || readOnly) return;
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن تسجيل حضور في تاريخ مستقبلي", "error"); return; }
 
-    const key = `${student.id}-${dateStr}`;
+    const key = attendanceKey(student.id, student.group_id, dateStr);
     if(savingRef.current.has(`${student.group_id || ""}-${dateStr}`)) { showToast("انتظر انتهاء حفظ الحصة","error"); return; }
     if (pendingKeys.current.has(key)) return; // منع double-click
-    pendingKeys.current.add(key);
+    beginCell(key);
 
-    const existing = attendanceRef.current.find(
-      a => a.student_id === student.id && a.session_date === dateStr && (!a.group_id||a.group_id===student.group_id)
-    );
+    const existing = student.attendance_guest_dates?.includes(dateStr) ? actualAttendanceSlot(attendanceRef.current, student.id, dateStr, student.group_id) : attendanceSlot(attendanceRef.current, student.id, dateStr, student.group_id);
 
-    if(existing?.resolution){pendingKeys.current.delete(key);showToast("راجع التعويض أو الإعفاء في سكان الكاميرا قبل تعديل هذه الحصة","error");return;}
+    if(existing?.resolution){endCell(key);showToast("اضغط على حالة التعويض أو الإعفاء لتصحيحها","error");return;}
     if (existing?.status === "present") {
       setAttendance(prev => prev.filter(a => a.id !== existing.id));
     try { await deleteRecord(existing); invalidateAllTimeCache(userId); }
       catch {
-        setAttendance(prev => [...prev, existing]);
+        setAttendance(prev => mergeAttendance(prev, [existing]));
         showToast("حدث خطأ أثناء حذف الحضور.", "error");
-      } finally { pendingKeys.current.delete(key); }
+      } finally { endCell(key); }
     } else {
       const sessionMonth = parseInt(dateStr.split("-")[1], 10);
       const currentYear = parseInt(dateStr.split("-")[0], 10);
-      const optimisticId = `optimistic-${student.id}-${dateStr}`;
+      const optimisticId = `optimistic-${student.id}-${student.group_id}-${dateStr}`;
       const optimisticRecord: AttendanceRecord = {
         id: optimisticId,
         teacher_id: userId,
@@ -113,9 +118,9 @@ export function useAttendanceActions({
         invalidateAllTimeCache(userId);
       } catch (err) {
         setAttendance(prev => prev.filter(a => a.id !== optimisticId));
-        if (existing) setAttendance(prev => [...prev, existing]);
+        if (existing) setAttendance(prev => mergeAttendance(prev, [existing]));
         showToast(getErrorMessage(err, "حدث خطأ أثناء تسجيل الحضور."), "error");
-      } finally { pendingKeys.current.delete(key); }
+      } finally { endCell(key); }
     }
   };
 
@@ -134,17 +139,17 @@ export function useAttendanceActions({
   };
 
   const handleMarkAllSession = async (dateStr: string, groupId: string) => {
-    if (!userId) return;
+    if (!userId || readOnly) return;
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن تحضير تاريخ مستقبلي", "error"); return; }
     const savingKey = `${groupId}-${dateStr}`;
-    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}-${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
+    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(attendanceKey(s.id, s.group_id, dateStr)))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
     if (savingRef.current.has(savingKey)) return;
     savingRef.current.add(savingKey);
     addSaving(groupId, dateStr);
     const sessionMonth = parseInt(dateStr.split("-")[1], 10);
     const sessionYear = parseInt(dateStr.split("-")[0], 10);
-    const groupStudents = groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents;
+    const groupStudents = (groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents).filter(s => !s.attendance_guest_only);
     const absentStudents = groupStudents.filter(s => (!s.attendance_ends_on || dateStr<=s.attendance_ends_on) && !s.attendance_excluded_dates?.includes(dateStr) && !s.attendance_resolutions?.[dateStr]).filter(s => !(s.is_suspended && (!s.suspended_until || new Date(s.suspended_until) > new Date())) && (s.group_join_date || s.created_at?.slice(0,10) || "") <= dateStr).filter(s =>
       !attendanceRef.current.some(a => a.student_id === s.id && a.session_date === dateStr && (!a.group_id||a.group_id===s.group_id) && a.status === "present")
     );
@@ -165,8 +170,7 @@ export function useAttendanceActions({
       // Replace each authoritative student/date row with its persisted record.
       if (newRecords.length > 0) {
         setAttendance((prev: AttendanceRecord[]) => [
-          ...prev.filter(a => !newRecords.some(o => o.student_id === a.student_id && o.session_date === a.session_date)),
-          ...newRecords,
+          ...mergeAttendance(prev, newRecords),
         ]);
       }
       invalidateAllTimeCache(userId);
@@ -180,18 +184,18 @@ export function useAttendanceActions({
   };
 
   const handleClearSession = async (dateStr: string, groupId: string) => {
-    if (!userId) return;
+    if (!userId || readOnly) return;
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن مسح حصة مستقبلية", "error"); return; }
     const savingKey = `${groupId}-${dateStr}`;
-    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}-${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
+    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(attendanceKey(s.id, s.group_id, dateStr)))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
     if (savingRef.current.has(savingKey) || !window.confirm("إلغاء حضور جميع طلاب هذه الحصة؟")) return;
     savingRef.current.add(savingKey);
     addSaving(groupId, dateStr);
     try {
       const groupStudents = groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents;
       const toDelete = attendanceRef.current.filter(
-        a => !a.id.startsWith("resolution-") && a.session_date === dateStr && (!groupId || a.group_id===groupId) && groupStudents.some(s => s.id === a.student_id)
+        a => a.status === "present" && !a.resolution && !a.id.startsWith("resolution-") && a.session_date === dateStr && (!groupId || a.group_id===groupId) && groupStudents.some(s => s.id === a.student_id)
       );
       const results = await Promise.allSettled(toDelete.map(r => deleteRecord(r)));
       const deleted = toDelete.filter((_, i) => results[i].status === "fulfilled");
@@ -206,19 +210,48 @@ export function useAttendanceActions({
     }
   };
 
-  const handleToggleCancelSession = async (groupId: string, dateStr: string) => {
+  const handleToggleCancelSession = async (groupId: string, dateStr: string, cancelled?: boolean) => {
+    if (readOnly) return;
+    const key = `${groupId}-${dateStr}`;
+    if (savingRef.current.has(key) || filteredStudents.some(s => s.group_id === groupId && pendingKeys.current.has(attendanceKey(s.id, s.group_id, dateStr)))) return;
+    savingRef.current.add(key); addSaving(groupId, dateStr);
     try {
-      const updated = await GroupsService.toggleCancelSession(groupId, dateStr);
+      const updated = await GroupsService.toggleCancelSession(groupId, dateStr, cancelled);
       updateGroupLocally(updated);
       const isCancelled = (updated.cancelled_sessions ?? []).includes(dateStr);
-      showToast(isCancelled ? "تم إلغاء الحصة — لن تؤثر على التقارير" : "تم استعادة الحصة");
+      showToast(isCancelled ? "تم إلغاء الحصة" : "تم استعادة الحصة");
+      await onRefresh?.();
     } catch {
       showToast("حدث خطأ أثناء تغيير حالة الحصة.", "error");
-    }
+    } finally { savingRef.current.delete(key); removeSaving(groupId, dateStr); }
+  };
+
+
+  const handleRevokeResolution = async (student: Student, date: string) => {
+    if (!userId || readOnly) return;
+    const row = attendanceSlot(attendanceRef.current, student.id, date, student.group_id);
+    if (!row?.substitution_id || !row.resolution) return;
+    const key = attendanceKey(student.id, student.group_id, date);
+    if (pendingKeys.current.has(key) || savingRef.current.has(`${student.group_id}-${date}`)) return;
+    if (!window.confirm(row.resolution === "exempt" ? "إلغاء إعفاء هذه الحصة؟" : "إلغاء تعويض هذه الحصة؟")) return;
+    beginCell(key);
+    try {
+      await AttendanceService.revokeSubstitution(row.substitution_id, "تصحيح من سجل الحضور");
+      setAttendance(prev => prev.flatMap(record => {
+        if (record.id !== row.id) return [record];
+        if (record.id.startsWith("resolution-")) return [];
+        const clean = { ...record }; delete clean.resolution; delete clean.substitution_id;
+        return [clean];
+      }));
+      invalidateAllTimeCache(userId);
+      showToast("تم تصحيح الحالة");
+      await onRefresh?.();
+    } catch (error) { showToast(getErrorMessage(error, "تعذر تصحيح الحالة"), "error"); }
+    finally { endCell(key); }
   };
 
   return {
-    isSaving, pendingDelete, setPendingDelete, today,
+    isCellSaving, handleRevokeResolution, isSaving, pendingDelete, setPendingDelete, today,
     isPresent, getAttendancePercent,
     handleToggle, confirmDelete,
     handleMarkAllSession, handleClearSession,

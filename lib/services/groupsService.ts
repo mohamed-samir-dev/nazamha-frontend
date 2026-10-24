@@ -26,8 +26,8 @@ export const GroupsService = {
     return GroupsRepository.updateGroup(id, updates);
   },
 
-  async toggleCancelSession(groupId: string, date: string): Promise<Group> {
-    return GroupsRepository.toggleCancelSession(groupId, date);
+  async toggleCancelSession(groupId: string, date: string, cancelled?: boolean): Promise<Group> {
+    return GroupsRepository.toggleCancelSession(groupId, date, cancelled);
   },
 
   async deleteGroup(id: string, deleteStudents = false): Promise<void> {

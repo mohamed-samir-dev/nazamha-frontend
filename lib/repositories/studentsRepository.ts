@@ -16,12 +16,12 @@ export const StudentsRepository = {
   async getStudentByQR(raw: string): Promise<Student> {
     return api.get<Student>(`/students/scan?qr=${encodeURIComponent(raw)}`);
   },
-  async getStudentsByTeacherId(fields?: string): Promise<Student[]> {
+  async getStudentsByTeacherId(fields?: string, options?: { fresh?: boolean; signal?: AbortSignal }): Promise<Student[]> {
     const cacheKey = fields ? STUDENTS_FIELDS_KEY(fields) : STUDENTS_KEY;
     const cached = appCache.get<Student[]>(cacheKey);
-    if (cached) return cached;
+    if (cached && !options?.fresh) return cached;
     const url = fields ? `/students?fields=${fields}` : "/students";
-    const data = await api.get<Student[]>(url);
+    const data = await api.get<Student[]>(url, options?.signal ? { signal: options.signal } : undefined);
     appCache.set(cacheKey, data, 2 * 60 * 1000); // 2 دقيقة
     return data;
   },

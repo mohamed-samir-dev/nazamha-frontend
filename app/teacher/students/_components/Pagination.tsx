@@ -32,6 +32,8 @@ export function Pagination({ currentPage, totalPages, totalItems, pageSize, onPa
       </span>
       <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
         <button
+          type="button"
+          aria-label="الصفحة السابقة"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           style={btnStyle(currentPage === 1)}
@@ -52,6 +54,9 @@ export function Pagination({ currentPage, totalPages, totalItems, pageSize, onPa
             ) : (
               <button
                 key={p}
+                type="button"
+                aria-label={`الصفحة ${p}`}
+                aria-current={p === currentPage ? "page" : undefined}
                 onClick={() => onPageChange(p as number)}
                 style={btnStyle(false, p === currentPage)}
               >
@@ -61,6 +66,8 @@ export function Pagination({ currentPage, totalPages, totalItems, pageSize, onPa
           )}
 
         <button
+          type="button"
+          aria-label="الصفحة التالية"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           style={btnStyle(currentPage === totalPages)}
