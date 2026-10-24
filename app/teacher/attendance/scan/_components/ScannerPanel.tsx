@@ -94,7 +94,7 @@ export function ScannerPanel(p: Props) {
           {p.soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
         </button>
       </div>
-      <div className={styles.viewport}>
+      <div className={`${styles.viewport} ${p.crossGroupConfirm ? styles.reviewViewport : ""}`}>
         <div id={p.scannerDivId} className={styles.reader} />
         {!p.scanning && (
           <div className={styles.cameraEmpty}>
