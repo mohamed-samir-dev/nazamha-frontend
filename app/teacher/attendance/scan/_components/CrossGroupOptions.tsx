@@ -35,9 +35,11 @@ export function CrossGroupOptions({confirmation,busy,onConfirm,onCancel}:Props){
     <div className={styles.confirmContent}>
       <div className={styles.crossHeading}>
         <span className={styles.crossHeadingIcon}><ArrowLeftRight size={18} aria-hidden="true"/></span>
-        <h2 id="cross-group-title">الطالب من مجموعة أخرى</h2>
+        <div className={styles.crossHeadingText}>
+          <h2 id="cross-group-title">الطالب من مجموعة أخرى</h2>
+          <strong className={styles.studentName}>{confirmation.student.name}</strong>
+        </div>
       </div>
-      <strong className={styles.studentName}>{confirmation.student.name}</strong>
       <dl id="cross-group-reason" className={styles.identity}>
         <div><dt>مجموعته الأصلية</dt><dd>{confirmation.originalGroupName}</dd></div>
         <div><dt>هيحضر مع</dt><dd>{validation?.destinationGroupName||"المجموعة المختارة"}</dd></div>
@@ -57,7 +59,7 @@ export function CrossGroupOptions({confirmation,busy,onConfirm,onCancel}:Props){
           {!available&&<span className={styles.crossUnavailableTag}>غير متاح</span>}
         </label>)}
         {(action==="compensate"||action==="exempt")&&<label className={styles.crossField}>
-          اختار الحصة
+          <span>الحصة</span>
           <select aria-label="الحصة المحددة للتعويض أو الإعفاء" value={target} onChange={event=>setTarget(event.target.value)}>
             <option value="">اختر الحصة</option>
             {options.map(lesson=><option key={`${lesson.group_id}-${lesson.date}`} value={lesson.date}>{lesson.date} · {lesson.time}</option>)}

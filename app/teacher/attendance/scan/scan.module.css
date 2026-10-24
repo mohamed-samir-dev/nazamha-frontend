@@ -729,108 +729,80 @@
     text-align: right;
   }
 }
-/* Cross-group choices stay inside the camera, with stronger contrast and distinct option colors. */
+/* A compact, mobile-first confirmation inside the existing camera panel. */
 .reviewViewport {
   aspect-ratio: auto;
-  height: clamp(360px, 62svh, 540px);
+  height: clamp(330px, calc(100svh - 190px), 410px);
+  min-height: 330px;
   max-height: none;
 }
+.cameraReview .cameraHeading { margin-bottom: 8px; }
+.cameraReview .cameraControls,
+.cameraReview .cameraFoot,
+.cameraReview .zoom,
+.cameraReview > .textButton { display: none; }
 .confirmation {
-  background: #101c2e;
-  color: #f1f5f9;
+  background: #142131;
+  color: #edf3f8;
   color-scheme: dark;
-  padding: 18px;
-  gap: 14px;
+  padding: 12px;
+  gap: 9px;
 }
 .confirmContent {
-  gap: 14px;
+  gap: 9px;
+  padding-inline-end: 2px;
   scrollbar-width: thin;
-  scrollbar-color: #7187a0 #17273b;
-  padding-inline-end: 5px;
+  scrollbar-color: #657c8e transparent;
 }
-.crossHeading { display: flex; align-items: center; gap: 10px; }
-.crossHeadingIcon, .crossStudentIcon, .crossChoiceIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 11px;
-}
-.crossHeadingIcon { width: 36px; height: 36px; background: #1d4564; color: #7dd3fc; }
-.crossEyebrow { display: block; color: #b9d6ef; font-size: .72rem; margin-bottom: 3px; }
-.crossHeading h2 { margin: 0; font-size: .95rem; font-weight: 700; line-height: 1.6; }
-.crossStudent { display: flex; align-items: center; gap: 10px; padding-top: 2px; }
-.crossStudent > div { flex: 1; min-width: 0; }
-.crossStudentIcon { width: 40px; height: 40px; background: #29405b; color: #e0f2fe; border: 1px solid #587493; }
-.crossStudent .studentName { display: block; font-size: 1.04rem; line-height: 1.7; color: #ffffff; overflow-wrap: anywhere; }
-.crossStudentCode { display: block; font-size: .78rem; color: #c4d4e5; margin-top: 1px; }
-.crossStudentCode bdi { color: #f0f7ff; margin-inline-start: 5px; font-variant-numeric: tabular-nums; }
-.crossStatus { flex-shrink: 0; border: 1px solid #628bb1; background: #284664; color: #e0f2fe; border-radius: 20px; padding: 5px 9px; font-size: .72rem; }
-.confirmation .identity { background: #1b2d43; border: 1px solid #516b86; border-radius: 12px; padding: 4px 12px; font-size: .82rem; }
-.confirmation .identity > div { padding: 8px 0; gap: 12px; }
-.confirmation .identity > div:last-child { border-bottom: 0; }
-.confirmation .identity dt { color: #c4d4e4; flex-shrink: 0; }
-.confirmation .identity dd { color: #f8fafc; margin: 0; line-height: 1.7; }
-.confirmContent > .crossDescription { margin: 0; color: #d1deed; font-size: .84rem; line-height: 1.8; }
-.crossOptions { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
-.crossOptions legend { color: #e0ecf7; font-size: .82rem; font-weight: 600; margin-bottom: 10px; }
-.crossChoice { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #537594; border-inline-start: 4px solid #38bdf8; background: #193a54; border-radius: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
-.crossChoice:hover:not(.crossChoiceUnavailable) { filter: brightness(1.13); border-color: #93c5fd; }
-.crossChoice input { order: 3; margin: 0; margin-inline-start: auto; width: 20px; height: 20px; flex: 0 0 20px; accent-color: #2dd4bf; cursor: inherit; }
-.crossChoiceIcon { order: 1; width: 33px; height: 33px; color: #7dd3fc; background: #245677; }
-.crossChoiceText { order: 2; display: grid; gap: 4px; flex: 1; min-width: 0; }
-.crossChoiceText strong { font-size: .88rem; font-weight: 700; color: #ffffff; line-height: 1.6; }
-.crossChoiceText small { font-size: .77rem; color: #d1dfed; line-height: 1.75; }
-.crossChoice:nth-of-type(2):not(.crossChoiceUnavailable):not(.crossChoiceSelected) { background: #30294d; border-color: #8270ad; border-inline-start-color: #c4b5fd; }
-.crossChoice:nth-of-type(2) .crossChoiceIcon { color: #ddd6fe; background: #534574; }
-.crossChoice:nth-of-type(3):not(.crossChoiceUnavailable):not(.crossChoiceSelected) { background: #3e3222; border-color: #a8884f; border-inline-start-color: #fbbf24; }
-.crossChoice:nth-of-type(3) .crossChoiceIcon { color: #fde68a; background: #69502c; }
-.crossChoiceSelected, .crossChoiceSelected:hover:not(.crossChoiceUnavailable) { border-color: #2dd4bf; background: #144e49; box-shadow: 0 0 0 1px #2dd4bf55; }
-.crossChoiceSelected .crossChoiceIcon { color: #99f6e4; background: #246d62; }
-.crossChoiceSelected .crossChoiceText strong { color: #ffffff; }
-.crossChoiceUnavailable { cursor: not-allowed; border-color: #52647a; background: #253347; filter: none; }
-.crossChoiceUnavailable .crossChoiceText strong, .crossChoiceUnavailable .crossChoiceIcon { color: #c4cedb; }
-.crossChoiceUnavailable .crossChoiceText small { color: #b3c0d0; }
-.crossChoice:focus-within { outline: 2px solid #67e8f9; outline-offset: 2px; }
-.crossField { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 5px; color: #dce9f7; font-size: .82rem; }
-.crossOptional { color: #b7c7dc; font-size: .74rem; }
-.crossField select, .crossField textarea, .confirmation .warning textarea { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #607895; border-radius: 10px; background: #14243a; color: #f1f5f9; font: inherit; line-height: 1.8; }
-.crossField textarea, .confirmation .warning textarea { min-height: 66px; max-height: 160px; resize: vertical; }
-.crossField textarea::placeholder { color: #b8c8dc; }
-.crossField select:focus-visible, .crossField textarea:focus-visible, .confirmation .warning textarea:focus-visible { outline: 2px solid #67e8f9; outline-offset: 2px; }
-.crossReview { padding: 14px; border-radius: 12px; background: #16453f; border: 1px solid #4bb7a1; color: #e0fff3; font-size: .8rem; line-height: 1.9; }
-.crossReviewHeading { display: flex; align-items: center; gap: 8px; color: #99f6d4; }
-.crossReview p { margin: 8px 0 0; }
-.crossHistory { border-top: 1px solid #50647b; margin-top: 2px; padding-top: 5px; color: #c7d8eb; font-size: .8rem; }
-.crossHistory > summary { padding: 8px 0; cursor: pointer; line-height: 1.7; }
-.crossHistory > p { padding: 6px 0; line-height: 1.8; color: #c2d2e5; }
-.crossHistory button, .confirmation .warning button { font: inherit; padding: 7px 10px; min-height: 36px; border-radius: 8px; background: #243b54; color: #e0f2fe; border: 1px solid #617e9b; cursor: pointer; margin-top: 7px; }
-.substitutionRow { padding: 12px 0; border-bottom: 1px solid #ffffff0b; overflow-wrap: anywhere; font-size: .74rem; line-height: 1.9; }
-.substitutionRow strong { color: #e0ecf8; font-weight: 600; }
-.substitutionRow p { margin: 6px 0; }
-.substitutionRow small { color: #b4c6da; }
-.confirmation .warning { border-color: #c99b4f; background: #46351f; color: #ffdf9b; }
-.confirmation [role="alert"] { background: #4a2636; border-color: #db829f; color: #ffe0e8; }
-.confirmation .confirmActions { gap: 8px; border-top: 1px solid #ffffff0c; padding: 12px 0 0; background: #101c2e; flex-wrap: wrap; }
-.confirmation .confirmActions > button { font-size: .84rem; min-height: 45px; border-radius: 10px; padding: 9px 12px; }
-.confirmation .primary { background: #2dd4bf; color: #042f2e; border-color: #5eead4; font-weight: 750; }
-.confirmation .primary:hover:not(:disabled) { background: #5eead4; }
-.confirmation .secondary { color: #f1f5f9; background: #2a3d55; border-color: #6d829a; }
-.confirmation .secondary:hover:not(:disabled) { background: #3a516c; }
-@media (max-width: 480px) {
-  .confirmation { padding: 14px; gap: 12px; }
-  .confirmContent { gap: 12px; }
-  .crossChoice { padding: 10px; gap: 8px; }
-  .crossChoiceIcon { width: 29px; height: 29px; }
-  .crossStatus { font-size: .68rem; padding: 4px 7px; }
-  .crossStudent .studentName { font-size: .95rem; }
-  .confirmation .confirmActions > .primary { flex-basis: 100%; order: -1; }
+.crossHeading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.crossHeadingIcon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px; height: 30px; border-radius: 9px; background: #294155; color: #b7d5e6; }
+.crossHeadingText { min-width: 0; }
+.crossHeading h2 { margin: 0 0 2px; color: #c1d1df; font-size: .75rem; line-height: 1.5; font-weight: 500; }
+.confirmation .studentName { display: block; color: #f8fafc; font-size: .94rem; line-height: 1.5; overflow-wrap: anywhere; }
+.confirmation .identity { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0; padding: 9px 10px; border: 1px solid #435b70; border-radius: 10px; background: #1e3042; }
+.confirmation .identity > div { display: block; min-width: 0; padding: 0; border: 0; }
+.confirmation .identity > div + div { border-inline-start: 1px solid #496176; padding-inline-start: 9px; }
+.confirmation .identity dt { color: #b8c9d7; font-size: .67rem; line-height: 1.4; margin-bottom: 3px; }
+.confirmation .identity dd { color: #f0f5fa; font-size: .77rem; line-height: 1.5; font-weight: 600; margin: 0; text-align: start; overflow-wrap: anywhere; }
+.crossOptions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.crossOptions legend { color: #d0deea; font-size: .74rem; font-weight: 600; margin-bottom: 7px; padding: 0; }
+.confirmation .crossChoice { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 88px; padding: 7px 4px 18px; border: 1px solid #536b80; border-radius: 10px; background: #213348; cursor: pointer; text-align: center; transition: border-color .15s, background .15s; }
+.crossChoice:hover:not(.crossChoiceUnavailable) { background: #293e52; border-color: #829caf; }
+.crossChoice input { position: absolute; top: 6px; inset-inline-end: 6px; width: 16px; height: 16px; margin: 0; accent-color: #94c7b3; cursor: inherit; }
+.crossChoiceIcon { display: inline-flex; align-items: center; justify-content: center; width: 23px; height: 23px; color: #bed5e6; }
+.crossChoiceIcon svg { width: 18px; height: 18px; }
+.crossChoice:nth-of-type(2) .crossChoiceIcon { color: #d0c4e5; }
+.crossChoice:nth-of-type(3) .crossChoiceIcon { color: #e4d0ad; }
+.crossChoiceText { display: block; min-width: 0; }
+.crossChoiceText strong { display: block; color: #f0f5fa; font-size: .76rem; font-weight: 600; line-height: 1.45; }
+.confirmation .crossChoiceSelected,
+.crossChoiceSelected:hover:not(.crossChoiceUnavailable) { background: #284b43; border-color: #93c7b2; box-shadow: inset 0 0 0 1px #93c7b2; }
+.crossChoiceSelected .crossChoiceText strong { color: #f0fff8; }
+.confirmation .crossChoiceUnavailable { background: #1b293b; border-color: #455c71; cursor: not-allowed; }
+.crossChoiceUnavailable .crossChoiceText strong,
+.crossChoiceUnavailable .crossChoiceIcon { color: #aebdcb; }
+.crossUnavailableTag { position: absolute; bottom: 4px; inset-inline: 2px; color: #afc0ce; font-size: .62rem; line-height: 1.2; white-space: nowrap; }
+.crossChoice:focus-within { outline: 2px solid #b4d8c9; outline-offset: 2px; }
+.crossField { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 3px; color: #d4e0eb; font-size: .75rem; }
+.crossField select { width: 100%; min-width: 0; min-height: 40px; padding: 7px 8px; border: 1px solid #61798f; border-radius: 9px; background: #1c2e42; color: #f1f5f9; font: inherit; }
+.crossField select:focus-visible { outline: 2px solid #b4d8c9; outline-offset: 2px; }
+.confirmation .warning { margin: 0; padding: 9px 10px; border-color: #a4916d; background: #3b3428; color: #edddbd; font-size: .75rem; line-height: 1.6; }
+.confirmation [role="alert"] { margin: 0; padding: 8px 10px; border: 1px solid #a47d89; border-radius: 9px; background: #3c2c37; color: #f0d8e0; font-size: .75rem; line-height: 1.5; }
+.confirmation .confirmActions { flex-wrap: nowrap; gap: 8px; border-top: 1px solid #42566b; padding: 8px 0 0; margin: 0; background: #142131; }
+.confirmation .confirmActions > button { min-height: 42px; min-width: 0; padding: 8px 10px; border-radius: 9px; font-size: .8rem; }
+.confirmation .confirmActions > .primary { flex: 2; flex-basis: 0; order: 0; background: #8bc0ac; border: 1px solid #a5cfbe; color: #132f27; font-weight: 750; }
+.confirmation .primary:hover:not(:disabled) { background: #a0cdbb; }
+.confirmation .confirmActions > .secondary { flex: 1; background: #26394e; border: 1px solid #61798f; color: #e4edf6; }
+.confirmation .secondary:hover:not(:disabled) { background: #324b62; }
+.crossRecorded { margin: 0; border: 1px solid #698ba1; border-radius: 9px; padding: 9px 10px; color: #e2f1fa; background: #263e52; font-size: .8rem; }
+@media (max-width: 360px) {
+  .confirmation { padding: 10px; gap: 8px; }
+  .confirmContent { gap: 8px; }
+  .confirmation .identity { padding: 8px; gap: 7px; }
+  .confirmation .identity dd { font-size: .73rem; }
+  .crossChoiceText strong { font-size: .72rem; }
+  .confirmation .crossChoice { min-height: 85px; }
 }
 @media (prefers-reduced-motion: reduce) { .crossChoice { transition: none; } }
 .settingsHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;font-weight:700}.settingsHeading span{font-size:.8rem;color:var(--text-muted,#94a3b8);font-weight:400}
 
-/* Keep the cross-group message limited to identity, groups and recording choices. */
-.confirmation .studentName { font-size: 1.08rem; line-height: 1.6; }
-.confirmation .crossChoice { padding-block: 9px; }
-.crossUnavailableTag { order: 2; font-size: .68rem; color: #c2cfde; white-space: nowrap; }
-.crossRecorded { border: 1px solid #5086a8; background: #193a54; border-radius: 10px; padding: 10px 12px; color: #e0f2fe; font-size: .85rem; }

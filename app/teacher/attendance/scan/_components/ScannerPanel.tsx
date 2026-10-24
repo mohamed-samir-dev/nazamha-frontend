@@ -79,7 +79,7 @@ export function ScannerPanel(p: Props) {
     }
   }
   return (
-    <section className={styles.cameraCard} aria-label="ماسح حضور الطلاب">
+    <section className={`${styles.cameraCard} ${p.crossGroupConfirm ? styles.cameraReview : ""}`} aria-label="ماسح حضور الطلاب">
       <div className={styles.cameraHeading}>
         <span>
           <ScanLine size={19} /> سكان الحضور
