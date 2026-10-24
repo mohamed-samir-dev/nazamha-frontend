@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ClipboardList, ScanLine, FileDown, CalendarDays } from "lucide-react";
+import { ClipboardList, ScanLine, CalendarDays } from "lucide-react";
 
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
@@ -15,6 +15,7 @@ import { AttendanceStats } from "./_components/AttendanceStats";
 import { AttendanceTable } from "./_components/AttendanceTable";
 import { QRModal } from "./_components/QRModal";
 import { ConfirmDeleteModal } from "./_components/ConfirmDeleteModal";
+import { AttendancePrintButton } from "./_components/AttendancePrintButton";
 import { exportAttendancePrint } from "./_utils/exportUtils";
 import { useOnlineSync } from "./scan/_hooks/useOnlineSync";
 import { Student } from "@/lib/types";
@@ -53,8 +54,6 @@ export default function AttendancePage() {
       : []
   );
 
-  const activeDates = data.sessionDates.filter(d => !cancelledSet.has(d));
-
   if (data.loading) return <Spinner fullScreen />;
 
   if (data.error) {
@@ -84,11 +83,10 @@ export default function AttendancePage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {data.filteredStudents.length > 0 && activeDates.length > 0 && (
-            <button
-              className="inline-flex items-center gap-1.5 px-3 py-2 sm:px-4 rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-300 text-sm font-semibold cursor-pointer transition-all hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-400"
-              onClick={() => exportAttendancePrint(
+        <div className="grid w-full grid-cols-2 items-stretch gap-2 sm:flex sm:w-auto sm:items-center">
+          {data.monthlyStudents.length > 0 && data.monthSessionDates.length > 0 && (
+            <AttendancePrintButton
+              onPrint={() => exportAttendancePrint(
                 data.monthlyStudents,
                 data.monthSessionDates,
                 data.attendance,
@@ -97,15 +95,13 @@ export default function AttendancePage() {
                 selectedGroup?.name || "الكل",
                 data.selectedGroupId === "all" ? data.groups : [selectedGroup!].filter(Boolean),
                 cancelledSet
-              ).catch(() => {})}
-            >
-              <FileDown size={15} />
-              <span className="hidden sm:inline">تصدير PDF</span>
-            </button>
+              )}
+              onError={message => showToast(message, "error")}
+            />
           )}
           <Link
             href="/teacher/attendance/scan"
-            className="inline-flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-[10px] bg-teal-500 text-white text-[0.85rem] sm:text-[0.9rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(20,184,166,0.3)] hover:bg-teal-600 hover:-translate-y-px"
+            className="inline-flex min-h-11 items-center justify-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 rounded-[10px] bg-teal-500 text-white text-[0.85rem] sm:text-[0.9rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(20,184,166,0.3)] hover:bg-teal-600 hover:-translate-y-px"
           >
             <ScanLine size={16} />
             <span>سكان QR</span>

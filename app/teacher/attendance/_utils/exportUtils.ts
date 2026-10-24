@@ -2,9 +2,8 @@ import { Student, AttendanceRecord, Group } from "@/lib/types";
 import { getGroupSessionDates, isSessionExpired, sessionTime } from "../_utils/sessionDates";
 import { AttendanceService } from "@/lib/services/attendanceService";
 import { AttendanceQueue } from "@/lib/offlineQueue";
-import { printHtml } from "@/lib/printHtml";
+import { printInPlace } from "@/lib/printInPlace";
 import {attendanceSlot} from "@/lib/utils/attendanceResolution";
-import { getTodayCairo } from "@/lib/utils/dateUtils";
 
 const arabicMonths = [
   "يناير","فبراير","مارس","أبريل","مايو","يونيو",
@@ -168,36 +167,14 @@ export async function exportAttendancePrint(
       .group-count { opacity: 0.9; white-space: nowrap; }
       .day-chip { background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.4); border-radius: 3px; padding: 1px 6px; font-size: 10px; font-weight: 600; white-space: nowrap; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-      .mobile-print-btn {
-        display: none;
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #111;
-        color: #fff;
-        border: none;
-        padding: 14px 32px;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 700;
-        cursor: pointer;
-        z-index: 9999;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        font-family: inherit;
-      }
-
-      @media print { body { padding: 0; margin: 0; } .group-block { page-break-inside: avoid; } .mobile-print-btn { display: none !important; } }
-      @media (max-width: 768px) { .mobile-print-btn { display: block; } }
+      @media print { body { padding: 0; margin: 0; } .group-block { page-break-inside: avoid; } }
       @page { margin: 8mm; size: A4 landscape; }
     </style>
     </head><body>
     <h2>كشف الحضور — ${escapeHtml(groupName)} — ${arabicMonths[month - 1]} ${year}</h2>
     <p class="subtitle">${new Date().toLocaleDateString("ar-EG")}</p>
     ${body}
-    <button class="mobile-print-btn" onclick="window.print()">🖨 طباعة التقرير</button>
-    <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); }<\/script>
     </body></html>`;
 
-  printHtml(html);
+  await printInPlace({ html });
 }
