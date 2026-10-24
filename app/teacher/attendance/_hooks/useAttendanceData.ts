@@ -12,7 +12,7 @@ import { OfflineCache, AttendanceQueue } from "@/lib/offlineQueue";
 import { getGroupSessionDatesForWeek, getGroupSessionDates } from "../_utils/sessionDates";
 import { getTodayCairo, getYearCairo, getMonthCairo } from "@/lib/utils/dateUtils";
 
-export function useAttendanceData() {
+export function useAttendanceData(currentMonthOnly = false) {
 
   const [todayYear, todayMonth] = [getYearCairo(), getMonthCairo()];
   const [loading, setLoading] = useState(true);
@@ -98,8 +98,8 @@ export function useAttendanceData() {
 
 
     const months = new Set<string>();
-    months.add(`${weekStart.getFullYear()}-${weekStart.getMonth() + 1}`);
-    months.add(`${weekEnd.getFullYear()}-${weekEnd.getMonth() + 1}`);
+    if(currentMonthOnly) months.add(`${getYearCairo()}-${getMonthCairo()}`);
+    else {months.add(`${weekStart.getFullYear()}-${weekStart.getMonth() + 1}`);months.add(`${weekEnd.getFullYear()}-${weekEnd.getMonth() + 1}`);}
 
     const results = await Promise.all(
       Array.from(months).map(key => {
@@ -108,7 +108,7 @@ export function useAttendanceData() {
       })
     );
     if (signal?.aborted) return;
-    setSelectedMonth(weekEnd.getMonth()+1); setSelectedYear(weekEnd.getFullYear());
+    setSelectedMonth(currentMonthOnly?getMonthCairo():weekEnd.getMonth()+1); setSelectedYear(currentMonthOnly?getYearCairo():weekEnd.getFullYear());
     const allRecords = results.flat();
     const queued = AttendanceQueue.getAll().filter(q => q.teacher_id === uid && !q._error);
     const merged = [...allRecords];
@@ -132,7 +132,7 @@ export function useAttendanceData() {
       .catch(() => { if (!controller?.signal.aborted) setError("تعذر تحميل الحضور؛ أعد فتح الصفحة للمحاولة."); });
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, weekOffset]);
+  }, [userId, weekOffset, currentMonthOnly]);
 
   // استماع على تحديثات صفحة السكان
   useEffect(() => {
@@ -147,7 +147,7 @@ export function useAttendanceData() {
         .catch(() => { if (!controller?.signal.aborted) setError("تعذر تحميل الحضور؛ أعد فتح الصفحة للمحاولة."); });
     };
     return () => { controller?.abort(); bc.close(); };
-  }, [userId, weekOffset]);
+  }, [userId, weekOffset, currentMonthOnly]);
 
   const loadAttendance = useCallback(async () => {
     if (!userId) return;
@@ -155,7 +155,7 @@ export function useAttendanceData() {
       const merged = await fetchAttendance(userId, weekOffset);
       if (merged) setAttendance(merged);
     } catch {}
-  }, [userId, weekOffset]);
+  }, [userId, weekOffset, currentMonthOnly]);
 
   const updateGroupLocally = (updated: Group) => {
     setGroups(prev => prev.map(g => g.id === updated.id ? updated : g));
@@ -165,7 +165,9 @@ export function useAttendanceData() {
 
   const weekStart = new Date(getTodayCairo()+"T12:00:00Z"); weekStart.setUTCDate(weekStart.getUTCDate()-((weekStart.getUTCDay()+1)%7)+weekOffset*7);
   const weekEnd=new Date(weekStart);weekEnd.setUTCDate(weekEnd.getUTCDate()+6);
-  const periodStudents=studentsForPeriod(students,memberships,weekStart.toISOString().slice(0,10),weekEnd.toISOString().slice(0,10),attendance);
+  const monthStart=`${todayYear}-${String(todayMonth).padStart(2,"0")}-01`;
+  const monthEnd=`${todayYear}-${String(todayMonth).padStart(2,"0")}-${new Date(todayYear,todayMonth,0).getDate()}`;
+  const periodStudents=studentsForPeriod(students,memberships,currentMonthOnly?monthStart:weekStart.toISOString().slice(0,10),currentMonthOnly?monthEnd:weekEnd.toISOString().slice(0,10),attendance);
   const monthlyStudents=studentsForPeriod(students,memberships,`${selectedYear}-${String(selectedMonth).padStart(2,"0")}-01`,`${selectedYear}-${String(selectedMonth).padStart(2,"0")}-31`,attendance);
   const filteredStudents = periodStudents.filter(s => {
     const effectiveGradeId = s.grade_id || groups.find(g => g.id === s.group_id)?.grade_id;
@@ -181,10 +183,10 @@ export function useAttendanceData() {
 
     const allDates = new Set<string>();
     for (const g of targetGroups) {
-      getGroupSessionDatesForWeek(g, weekOffset).forEach(d => allDates.add(d));
+      (currentMonthOnly?getGroupSessionDates(g,todayMonth,todayYear):getGroupSessionDatesForWeek(g, weekOffset)).forEach(d => allDates.add(d));
     }
     return Array.from(allDates).sort();
-  }, [groups, selectedGroupId, selectedGradeId, weekOffset]);
+  }, [groups, selectedGroupId, selectedGradeId, weekOffset, currentMonthOnly, todayMonth, todayYear]);
 
   const monthSessionDates = useMemo(() => {
     const targetGroups = selectedGroupId === "all"

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import {
   isSessionExpired, isSessionFuture,
-  getGroupSessionDatesForWeek, getWeekLabel,
+  getGroupSessionDatesForWeek, getGroupSessionDates, getWeekLabel,
   sessionTime,
 } from "../_utils/sessionDates";
 import { SessionState } from "./SessionHeaderCell";
@@ -26,6 +26,7 @@ interface GroupBlock {
   group: Group | null;
   groupId: string;
   students: Student[];
+  currentMonthOnly?: boolean;
   sessionDates: string[];
   sessionStates: Record<string, SessionState>;
   activeDates: string[];
@@ -37,6 +38,7 @@ function buildGroupBlocks(
   selectedGroupId: string,
   sessionDates: string[],
   weekOffset: number,
+  month?: {month:number;year:number},
 ): GroupBlock[] {
   if (selectedGroupId !== "all") {
     const group = groups.find(g => g.id === selectedGroupId) ?? null;
@@ -62,7 +64,7 @@ function buildGroupBlocks(
 
   return Array.from(groupedMap.entries()).map(([gid, grpStudents]) => {
     const group = groups.find(g => g.id === gid) ?? null;
-    const grpDates = group ? getGroupSessionDatesForWeek(group, weekOffset) : sessionDates;
+    const grpDates = group ? (month?getGroupSessionDates(group,month.month,month.year):getGroupSessionDatesForWeek(group, weekOffset)) : sessionDates;
     const cancelled = group?.cancelled_sessions ?? [];
     const states: Record<string, SessionState> = {};
     for (const d of grpDates)
@@ -79,6 +81,7 @@ function buildGroupBlocks(
 
 interface TableProps {
   students: Student[];
+  currentMonthOnly?: boolean;
   sessionDates: string[];
   attendance: AttendanceRecord[];
   selectedGroupId: string;
@@ -96,21 +99,23 @@ interface TableProps {
   onShowQR: (student: Student) => void;
   onShowToast: (msg: string, type: "error") => void;
   isSaving: (gid: string, date: string) => boolean;
+  isCellSaving?: (sid:string,date:string,gid?:string|null) => boolean;
 }
 
 const PAGE_SIZE = 20;
 
 export function AttendanceTable({
   students, sessionDates,
-  selectedGroupId, groups, weekOffset, onWeekChange,
+  selectedGroupId, groups, weekOffset, onWeekChange, selectedMonth, selectedYear, currentMonthOnly=false,
   isPresent, getAttendancePercent,
-  onToggle, onMarkAll, onClearSession, onCancelSession, onShowQR, onShowToast, isSaving,
+  onToggle, onMarkAll, onClearSession, onCancelSession, onShowQR, onShowToast, isSaving, isCellSaving,
 }: TableProps) {
   const [page, setPage] = useState(1);
 
   const isPastWeek = weekOffset < 0;
 
-  const weekNav = (
+  const monthLabel = new Date(Date.UTC(selectedYear,selectedMonth-1,1)).toLocaleDateString("ar-EG",{month:"long",year:"numeric",timeZone:"Africa/Cairo"});
+  const weekNav = currentMonthOnly ? <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-teal-500/5 border border-teal-500/15 rounded-[10px] mb-4"><span className="text-[0.92rem] font-bold text-slate-100 font-mono">{monthLabel}</span><span className="text-[0.5rem] sm:text-[0.72rem] px-1 sm:px-2 py-px rounded-full bg-teal-500/10 border border-teal-500/25 text-teal-400 font-semibold leading-tight">الشهر الحالي</span></div> : (
     <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-teal-500/5 border border-teal-500/15 rounded-[10px] mb-4">
       <button
         className="flex items-center justify-center w-[38px] h-[38px] rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-300 cursor-pointer transition-all flex-shrink-0 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-400 disabled:opacity-25 disabled:cursor-not-allowed"
@@ -179,13 +184,13 @@ export function AttendanceTable({
         {legend}
         <div className="text-center py-12 text-slate-500 flex flex-col items-center gap-3">
           <CalendarX size={40} className="opacity-30" />
-          <p>لا توجد حصص في هذا الأسبوع</p>
+          <p>لا توجد حصص في هذه الفترة</p>
         </div>
       </>
     );
   }
 
-  const blocks = buildGroupBlocks(students, groups, selectedGroupId, sessionDates, weekOffset);
+  const blocks = buildGroupBlocks(students, groups, selectedGroupId, sessionDates, weekOffset, currentMonthOnly?{month:selectedMonth,year:selectedYear}:undefined);
 
   // Pagination على مستوى الطلاب الكلي
   const totalStudents = students.length;
@@ -223,6 +228,7 @@ export function AttendanceTable({
           startIndex={block.startIndex - pageStart}
           isPastWeek={isPastWeek}
           isSaving={isSaving}
+          isCellSaving={isCellSaving}
           isPresent={isPresent}
           getAttendancePercent={getAttendancePercent}
           onToggle={onToggle}

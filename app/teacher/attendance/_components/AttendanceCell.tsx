@@ -1,15 +1,16 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check, X, LoaderCircle } from "lucide-react";
 import { Student } from "@/lib/types";
 import { SessionState } from "./SessionHeaderCell";
 
 export function AttendanceCell({
-  present, state, student, dateStr, onToggle, isPastWeek, onShowToast,
+  present, state, student, dateStr, onToggle, isPastWeek, onShowToast, saving=false, sessionSaving=false,
 }: {
   present: boolean; state: SessionState; student: Student; dateStr: string;
   onToggle: (s: Student, d: string) => void; isPastWeek: boolean;
   onShowToast?: (msg: string, type: "error") => void;
+  saving?:boolean; sessionSaving?:boolean;
 }) {
   if (state === "cancelled") {
     return (
@@ -27,6 +28,7 @@ export function AttendanceCell({
   const canEdit = !isPastWeek && !isFuture && !isSuspended && (state === "active" || state === "expired");
 
   const handleClick = () => {
+    if(saving||sessionSaving)return;
     if (isFuture) { onShowToast?.("لا يمكن تسجيل حضور في تاريخ مستقبلي", "error"); return; }
     if (isSuspended) { onShowToast?.("هذا الطالب موقوف — لا يمكن تسجيل حضوره", "error"); return; }
     if (canEdit) onToggle(student, dateStr);
@@ -45,7 +47,10 @@ export function AttendanceCell({
                 : "border-white/10 bg-white/[0.02] text-transparent hover:border-teal-500/50 hover:bg-teal-500/10 hover:text-teal-500/50 cursor-pointer"
           }`}
         onClick={handleClick}
-        disabled={isPastWeek}
+        disabled={isPastWeek||saving||sessionSaving}
+        aria-busy={saving}
+        aria-label={saving?`جاري حفظ حضور ${student.name}`:undefined}
+        style={saving?{color:"var(--text-primary, #e2e8f0)"}:undefined}
         title={
           isPastWeek ? "أسبوع منتهي — لا يمكن التعديل" :
           isFuture ? "لا يمكن تسجيل حضور في تاريخ مستقبلي" :
@@ -54,8 +59,9 @@ export function AttendanceCell({
           `تسجيل حضور ${student.name}`
         }
       >
-        {present ? <Check size={13} strokeWidth={3} /> : (state === "expired" || isPastWeek) ? <X size={11} strokeWidth={2.5} /> : null}
+        {saving?<LoaderCircle size={13} className="animate-spin"/>:present ? <Check size={13} strokeWidth={3} /> : (state === "expired" || isPastWeek) ? <X size={11} strokeWidth={2.5} /> : null}
       </button>
+      {saving&&<span role="status" className="block text-[0.6rem] text-slate-400 mt-0.5 whitespace-nowrap">جاري الحفظ</span>}
     </td>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, RotateCcw, CheckSquare, XSquare, Clock, CalendarX } from "lucide-react";
+import { Ban, RotateCcw, CheckSquare, XSquare, Clock, CalendarX, LoaderCircle } from "lucide-react";
 import { formatDateShort } from "../_utils/sessionDates";
 
 export type SessionState = "future" | "expired" | "active" | "cancelled";
@@ -73,12 +73,14 @@ export function SessionHeaderCell({
                   : "border-red-500/40 text-red-400 bg-red-500/10 hover:bg-red-500/20 hover:border-red-400"
               }`}
               onClick={() => onCancelSession(groupId, dateStr)}
+              disabled={saving}
               title={state === "cancelled" ? "استعادة الحصة" : "إلغاء الحصة"}
             >
               {state === "cancelled" ? <RotateCcw size={12} /> : <CalendarX size={12} />}
             </button>
           )}
         </div>
+        {saving&&<span role="status" className="inline-flex items-center gap-1 text-[0.6rem] text-slate-400"><LoaderCircle size={10} className="animate-spin"/>جاري الحفظ</span>}
       </div>
     </th>
   );

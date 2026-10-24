@@ -44,6 +44,10 @@ export function useAttendanceActions({
   const removeSaving = (groupId: string, dateStr: string) => setSavingKeys(prev => { const s = new Set(prev); s.delete(`${groupId}-${dateStr}`); return s; });
   const [pendingDelete, setPendingDelete] = useState<{ record: AttendanceRecord; studentName: string } | null>(null);
 
+  const [pendingCells, setPendingCells] = useState<Set<string>>(new Set());
+  const isCellSaving = (sid:string,date:string,gid?:string|null) => pendingCells.has(`${sid}|${gid||""}|${date}`);
+  const beginCell = (key:string) => { pendingKeys.current.add(key); setPendingCells(prev=>new Set(prev).add(key)); };
+  const endCell = (key:string) => { pendingKeys.current.delete(key); setPendingCells(prev=>{const next=new Set(prev);next.delete(key);return next;}); };
   const today = getTodayCairo();
 
   const isPresent = (studentId: string, dateStr: string,groupId?:string|null) => attendanceSlot(attendance,studentId,dateStr,groupId)?.status==="present";
@@ -66,23 +70,23 @@ export function useAttendanceActions({
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن تسجيل حضور في تاريخ مستقبلي", "error"); return; }
 
-    const key = `${student.id}-${dateStr}`;
+    const key = `${student.id}|${student.group_id||""}|${dateStr}`;
     if(savingRef.current.has(`${student.group_id || ""}-${dateStr}`)) { showToast("انتظر انتهاء حفظ الحصة","error"); return; }
     if (pendingKeys.current.has(key)) return; // منع double-click
-    pendingKeys.current.add(key);
+    beginCell(key);
 
     const existing = attendanceRef.current.find(
       a => a.student_id === student.id && a.session_date === dateStr && (!a.group_id||a.group_id===student.group_id)
     );
 
-    if(existing?.resolution){pendingKeys.current.delete(key);showToast("راجع التعويض أو الإعفاء في سكان الكاميرا قبل تعديل هذه الحصة","error");return;}
+    if(existing?.resolution){endCell(key);showToast("راجع التعويض أو الإعفاء في سكان الكاميرا قبل تعديل هذه الحصة","error");return;}
     if (existing?.status === "present") {
       setAttendance(prev => prev.filter(a => a.id !== existing.id));
     try { await deleteRecord(existing); invalidateAllTimeCache(userId); }
       catch {
         setAttendance(prev => [...prev, existing]);
         showToast("حدث خطأ أثناء حذف الحضور.", "error");
-      } finally { pendingKeys.current.delete(key); }
+      } finally { endCell(key); }
     } else {
       const sessionMonth = parseInt(dateStr.split("-")[1], 10);
       const currentYear = parseInt(dateStr.split("-")[0], 10);
@@ -115,7 +119,7 @@ export function useAttendanceActions({
         setAttendance(prev => prev.filter(a => a.id !== optimisticId));
         if (existing) setAttendance(prev => [...prev, existing]);
         showToast(getErrorMessage(err, "حدث خطأ أثناء تسجيل الحضور."), "error");
-      } finally { pendingKeys.current.delete(key); }
+      } finally { endCell(key); }
     }
   };
 
@@ -138,7 +142,7 @@ export function useAttendanceActions({
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن تحضير تاريخ مستقبلي", "error"); return; }
     const savingKey = `${groupId}-${dateStr}`;
-    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}-${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
+    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}|${s.group_id||""}|${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
     if (savingRef.current.has(savingKey)) return;
     savingRef.current.add(savingKey);
     addSaving(groupId, dateStr);
@@ -184,7 +188,7 @@ export function useAttendanceActions({
     if (weekOffset < 0) { showToast("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (dateStr > today) { showToast("لا يمكن مسح حصة مستقبلية", "error"); return; }
     const savingKey = `${groupId}-${dateStr}`;
-    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}-${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
+    if(filteredStudents.some(s=>(!groupId || s.group_id===groupId) && pendingKeys.current.has(`${s.id}|${s.group_id||""}|${dateStr}`))) { showToast("انتظر انتهاء حفظ الطلاب أولًا","error"); return; }
     if (savingRef.current.has(savingKey) || !window.confirm("إلغاء حضور جميع طلاب هذه الحصة؟")) return;
     savingRef.current.add(savingKey);
     addSaving(groupId, dateStr);
@@ -207,6 +211,9 @@ export function useAttendanceActions({
   };
 
   const handleToggleCancelSession = async (groupId: string, dateStr: string) => {
+    const key=`${groupId}-${dateStr}`;
+    if(savingRef.current.has(key)||filteredStudents.some(s=>s.group_id===groupId&&pendingKeys.current.has(`${s.id}|${s.group_id||""}|${dateStr}`)))return;
+    savingRef.current.add(key);addSaving(groupId,dateStr);
     try {
       const updated = await GroupsService.toggleCancelSession(groupId, dateStr);
       updateGroupLocally(updated);
@@ -214,11 +221,11 @@ export function useAttendanceActions({
       showToast(isCancelled ? "تم إلغاء الحصة — لن تؤثر على التقارير" : "تم استعادة الحصة");
     } catch {
       showToast("حدث خطأ أثناء تغيير حالة الحصة.", "error");
-    }
+    } finally {savingRef.current.delete(key);removeSaving(groupId,dateStr);}
   };
 
   return {
-    isSaving, pendingDelete, setPendingDelete, today,
+    isCellSaving, isSaving, pendingDelete, setPendingDelete, today,
     isPresent, getAttendancePercent,
     handleToggle, confirmDelete,
     handleMarkAllSession, handleClearSession,

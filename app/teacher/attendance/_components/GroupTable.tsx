@@ -18,6 +18,7 @@ interface GroupTableProps {
   startIndex: number;
   isPastWeek: boolean;
   isSaving: (gid: string, date: string) => boolean;
+  isCellSaving?: (sid:string,date:string,gid?:string|null) => boolean;
   isPresent: (sid: string, date: string,groupId?:string|null) => boolean;
   getAttendancePercent: (sid: string, activeDates: string[], joinDate?: string,groupId?:string|null) => number;
   onToggle: (student: Student, date: string) => void;
@@ -30,7 +31,7 @@ interface GroupTableProps {
 
 export function GroupTable({
   group, groupId, students, sessionDates, sessionStates, activeDates,
-  startIndex, isPastWeek, isSaving,
+  startIndex, isPastWeek, isSaving, isCellSaving,
   isPresent, getAttendancePercent,
   onToggle, onMarkAll, onClearSession, onCancelSession, onShowQR, onShowToast,
 }: GroupTableProps) {
@@ -154,6 +155,8 @@ export function GroupTable({
                             dateStr={d}
                             onToggle={onToggle}
                             isPastWeek={isPastWeek}
+                            saving={!!isCellSaving?.(student.id,d,student.group_id)}
+                            sessionSaving={isSaving(groupId,d)}
                             onShowToast={onShowToast}
                           />
                         );
