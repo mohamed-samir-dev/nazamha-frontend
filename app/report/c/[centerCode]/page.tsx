@@ -20,6 +20,9 @@ interface SubjectReport {
   attendance_present: number;
   attendance_absent: number;
   attendance_total: number;
+  attendance_compensated?:number;
+  attendance_exempt?:number;
+  attendance_guest?:number;
   isPaid: boolean;
 }
 
@@ -131,6 +134,7 @@ export default function CenterStudentReportPage({ params }: { params: Promise<{ 
                   <StatBox num={sub.attendance_present} label="حضور" color="#10b981" icon={<MdVerified size={16} />} />
                   <StatBox num={sub.attendance_absent} label="غياب" color="#ef4444" icon={<MdCancel size={16} />} />
                   <StatBox num={sub.attendance_total} label="إجمالي" color="#818cf8" icon={<PiCalendarCheckFill size={16} />} />
+                  <small style={{gridColumn:"1 / -1",color:"#94a3b8"}}>معوّض: {sub.attendance_compensated||0} · إعفاء: {sub.attendance_exempt||0} · حضور خارجي: {sub.attendance_guest||0}</small>
                 </div>
                 {sub.attendance_total > 0 && (
                   <div style={S.barTrack}>

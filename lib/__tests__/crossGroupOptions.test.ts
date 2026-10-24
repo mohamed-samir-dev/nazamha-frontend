@@ -2,6 +2,7 @@
 import React,{act} from "react";
 import {createRoot} from "react-dom/client";
 import {CrossGroupOptions} from "@/app/teacher/attendance/scan/_components/CrossGroupOptions";
+import {SessionConfig} from "@/app/teacher/attendance/scan/_components/SessionConfig";
 import {api} from "@/lib/apiClient";
 import {AttendanceService} from "@/lib/services/attendanceService";
 import {attendanceForDates} from "@/lib/utils/attendanceResolution";
@@ -29,3 +30,12 @@ test("history load error is visible and can be retried",async()=>{(api.get as je
 test("reversal requires a reason and preserves failure for retry",async()=>{const row={id:"x",kind:"compensate",state:"approved",active:true,actual_date:"2026-10-26",target_date:"2026-10-24",approved_by:"t",history:[]};(api.get as jest.Mock).mockResolvedValue({data:[row],total:1});const h=await mount();await click(button(h.node,"مراجعة والتراجع عن العملية"));expect(button(h.node,"تأكيد التراجع").disabled).toBe(true);const textarea=Array.from(h.node.querySelectorAll("textarea")).at(-1)!;await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(textarea,"اختيار خاطئ");textarea.dispatchEvent(new Event("input",{bubbles:true}));});(AttendanceService.revokeSubstitution as jest.Mock).mockRejectedValueOnce(new Error("تغيرت البيانات"));await click(button(h.node,"تأكيد التراجع"));expect(h.node.textContent).toContain("تغيرت البيانات");await click(button(h.node,"تأكيد التراجع"));expect(h.node.textContent).toContain("الحضور الفعلي في الحصة الحالية محفوظ");expect(AttendanceService.revokeSubstitution).toHaveBeenCalledWith("x","اختيار خاطئ");await h.close();});
 test("reporting excludes compensation/exemption from required denominator and ignores guest numerator",()=>{const rows:any=[{student_id:"s",group_id:"a",session_date:"2026-10-01",status:"present"},{student_id:"s",group_id:"a",session_date:"2026-10-02",status:"absent",resolution:"compensated"},{student_id:"s",group_id:"a",session_date:"2026-10-03",status:"absent",resolution:"exempt"},{student_id:"s",group_id:"b",session_date:"2026-10-04",status:"present",attendance_kind:"guest"}];expect(attendanceForDates(rows,"s",["2026-10-01","2026-10-02","2026-10-03","2026-10-04"],"a")).toEqual({present:1,absent:1,total:2,percent:50,compensated:1,exempt:1});});
 test("same-day guest attendance never removes the student's required original group lesson",()=>{const projected=studentsForPeriod([{id:"s",name:"أحمد",group_id:"a"}],[{student_id:"s",group_id:"a",starts_on:"2026-01-01"}],"2026-10-01","2026-10-31",[{id:"x",student_id:"s",group_id:"b",session_date:"2026-10-04",month:10,year:2026,status:"present",attendance_kind:"guest"}]);expect(projected[0].attendance_excluded_dates).toEqual([]);});
+test("session settings stay visible after selecting a group, changing the date and starting the camera",async()=>{
+ const host=document.createElement("div"),root=createRoot(host);document.body.appendChild(host);
+ const base:any={grades:[{id:"grade",name:"الثالث الثانوي"}],groups:[{id:"a",grade_id:"grade",name:"أ",day_of_week:"السبت",time:"17:00"}],selectedGradeId:"grade",selectedGroupId:"",sessionDate:"2026-10-24",validSessionDates:["2026-10-24"],scanning:false,isStarting:false,manualCode:"",manualPlaceholder:"الكود",onGradeChange:jest.fn(),onGroupChange:jest.fn(),onSessionDateChange:jest.fn(),onManualCodeChange:jest.fn(),onManualSubmit:jest.fn()};
+ for(const change of [{},{selectedGroupId:"a"},{selectedGroupId:"a",sessionDate:"2026-10-17"},{selectedGroupId:"a",scanning:true}]){
+   await act(async()=>root.render(React.createElement(SessionConfig,{...base,...change})));
+   const select=host.querySelector("#scan-group")!;expect(select).not.toBeNull();expect(select.closest("details")).toBeNull();expect(host.textContent).toContain("إعدادات الجلسة");
+ }
+ await act(async()=>root.unmount());host.remove();
+});

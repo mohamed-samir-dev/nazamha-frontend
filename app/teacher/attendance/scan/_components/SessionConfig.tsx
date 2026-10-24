@@ -33,17 +33,13 @@ export function SessionConfig(p: Props) {
   const start = group?.start_date || group?.created_at?.slice(0, 10);
   return (
     <section className={styles.card} aria-label="إعداد الجلسة والإدخال اليدوي">
-      <details
-        key={p.selectedGroupId || "empty"}
-        open={!p.selectedGroupId || undefined}
-        className={styles.settings}
-      >
-        <summary>
+      <div className={styles.settings}>
+        <div className={styles.settingsHeading}>
           إعدادات الجلسة{" "}
           <span>
             {p.autoDetected ? "تم اختيار حصة اليوم" : "تعديل المجموعة والتاريخ"}
           </span>
-        </summary>
+        </div>
         <div className={styles.fields}>
           <label htmlFor="scan-grade">السنة الدراسية</label>
           <select
@@ -108,7 +104,7 @@ export function SessionConfig(p: Props) {
             </p>
           )}
         </div>
-      </details>
+      </div>
       <details className={styles.manual}>
         <summary>
           تسجيل بكود الطالب <span>بدون كاميرا</span>
