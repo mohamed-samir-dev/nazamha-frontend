@@ -78,7 +78,3 @@ test("frozen past schedule survives changing weekday without dropping older lega
  const group:any={id:"g",day_of_week:"الثلاثاء",start_date:"2026-01-01",attendance_sessions:[{session_date:"2026-10-12",time:"10:00",cancelled:false},{session_date:"2026-10-19",time:"10:00",cancelled:false}]};
  const dates=getGroupSessionDates(group,10,2026);expect(dates).toContain("2026-10-12");expect(dates).not.toContain("2026-10-13");expect(dates).toContain("2026-10-27");expect(getGroupSessionDates(group,9,2026).length).toBeGreaterThan(0);
 });
-
-test("students who have not joined yet do not leak into an earlier month's roster",()=>{
- const future:any={id:"future",name:"F",group_id:"g",group_join_date:"2026-10-01"};expect(studentsForPeriod([future],[],"2026-09-01","2026-09-30")).toEqual([]);expect(studentsForPeriod([future],[],"2026-11-01","2026-11-30")).toHaveLength(1);
-});

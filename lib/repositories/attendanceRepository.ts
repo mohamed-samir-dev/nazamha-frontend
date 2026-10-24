@@ -11,8 +11,8 @@ const broadcast = () => { if (typeof BroadcastChannel !== "undefined") { const c
 export const AttendanceRepository = {
   async revokeSubstitution(id:string,reason:string){await api.post(`/attendance/substitutions/${id}/revoke`,{reason});appCache.invalidate("allTimeAttendanceMap");broadcast();},
   isSyncing() { return syncPromise !== null; },
-  async getAttendanceRecords(month: number, year: number, options?: { signal?: AbortSignal }): Promise<AttendanceRecord[]> {
-    return api.get<AttendanceRecord[]>(`/attendance?month=${month}&year=${year}`, options);
+  async getAttendanceRecords(month: number, year: number): Promise<AttendanceRecord[]> {
+    return api.get<AttendanceRecord[]>(`/attendance?month=${month}&year=${year}`);
   },
 
   async getAllAttendanceRecords(): Promise<AttendanceRecord[]> {

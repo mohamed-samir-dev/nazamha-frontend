@@ -40,7 +40,7 @@ async function harness(hook:()=>any){const root=createRoot(document.createElemen
 test("initial boundary week reads both months and returning to current reloads",async()=>{
  jest.useFakeTimers().setSystemTime(new Date("2026-11-02T12:00:00Z"));
  const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockImplementation(async(month)=>[{id:String(month),student_id:"s",session_date:month===10?"2026-10-31":"2026-11-02",status:"present",month,year:2026}]);
- const h=await harness(useAttendanceData);await act(async()=>h.value.setViewMode("week"));expect(read.mock.calls.map(c=>c[0])).toEqual(expect.arrayContaining([10,11]));
+ const h=await harness(useAttendanceData);expect(read.mock.calls.map(c=>c[0])).toEqual(expect.arrayContaining([10,11]));
  await act(async()=>h.value.setWeekOffset(-1));const count=read.mock.calls.length;
  await act(async()=>h.value.setWeekOffset(0));expect(read.mock.calls.length).toBeGreaterThan(count);expect(h.value.attendance.some((r:any)=>r.month===11)).toBe(true);await h.close();
 });
@@ -96,33 +96,4 @@ test("camera completing after stop is released and cannot reactivate scanner",as
  const h=await harness(useScanSession);await act(async()=>h.value.handleGroupChange("g"));await act(async()=>h.value.acknowledgePastDate());let starting:any;
  await act(async()=>{starting=h.value.startScanner();});expect(camera.start).toHaveBeenCalledWith({facingMode:"environment"},expect.objectContaining({fps:10}),expect.any(Function),expect.any(Function));
  await act(async()=>h.value.stopScanner());await act(async()=>{resolve();await starting;});expect(h.value.scanning).toBe(false);expect(camera.stop).toHaveBeenCalled();expect(camera.clear).toHaveBeenCalled();await h.close();
-});
-
-test("month mode loads once, exposes earlier and future months independently",async()=>{
- const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);
- const h=await harness(useAttendanceData);expect(read.mock.calls).toHaveLength(1);expect(h.value.viewMode).toBe("month");
- await act(async()=>h.value.setReportPeriod("2026-09"));expect(h.value.selectedMonth).toBe(9);expect(h.value.period.end).toBe("2026-09-30");expect(read).toHaveBeenLastCalledWith(9,2026,expect.objectContaining({signal:expect.any(AbortSignal)}));
- await act(async()=>h.value.setReportPeriod("2027-02"));expect(h.value.selectedYear).toBe(2027);expect(h.value.period.end).toBe("2027-02-28");await h.close();
-});
-test("a superseded month response cannot overwrite the latest month",async()=>{
- let resolveOld:any;const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockImplementation(async(month)=>month===9?await new Promise(r=>resolveOld=r):[{id:String(month),student_id:"s",group_id:"g",session_date:`2026-${month}-02`,status:"present",month,year:2026}] as any);
- const h=await harness(useAttendanceData);await act(async()=>h.value.setReportPeriod("2026-09"));const oldSignal=read.mock.calls.find(c=>c[0]===9)![2]!.signal!;
- await act(async()=>h.value.setReportPeriod("2026-11"));expect(oldSignal.aborted).toBe(true);
- await act(async()=>resolveOld([{id:"old",student_id:"s",session_date:"2026-09-02",month:9,year:2026,status:"present"}]));expect(h.value.selectedMonth).toBe(11);expect(h.value.attendance.map((r:any)=>r.month)).toEqual([11]);await h.close();
-});
-test("partial metadata failure keeps cached rows visible as read-only",async()=>{
- OfflineCache.saveGroups([{id:"g",name:"G",day_of_week:"الإثنين",time:"10:00"}] as any);OfflineCache.saveStudents([{id:"s",name:"S",group_id:"g"}]);
- (GroupsService.getGroupsByTeacherId as jest.Mock).mockRejectedValue(new Error("network"));jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);
- const h=await harness(useAttendanceData);expect(h.value.groups).toHaveLength(1);expect(h.value.filteredStudents).toHaveLength(1);expect(h.value.loading).toBe(false);expect(h.value.readOnly).toBe(true);expect(h.value.error).toContain("محفوظة");await h.close();
-});
-test("an older refresh cannot erase a locally confirmed save",async()=>{
- const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);const h=await harness(useAttendanceData);let finish:any;read.mockImplementationOnce(()=>new Promise(r=>finish=r));let update:any;
- await act(async()=>{update=h.value.loadAttendance()});const saved:any={id:"new",student_id:"s",group_id:"g",session_date:"2026-10-23",status:"present",month:10,year:2026};
- await act(async()=>h.value.setAttendance([saved]));await act(async()=>{finish([]);await update});expect(h.value.attendance).toEqual([saved]);expect(h.value.refreshing).toBe(false);await h.close();
-});
-
-test("initial attendance starts alongside slow metadata without a duplicate read",async()=>{
- let resolveGroups:any;(GroupsService.getGroupsByTeacherId as jest.Mock).mockImplementation(()=>new Promise(resolve=>resolveGroups=resolve));const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);
- const h=await harness(useAttendanceData);expect(read).toHaveBeenCalledTimes(1);expect(h.value.loading).toBe(true);
- await act(async()=>resolveGroups([{id:"g",name:"G",day_of_week:"الإثنين",time:"10:00"}]));expect(h.value.loading).toBe(false);expect(read).toHaveBeenCalledTimes(1);await h.close();
 });

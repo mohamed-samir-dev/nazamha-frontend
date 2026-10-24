@@ -41,8 +41,8 @@ export const GroupsRepository = {
     return result;
   },
 
-  async toggleCancelSession(groupId: string, date: string, cancelled?: boolean): Promise<Group> {
-    const result = await api.post<Group>(`/groups/${groupId}/cancel-session`, { date, ...(cancelled === undefined ? {} : { cancelled }) });
+  async toggleCancelSession(groupId: string, date: string): Promise<Group> {
+    const result = await api.post<Group>(`/groups/${groupId}/cancel-session`, { date });
     appCache.invalidate(GROUPS_KEY);
     return result;
   },

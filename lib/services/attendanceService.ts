@@ -7,12 +7,9 @@ import { AttendanceRecord, Student, Grade } from "@/lib/types";
 export const AttendanceService = {
   revokeSubstitution:(id:string,reason:string)=>AttendanceRepository.revokeSubstitution(id,reason),
   isSyncing: () => AttendanceRepository.isSyncing(),
-  getContext(options?: { start?: string; end?: string; signal?: AbortSignal }): Promise<AttendanceContext> {
-    const query = options?.start && options.end ? `?start=${options.start}&end=${options.end}` : "";
-    return api.get(`/attendance/context${query}`, options);
-  },
-  async getAttendanceRecords(month: number, year: number, options?: { signal?: AbortSignal }): Promise<AttendanceRecord[]> {
-    return AttendanceRepository.getAttendanceRecords(month, year, options);
+  getContext(): Promise<AttendanceContext> { return api.get("/attendance/context"); },
+  async getAttendanceRecords(month: number, year: number): Promise<AttendanceRecord[]> {
+    return AttendanceRepository.getAttendanceRecords(month, year);
   },
 
   async getAllAttendanceRecords(): Promise<AttendanceRecord[]> {

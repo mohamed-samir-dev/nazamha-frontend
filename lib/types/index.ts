@@ -248,8 +248,6 @@ export interface Group {
 }
 
 export interface Student {
-  attendance_guest_dates?: string[];
-  attendance_guest_only?: boolean;
   attendance_resolutions?:Record<string,"compensated"|"exempt">;
   attendance_ends_on?: string;
   attendance_excluded_dates?: string[];

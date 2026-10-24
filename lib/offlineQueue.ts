@@ -150,9 +150,9 @@ export const AttendanceQueue = {
     AttendanceQueue.notify();
   },
 
-  remove(student_id: string, session_date: string, group_id?: string | null, teacher_id?: string) {
+  remove(student_id: string, session_date: string) {
     const queue = AttendanceQueue.getAll().filter(
-      r => !(r.student_id === student_id && r.session_date === session_date && (group_id === undefined || r.group_id === group_id) && (!teacher_id || r.teacher_id === teacher_id))
+      r => !(r.student_id === student_id && r.session_date === session_date)
     );
     localStorage.setItem(KEYS.queue, JSON.stringify(queue));
     AttendanceQueue.notify();

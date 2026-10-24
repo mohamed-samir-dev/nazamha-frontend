@@ -1,32 +1,85 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { MoreHorizontal, LoaderCircle, X } from "lucide-react";
+
+import { Ban, RotateCcw, CheckSquare, XSquare, Clock, CalendarX } from "lucide-react";
 import { formatDateShort } from "../_utils/sessionDates";
-import styles from "../attendance.module.css";
+
 export type SessionState = "future" | "expired" | "active" | "cancelled";
-interface Props {
-  dateStr: string; state: SessionState; saving: boolean; groupId: string | null;
-  isPastWeek: boolean; readOnly?: boolean;
-  onMarkAll: (date: string, gid: string) => void; onClearSession: (date: string, gid: string) => void;
-  onCancelSession: (gid: string, date: string, cancelled?: boolean) => void;
-}
-export function SessionHeaderCell(p: Props) {
-  const [open, setOpen] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { if (open) dialog.current?.showModal(); }, [open]);
-  const canEdit = !p.isPastWeek && !p.readOnly && !p.saving && !!p.groupId;
-  const canRecord = canEdit && (p.state === "active" || p.state === "expired");
-  const close = () => { dialog.current?.close(); setOpen(false); };
-  const run = (action: () => void) => { close(); action(); };
-  return <th scope="col" className={styles.sessionHeader} data-state={p.state} data-date={p.dateStr}>
-    <div><time dateTime={p.dateStr}>{formatDateShort(p.dateStr)}</time><small>{p.saving ? "جاري الحفظ" : p.state === "cancelled" ? "ملغاة" : p.state === "future" ? "قادمة" : p.state === "active" ? "اليوم" : "منتهية"}</small></div>
-    <button type="button" className={styles.sessionMenuButton} aria-label={`إجراءات حصة ${p.dateStr}`} aria-haspopup="dialog" disabled={!canEdit} onClick={() => setOpen(true)} aria-busy={p.saving}>{p.saving ? <LoaderCircle size={17} className={styles.spin} /> : <MoreHorizontal size={19} />}</button>
-    {open && createPortal(<dialog ref={dialog} className={styles.sessionDialog} aria-labelledby={`session-dialog-${p.groupId}-${p.dateStr}`} onCancel={() => setOpen(false)} onClose={() => setOpen(false)} onClick={e => { if (e.target === e.currentTarget) close(); }}>
-      <div className={styles.dialogHeading}><strong id={`session-dialog-${p.groupId}-${p.dateStr}`}>حصة {formatDateShort(p.dateStr)}</strong><button type="button" aria-label="إغلاق" onClick={close}><X size={18} /></button></div>
-      <button type="button" disabled={!canRecord} onClick={() => run(() => p.onMarkAll(p.dateStr, p.groupId!))}>تحضير الكل</button>
-      <button type="button" disabled={!canRecord} onClick={() => run(() => p.onClearSession(p.dateStr, p.groupId!))}>مسح الحضور</button>
-      <button type="button" className={styles.dangerText} disabled={!canEdit} onClick={() => run(() => p.onCancelSession(p.groupId!, p.dateStr, p.state !== "cancelled"))}>{p.state === "cancelled" ? "استعادة الحصة" : "إلغاء الحصة"}</button>
-    </dialog>, document.body)}
-  </th>;
+
+export function SessionHeaderCell({
+  dateStr, state, saving, groupId, isPastWeek,
+  onMarkAll, onClearSession, onCancelSession,
+}: {
+  dateStr: string; state: SessionState; saving: boolean; groupId: string | null; isPastWeek: boolean;
+  onMarkAll: (d: string, gid: string) => void; onClearSession: (d: string, gid: string) => void;
+  onCancelSession: (gid: string, d: string) => void;
+}) {
+  const canEdit = !isPastWeek && (state === "active" || state === "expired" || state === "future");
+  const short = formatDateShort(dateStr);
+
+  const stateStyles: Record<SessionState, string> = {
+    active: "border-teal-500 text-teal-400",
+    expired: "border-amber-500 text-amber-400",
+    future: "border-slate-500 text-slate-400",
+    cancelled: "border-red-500 text-red-400",
+  };
+
+  return (
+    <th className={`text-center min-w-[100px] px-1.5 py-2 att-session-${state}`}>
+      <div className="flex flex-col items-center gap-1.5">
+        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[0.72rem] font-mono font-bold bg-white/[0.03] whitespace-nowrap ${stateStyles[state]}`}>
+          {state === "expired" && <Clock size={10} />}
+          {state === "cancelled" && <Ban size={10} />}
+          {state === "active" && <span className="w-[5px] h-[5px] rounded-full bg-teal-500 flex-shrink-0" />}
+          {state === "future" && <span className="w-[5px] h-[5px] rounded-full bg-slate-500 flex-shrink-0" />}
+          <span>{short}</span>
+        </div>
+
+        {state === "cancelled" && (
+          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-red-500/10 border border-red-500/25 text-red-400 tracking-wide">ملغاة</span>
+        )}
+        {state === "expired" && (
+          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-amber-500/10 border border-amber-500/25 text-amber-400 tracking-wide">منتهية</span>
+        )}
+        {state === "future" && (
+          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-slate-500/10 border border-slate-500/15 text-slate-400 tracking-wide">قادمة</span>
+        )}
+
+        <div className="flex flex-row gap-0.5 items-center">
+          {state !== "cancelled" && (
+            <>
+              <button
+                className="flex items-center justify-center w-[26px] h-[22px] rounded-[5px] border border-teal-500/40 text-teal-400 bg-teal-500/10 cursor-pointer transition-all hover:bg-teal-500/20 hover:border-teal-400 disabled:opacity-20 disabled:cursor-not-allowed"
+                onClick={() => onMarkAll(dateStr, groupId ?? "")}
+                disabled={saving || !canEdit}
+                title={isPastWeek ? "أسبوع منتهي" : "تحضير الكل"}
+              >
+                <CheckSquare size={12} />
+              </button>
+              <button
+                className="flex items-center justify-center w-[26px] h-[22px] rounded-[5px] border border-red-500/40 text-red-400 bg-red-500/10 cursor-pointer transition-all hover:bg-red-500/20 hover:border-red-400 disabled:opacity-20 disabled:cursor-not-allowed"
+                onClick={() => onClearSession(dateStr, groupId ?? "")}
+                disabled={saving || !canEdit}
+                title={isPastWeek ? "أسبوع منتهي" : "إلغاء الكل"}
+              >
+                <XSquare size={12} />
+              </button>
+            </>
+          )}
+          {groupId && !isPastWeek && (
+            <button
+              className={`flex items-center justify-center w-[26px] h-[22px] rounded-[5px] border cursor-pointer transition-all ${
+                state === "cancelled"
+                  ? "border-teal-500/40 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 hover:border-teal-400"
+                  : "border-red-500/40 text-red-400 bg-red-500/10 hover:bg-red-500/20 hover:border-red-400"
+              }`}
+              onClick={() => onCancelSession(groupId, dateStr)}
+              title={state === "cancelled" ? "استعادة الحصة" : "إلغاء الحصة"}
+            >
+              {state === "cancelled" ? <RotateCcw size={12} /> : <CalendarX size={12} />}
+            </button>
+          )}
+        </div>
+      </div>
+    </th>
+  );
 }

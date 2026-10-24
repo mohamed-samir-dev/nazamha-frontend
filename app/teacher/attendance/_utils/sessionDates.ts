@@ -90,7 +90,8 @@ export function isSessionCancelled(group: Group, dateStr: string): boolean {
 }
 
 /** هل الحصة عدت (+ ساعة من وقت المجموعة — يتوافق مع backend cron)؟ */
-export function isSessionExpired(dateStr: string, groupTime: string, now = new Date()): boolean {
+export function isSessionExpired(dateStr: string, groupTime: string): boolean {
+  const now = new Date();
   const [h, m] = groupTime.split(":").map(Number);
   // بناء وقت نهاية الحصة بتوقيت القاهرة صراحةً
   const sessionEndUTC = new Date(
