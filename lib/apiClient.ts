@@ -168,7 +168,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       }
       const retryMsg = (retryErr.message as string | undefined);
       const retryIsArabic = retryMsg ? /[\u0600-\u06FF]/.test(retryMsg) : false;
-      const retryError = new Error(retryIsArabic ? retryMsg! : "حدث خطأ أثناء تنفيذ العملية. يرجى المحاولة مرة أخرى.") as any;
+      const retryError:Error & {status?:number;error_code?:unknown} = new Error(retryIsArabic ? retryMsg! : "حدث خطأ أثناء تنفيذ العملية. يرجى المحاولة مرة أخرى.");
       retryError.status = retry.status;
       if (retryErr.error_code) retryError.error_code = retryErr.error_code;
       throw retryError;

@@ -1,5 +1,6 @@
 "use client";
 
+import {attendanceSlot} from "@/lib/utils/attendanceResolution";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { AuthService } from "@/lib/services/authService";
 import { TeachersService } from "@/lib/services/teachersService";
@@ -198,6 +199,7 @@ export function useStudentReports() {
   const attendanceDatesMap = useMemo(() => {
     const map = new Map<string, { presentDates: Set<string>; absentDates: Set<string> }>();
     for (const r of attendanceRecords) {
+      if(r.resolution || r.attendance_kind==="guest"||r.attendance_kind==="substitute")continue;
       const cur = map.get(r.student_id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
       if (r.status === "present") cur.presentDates.add(r.session_date);
       else cur.absentDates.add(r.session_date);
@@ -225,12 +227,12 @@ export function useStudentReports() {
       const grp = groupMap.get(s.group_id || "");
       const dates = grp ? (groupSessionDatesMap.get(grp.id) ?? []) : [];
       const joinDate = s.group_join_date?.slice(0, 10) ?? null;
-      const relevantDates = joinDate ? dates.filter((d) => d >= joinDate) : dates;
+      const relevantDates = dates.filter(d=>(!joinDate||d>=joinDate)&&!attendanceSlot(attendanceRecords,s.id,d,s.group_id)?.resolution);
       const att = attendanceDatesMap.get(s.id) ?? { presentDates: new Set<string>(), absentDates: new Set<string>() };
       map.set(s.id, countMembershipAttendance(relevantDates, att.presentDates, att.absentDates));
     }
     return map;
-  }, [students, groups, groupSessionDatesMap, attendanceDatesMap]);
+  }, [students, groups, groupSessionDatesMap, attendanceDatesMap,attendanceRecords]);
 
   const getStudentAttendance = (studentId: string) =>
     attendanceMap.get(studentId) ?? { present: 0, absent: 0, total: 0 };

@@ -9,11 +9,11 @@ export interface CrossGroupChoice {action:"guest"|"compensate"|"exempt";target_d
 interface HistoryRow {actual_group_name?:string;target_group_name?:string;id:string;actual_date:string;actual_group_id:string;target_date:string;kind:"compensate"|"exempt";state:"approved"|"revoked"|"review";active:boolean;approved_by:string;history:{at:string;action:string;reason:string}[]}
 export function CrossGroupOptions({confirmation,busy,onConfirm,onCancel}:{confirmation:CrossGroupConfirm;busy:boolean;onConfirm:(choice:CrossGroupChoice)=>void;onCancel:()=>void}){
  const [action,setAction]=useState<CrossGroupChoice["action"]|"">(""),[target,setTarget]=useState(""),[reason,setReason]=useState(""),[review,setReview]=useState(false);
- const [history,setHistory]=useState<HistoryRow[]>([]),[historyError,setHistoryError]=useState(""),[historyLoading,setHistoryLoading]=useState(false),[historyRevision,setHistoryRevision]=useState(0),[page,setPage]=useState(1),[total,setTotal]=useState(0);
+ const [history,setHistory]=useState<HistoryRow[]>([]),[historyError,setHistoryError]=useState(""),[historyLoading,setHistoryLoading]=useState(true),[historyRevision,setHistoryRevision]=useState(0),[page,setPage]=useState(1),[total,setTotal]=useState(0);
  const [reversing,setReversing]=useState<HistoryRow|null>(null),[reverseReason,setReverseReason]=useState(""),[reverseBusy,setReverseBusy]=useState(false),[message,setMessage]=useState("");
  const v=confirmation.validation,options=action==="compensate"?v?.previous||[]:v?.future||[];
  useEffect(()=>{
-   let active=true;setHistoryLoading(true);setHistoryError("");
+   let active=true;
    void api.get<{data:HistoryRow[];total:number}>(`/attendance/substitutions?student_id=${confirmation.student.id}&page=${page}&limit=10`).then(result=>{if(!result||!Array.isArray(result.data))throw new Error("استجابة غير مكتملة");if(active){setHistory(rows=>page===1?result.data:[...rows,...result.data]);setTotal(result.total);}}).catch(()=>{if(active)setHistoryError("تعذر تحميل سجل التعويض؛ أعد المحاولة قبل التراجع عن أي عملية.");}).finally(()=>{if(active)setHistoryLoading(false);});
    return()=>{active=false;};
  },[confirmation.student.id,page,historyRevision]);
@@ -45,10 +45,10 @@ export function CrossGroupOptions({confirmation,busy,onConfirm,onCancel}:{confir
     </fieldset>:<div role="status" className={styles.warning}><strong>راجع قبل التأكيد</strong><p>{summary}</p>{reason&&<p>الملاحظة: {reason}</p>}</div>}
    </>}
    <details><summary>سجل التعويض والإعفاء لهذا الطالب</summary>
-    {historyLoading&&<p role="status">جاري تحميل السجل…</p>}{historyError&&<p role="alert">{historyError}<button disabled={historyLoading} onClick={()=>setHistoryRevision(r=>r+1)}>إعادة تحميل السجل</button></p>}
+    {historyLoading&&<p role="status">جاري تحميل السجل…</p>}{historyError&&<p role="alert">{historyError}<button disabled={historyLoading} onClick={()=>{setHistoryLoading(true);setHistoryError("");setHistoryRevision(r=>r+1);}}>إعادة تحميل السجل</button></p>}
     {!historyLoading&&!history.length&&!historyError&&<p>لا توجد عمليات تعويض أو إعفاء مسجلة.</p>}
     {history.map(row=><div key={row.id} className={styles.substitutionRow}><strong>{row.kind==="compensate"?"تعويض سابق":"إعفاء قادم"} · {row.state==="approved"?"معتمد":row.state==="review"?"يحتاج مراجعة — لا يؤثر في الغياب":"تم التراجع"}</strong><p>الحضور الفعلي: {row.actual_group_name} · <bdi>{row.actual_date}</bdi> · الحصة الأصلية: {row.target_group_name} · <bdi>{row.target_date}</bdi></p><small>اعتمده: {row.approved_by}</small><details><summary>تاريخ العملية</summary>{row.history.map((e,i)=><p key={i}>{new Date(e.at).toLocaleString("ar-EG",{timeZone:"Africa/Cairo"})} · {e.action==="approve"?"اعتماد":e.action==="reverse"?"تراجع":"مراجعة"} · {e.reason}</p>)}</details>{row.state!=="revoked"&&<button disabled={busy||reverseBusy} onClick={()=>{setReversing(row);setReverseReason("");setMessage("");}}>مراجعة والتراجع عن العملية</button>}</div>)}
-    {history.length<total&&<button disabled={historyLoading} onClick={()=>setPage(p=>p+1)}>عرض عمليات أقدم</button>}
+    {history.length<total&&<button disabled={historyLoading} onClick={()=>{setHistoryLoading(true);setHistoryError("");setPage(p=>p+1);}}>عرض عمليات أقدم</button>}
    </details>
    {reversing&&<div className={styles.warning}><strong>تأكيد التراجع</strong><p>سيُلغى أثر {reversing.kind==="compensate"?"التعويض":"الإعفاء"} عن الحصة {reversing.target_date}. سيبقى الحضور الفعلي بتاريخ {reversing.actual_date} محفوظًا.</p><label>سبب التراجع<textarea maxLength={500} value={reverseReason} disabled={reverseBusy} onChange={e=>setReverseReason(e.target.value)}/></label><button disabled={busy||reverseBusy||reverseReason.trim().length<3} onClick={()=>void reverse()}>{reverseBusy?"جاري التراجع…":"تأكيد التراجع"}</button><button disabled={reverseBusy} onClick={()=>setReversing(null)}>إبقاء العملية</button></div>}
    {message&&<p role="status" className={styles.warning}>{message}</p>}

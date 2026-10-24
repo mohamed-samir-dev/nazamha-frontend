@@ -145,8 +145,8 @@ export function useAttendanceActions({
     const sessionMonth = parseInt(dateStr.split("-")[1], 10);
     const sessionYear = parseInt(dateStr.split("-")[0], 10);
     const groupStudents = groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents;
-    const absentStudents = groupStudents.filter(s => (!s.attendance_ends_on || dateStr<=s.attendance_ends_on) && !s.attendance_excluded_dates?.includes(dateStr)).filter(s => !(s.is_suspended && (!s.suspended_until || new Date(s.suspended_until) > new Date())) && (s.group_join_date || s.created_at?.slice(0,10) || "") <= dateStr).filter(s =>
-      !attendanceRef.current.some(a => a.student_id === s.id && a.session_date === dateStr && a.status === "present")
+    const absentStudents = groupStudents.filter(s => (!s.attendance_ends_on || dateStr<=s.attendance_ends_on) && !s.attendance_excluded_dates?.includes(dateStr) && !s.attendance_resolutions?.[dateStr]).filter(s => !(s.is_suspended && (!s.suspended_until || new Date(s.suspended_until) > new Date())) && (s.group_join_date || s.created_at?.slice(0,10) || "") <= dateStr).filter(s =>
+      !attendanceRef.current.some(a => a.student_id === s.id && a.session_date === dateStr && (!a.group_id||a.group_id===s.group_id) && a.status === "present")
     );
     try {
       if (absentStudents.length === 0) { showToast("جميع الطلاب المتاحين محضّرون بالفعل"); return; }
