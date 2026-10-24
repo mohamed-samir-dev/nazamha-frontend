@@ -30,7 +30,7 @@ export default function AttendancePage() {
   const showToast = (message: string, type: "success" | "error" = "success") =>
     setToast({ message, type });
 
-  const data = useAttendanceData(true);
+  const data = useAttendanceData(false);
 
   useOnlineSync((count) => {
     if (count > 0) data.loadAttendance();
@@ -126,7 +126,6 @@ export default function AttendancePage() {
       {/* Table */}
       <div className="glass-panel overflow-hidden py-4">
         <AttendanceTable key={`${data.selectedGradeId}-${data.selectedGroupId}-${data.weekOffset}`}
-          currentMonthOnly
           students={data.filteredStudents}
           sessionDates={data.sessionDates}
           attendance={data.attendance}

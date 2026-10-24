@@ -30,6 +30,42 @@ export function useAttendanceData(currentMonthOnly = false) {
   const [selectedYear, setSelectedYear] = useState(todayYear);
   const [weekOffset, setWeekOffset] = useState(0);
 
+  const fetchAttendance = useCallback(async (uid: string, offset: number, signal?: AbortSignal) => {
+    const todayStr = getTodayCairo();
+    const today = new Date(todayStr + "T00:00:00");
+    const weekStart = new Date(today);
+    const day = weekStart.getDay();
+    const diffToSat = day === 6 ? 0 : day + 1;
+    weekStart.setDate(weekStart.getDate() - diffToSat + offset * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+
+    const months = new Set<string>();
+    if(currentMonthOnly) months.add(`${getYearCairo()}-${getMonthCairo()}`);
+    else {months.add(`${weekStart.getFullYear()}-${weekStart.getMonth() + 1}`);months.add(`${weekEnd.getFullYear()}-${weekEnd.getMonth() + 1}`);}
+
+    const results = await Promise.all(
+      Array.from(months).map(key => {
+        const [y, m] = key.split("-").map(Number);
+        return navigator.onLine ? AttendanceService.getAttendanceRecords(m, y).then(rows=>{OfflineCache.replaceAttendanceMonth(uid,m,y,rows);return rows;}) : Promise.resolve(OfflineCache.loadAttendanceRecords().filter(r=>r.teacher_id===uid && r.month===m && r.year===y));
+      })
+    );
+    if (signal?.aborted) return;
+    setSelectedMonth(currentMonthOnly?getMonthCairo():weekEnd.getMonth()+1); setSelectedYear(currentMonthOnly?getYearCairo():weekEnd.getFullYear());
+    const allRecords = results.flat();
+    const queued = AttendanceQueue.getAll().filter(q => q.teacher_id === uid && !q._error);
+    const merged = [...allRecords];
+    for (const q of queued) {
+      const existing = merged.findIndex(r => r.student_id === q.student_id && r.session_date === q.session_date);
+      if (existing >= 0) merged.splice(existing,1);
+      {
+        merged.push({ ...q, id: `offline-${q.student_id}-${q.session_date}`, created_at: q._queuedAt } as AttendanceRecord);
+      }
+    }
+    return merged;
+  }, [currentMonthOnly]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -84,43 +120,8 @@ export function useAttendanceData(currentMonthOnly = false) {
     }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchAttendance]);
 
-  async function fetchAttendance(uid: string, offset: number, signal?: AbortSignal) {
-    const todayStr = getTodayCairo();
-    const today = new Date(todayStr + "T00:00:00");
-    const weekStart = new Date(today);
-    const day = weekStart.getDay();
-    const diffToSat = day === 6 ? 0 : day + 1;
-    weekStart.setDate(weekStart.getDate() - diffToSat + offset * 7);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-
-
-    const months = new Set<string>();
-    if(currentMonthOnly) months.add(`${getYearCairo()}-${getMonthCairo()}`);
-    else {months.add(`${weekStart.getFullYear()}-${weekStart.getMonth() + 1}`);months.add(`${weekEnd.getFullYear()}-${weekEnd.getMonth() + 1}`);}
-
-    const results = await Promise.all(
-      Array.from(months).map(key => {
-        const [y, m] = key.split("-").map(Number);
-        return navigator.onLine ? AttendanceService.getAttendanceRecords(m, y).then(rows=>{OfflineCache.replaceAttendanceMonth(uid,m,y,rows);return rows;}) : Promise.resolve(OfflineCache.loadAttendanceRecords().filter(r=>r.teacher_id===uid && r.month===m && r.year===y));
-      })
-    );
-    if (signal?.aborted) return;
-    setSelectedMonth(currentMonthOnly?getMonthCairo():weekEnd.getMonth()+1); setSelectedYear(currentMonthOnly?getYearCairo():weekEnd.getFullYear());
-    const allRecords = results.flat();
-    const queued = AttendanceQueue.getAll().filter(q => q.teacher_id === uid && !q._error);
-    const merged = [...allRecords];
-    for (const q of queued) {
-      const existing = merged.findIndex(r => r.student_id === q.student_id && r.session_date === q.session_date);
-      if (existing >= 0) merged.splice(existing,1);
-      {
-        merged.push({ ...q, id: `offline-${q.student_id}-${q.session_date}`, created_at: q._queuedAt } as AttendanceRecord);
-      }
-    }
-    return merged;
-  }
 
   // إعادة جلب الـ attendance عند تغيير الأسبوع (weekOffset)
   useEffect(() => {
@@ -131,8 +132,7 @@ export function useAttendanceData(currentMonthOnly = false) {
       .then(merged => { if (merged) { setAttendance(merged); setLoadedWeek(weekOffset); } })
       .catch(() => { if (!controller?.signal.aborted) setError("تعذر تحميل الحضور؛ أعد فتح الصفحة للمحاولة."); });
     return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, weekOffset, currentMonthOnly]);
+  }, [userId, weekOffset, fetchAttendance]);
 
   // استماع على تحديثات صفحة السكان
   useEffect(() => {
@@ -147,7 +147,7 @@ export function useAttendanceData(currentMonthOnly = false) {
         .catch(() => { if (!controller?.signal.aborted) setError("تعذر تحميل الحضور؛ أعد فتح الصفحة للمحاولة."); });
     };
     return () => { controller?.abort(); bc.close(); };
-  }, [userId, weekOffset, currentMonthOnly]);
+  }, [userId, weekOffset, fetchAttendance]);
 
   const loadAttendance = useCallback(async () => {
     if (!userId) return;
@@ -155,7 +155,7 @@ export function useAttendanceData(currentMonthOnly = false) {
       const merged = await fetchAttendance(userId, weekOffset);
       if (merged) setAttendance(merged);
     } catch {}
-  }, [userId, weekOffset, currentMonthOnly]);
+  }, [userId, weekOffset, fetchAttendance]);
 
   const updateGroupLocally = (updated: Group) => {
     setGroups(prev => prev.map(g => g.id === updated.id ? updated : g));

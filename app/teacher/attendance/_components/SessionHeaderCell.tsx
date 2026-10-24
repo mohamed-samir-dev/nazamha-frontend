@@ -13,7 +13,8 @@ export function SessionHeaderCell({
   onMarkAll: (d: string, gid: string) => void; onClearSession: (d: string, gid: string) => void;
   onCancelSession: (gid: string, d: string) => void;
 }) {
-  const canEdit = !isPastWeek && (state === "active" || state === "expired" || state === "future");
+  const isFuture = state === "future" || dateStr > new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" });
+  const canEdit = !isPastWeek && !isFuture && (state === "active" || state === "expired");
   const short = formatDateShort(dateStr);
 
   const stateStyles: Record<SessionState, string> = {
@@ -51,7 +52,7 @@ export function SessionHeaderCell({
                 className="flex items-center justify-center w-[26px] h-[22px] rounded-[5px] border border-teal-500/40 text-teal-400 bg-teal-500/10 cursor-pointer transition-all hover:bg-teal-500/20 hover:border-teal-400 disabled:opacity-20 disabled:cursor-not-allowed"
                 onClick={() => onMarkAll(dateStr, groupId ?? "")}
                 disabled={saving || !canEdit}
-                title={isPastWeek ? "أسبوع منتهي" : "تحضير الكل"}
+                title={isPastWeek ? "أسبوع منتهي" : isFuture ? "حصة قادمة — لا يمكن التحضير" : "تحضير الكل"}
               >
                 <CheckSquare size={12} />
               </button>
@@ -59,7 +60,7 @@ export function SessionHeaderCell({
                 className="flex items-center justify-center w-[26px] h-[22px] rounded-[5px] border border-red-500/40 text-red-400 bg-red-500/10 cursor-pointer transition-all hover:bg-red-500/20 hover:border-red-400 disabled:opacity-20 disabled:cursor-not-allowed"
                 onClick={() => onClearSession(dateStr, groupId ?? "")}
                 disabled={saving || !canEdit}
-                title={isPastWeek ? "أسبوع منتهي" : "إلغاء الكل"}
+                title={isPastWeek ? "أسبوع منتهي" : isFuture ? "حصة قادمة — لا يمكن الإلغاء" : "إلغاء الكل"}
               >
                 <XSquare size={12} />
               </button>

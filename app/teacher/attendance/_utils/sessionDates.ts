@@ -17,9 +17,7 @@ export function getGroupSessionDates(group: Group, month: number, year: number):
 
 
 
-  const startDate = group.start_date ?? (group.created_at
-    ? new Date(group.created_at).toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" })
-    : null);
+  const startDate = group.start_date || null;
 
   const dates: string[] = [];
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -32,10 +30,13 @@ export function getGroupSessionDates(group: Group, month: number, year: number):
     }
   }
 
-  const frozen=group.attendance_sessions||[];
-  const latest=frozen.map(s=>s.session_date).sort().at(-1);
-  const earliest=frozen.map(s=>s.session_date).sort()[0];
-  return [...new Set([...dates.filter(d=>!latest||d>latest||d<earliest),...frozen.map(s=>s.session_date).filter(d=>d.startsWith(`${year}-${String(month).padStart(2,"0")}-`))])].sort();
+  const frozen = group.attendance_sessions || [];
+  const latest = frozen.map(s => s.session_date).sort().at(-1);
+  const earliest = frozen.map(s => s.session_date).sort()[0];
+  const datesInRange = dates.filter(d => !latest || d > latest || d < earliest);
+  const monthPrefix = `${year}-${String(month).padStart(2, "0")}-`;
+  const monthFrozen = frozen.filter(s => s.session_date.startsWith(monthPrefix)).map(s => s.session_date);
+  return [...new Set([...datesInRange, ...monthFrozen])].sort();
 }
 
 /** بداية الأسبوع (السبت) لتاريخ معين */

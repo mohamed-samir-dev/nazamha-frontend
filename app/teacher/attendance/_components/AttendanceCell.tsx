@@ -29,6 +29,7 @@ export function AttendanceCell({
 
   const handleClick = () => {
     if(saving||sessionSaving)return;
+    if (isPastWeek) { onShowToast?.("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
     if (isFuture) { onShowToast?.("لا يمكن تسجيل حضور في تاريخ مستقبلي", "error"); return; }
     if (isSuspended) { onShowToast?.("هذا الطالب موقوف — لا يمكن تسجيل حضوره", "error"); return; }
     if (canEdit) onToggle(student, dateStr);
@@ -42,12 +43,14 @@ export function AttendanceCell({
             ? "border-teal-500 bg-teal-500/20 text-teal-400 shadow-[0_0_8px_rgba(20,184,166,0.2)] hover:bg-teal-500/25"
             : isPastWeek
               ? "border-white/10 bg-white/[0.02] text-transparent opacity-30 cursor-not-allowed"
-              : (state === "expired") && !present
+              : isFuture
+                ? "border-white/5 bg-white/[0.01] text-transparent opacity-20 cursor-not-allowed"
+                : (state === "expired") && !present
                 ? "border-red-500/30 bg-red-500/[0.06] text-red-500/50 cursor-pointer hover:border-teal-500/50 hover:bg-teal-500/10"
                 : "border-white/10 bg-white/[0.02] text-transparent hover:border-teal-500/50 hover:bg-teal-500/10 hover:text-teal-500/50 cursor-pointer"
           }`}
         onClick={handleClick}
-        disabled={isPastWeek||saving||sessionSaving}
+        disabled={!canEdit||saving||sessionSaving}
         aria-busy={saving}
         aria-label={saving?`جاري حفظ حضور ${student.name}`:undefined}
         style={saving?{color:"var(--text-primary, #e2e8f0)"}:undefined}
