@@ -181,8 +181,8 @@ export function useAttendanceReports() {
         const relevantSet = new Set(relevantDates);
         const present = [...att.presentDates].filter((d) => relevantSet.has(d)).length;
         const total = relevantDates.length;
-        return total > 0 ? Math.round((present / total) * 100) : 0;
-      });
+        return total > 0 ? Math.round((present / total) * 100) : null;
+      }).filter((p):p is number=>p!==null);
 
       const avgPct = pcts.length > 0 ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0;
       const below75 = pcts.filter((p) => p < 75).length;
@@ -239,7 +239,7 @@ export function useAttendanceReports() {
 
   const stats = useMemo(() => {
     const total = filteredStudents.length;
-    const pcts = studentRows.map((r) => r.pct);
+    const pcts = studentRows.filter(r=>r.total>0).map((r) => r.pct);
     const avgPct = pcts.length > 0 ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0;
     const below75 = pcts.filter((p) => p < 75).length;
     const perfect = pcts.filter((p) => p === 100).length;

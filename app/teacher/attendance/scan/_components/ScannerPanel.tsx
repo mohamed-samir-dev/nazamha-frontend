@@ -55,15 +55,21 @@ export function ScannerPanel(p: Props) {
   function handleKeys(event: React.KeyboardEvent) {
     if (event.key === "Escape" && !p.busy) p.onCancelCrossGroup();
     if (event.key !== "Tab") return;
-    const buttons = dialog.current?.querySelectorAll<HTMLElement>(
-      "button:not(:disabled),select:not(:disabled),textarea:not(:disabled),input:not(:disabled)",
-    );
+    const buttons = Array.from(dialog.current?.querySelectorAll<HTMLElement>(
+      "button:not(:disabled),select:not(:disabled),textarea:not(:disabled),input:not(:disabled),summary",
+    ) || []).filter(element=>{
+      for(let parent=element.parentElement;parent&&parent!==dialog.current;parent=parent.parentElement){
+        if(parent.tagName==="DETAILS"&&!parent.hasAttribute("open")&&!(element.tagName==="SUMMARY"&&element.parentElement===parent))return false;
+      }
+      return true;
+    });
     if (!buttons?.length) {
       event.preventDefault();
       return;
     }
     const first = buttons[0],
       last = buttons[buttons.length - 1];
+    if(!dialog.current?.contains(document.activeElement)){event.preventDefault();first.focus();return;}
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();

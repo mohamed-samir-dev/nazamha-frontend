@@ -449,6 +449,8 @@ export interface CrossGroupValidation {
   destinationGroupName?:string;
   actualLesson?:{date:string;time:string;group_id:string};
   alreadyPresent?:boolean;
+  canRecord?:boolean;
+  attendanceUnavailable?:string;
   previous?:CrossGroupLessonOption[];
   future?:CrossGroupLessonOption[];
   previousUnavailable?:string;

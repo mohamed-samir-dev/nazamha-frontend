@@ -10,6 +10,9 @@ interface MonthSummary {
   year: number;
   present: number;
   absent: number;
+  compensated?:number;
+  exempt?:number;
+  guest?:number;
 }
 
 const MONTHS_AR = [
@@ -65,6 +68,7 @@ export function StudentAttendanceCard({ studentId }: { studentId: string }) {
         ))}
       </div>
 
+      <p className="text-xs text-slate-400">التعويض: {summary.reduce((sum,m)=>sum+(m.compensated||0),0)} · الإعفاء: {summary.reduce((sum,m)=>sum+(m.exempt||0),0)} · حضور مع مجموعات أخرى: {summary.reduce((sum,m)=>sum+(m.guest||0),0)}. لا تُسجّل هذه الحالات حضورًا فعليًا في الحصة الأصلية.</p>
       {/* نسبة الحضور الكلية */}
       <div style={{
         padding: "0.85rem 1.25rem", borderRadius: "12px",

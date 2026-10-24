@@ -64,6 +64,7 @@ export function resetAuthFailureGuard(): void {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const logEnabled=ENABLE_LOGS&&!/^\/(?:attendance|students)(?:[/?]|$)/.test(path);
   const generation = appCache.generation();
   const method = (options.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
@@ -83,7 +84,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const isAuthMe = path === "/auth/me";
   const cachePolicy: RequestCache = (MUTATING.has(method) || isAuthMe) ? "no-store" : "default";
 
-  if (ENABLE_LOGS) {
+  if (logEnabled) {
     console.log(`📡 API ${method} ${path}`, options.body ? JSON.parse(options.body as string) : '');
   }
 
@@ -134,7 +135,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     res = await send();
   }
 
-  if (ENABLE_LOGS) {
+  if (logEnabled) {
     console.log(`📥 API Response ${method} ${path}:`, res.status, res.statusText);
   }
 
@@ -152,7 +153,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         if (retry.status === 204 || retry.status === 304) return undefined as T;
         const data = await retry.json();
         ensureCurrentAccount();
-        if (ENABLE_LOGS) {
+        if (logEnabled) {
           console.log(`📦 API Data (retry):`, data);
         }
         return data;
@@ -161,7 +162,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       const retryRawText = await retry.text().catch(() => "");
       let retryErr: Record<string, unknown> = {};
       try { retryErr = retryRawText ? JSON.parse(retryRawText) : {}; } catch {
-        if (ENABLE_LOGS) {
+        if (logEnabled) {
           console.error(`❌ API Error ${method} ${path} (retry): non-JSON response (${retry.status}):`, retryRawText.slice(0, 500));
         }
       }
@@ -200,11 +201,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const rawText = await res.text().catch(() => "");
     let err: Record<string, unknown> = {};
     try { err = rawText ? JSON.parse(rawText) : {}; } catch {
-      if (ENABLE_LOGS) {
+      if (logEnabled) {
         console.error(`❌ API Error ${method} ${path}: non-JSON response (${res.status}):`, rawText.slice(0, 500));
       }
     }
-    if (Object.keys(err).length > 0 && ENABLE_LOGS) {
+    if (Object.keys(err).length > 0 && logEnabled) {
       console.error(`❌ API Error ${method} ${path}:`, err);
     }
     const rawMsg: string | undefined = (err as Record<string, unknown>).message as string | undefined;
@@ -226,7 +227,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (res.status === 204 || res.status === 304) return undefined as T;
   const data = await res.json();
   if (generation !== appCache.generation()) throw new Error("تم تغيير الحساب؛ تجاهل الاستجابة القديمة");
-  if (ENABLE_LOGS) {
+  if (logEnabled) {
     console.log(`📦 API Data:`, data);
   }
   return data;

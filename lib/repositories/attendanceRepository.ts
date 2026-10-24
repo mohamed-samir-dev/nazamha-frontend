@@ -100,10 +100,10 @@ export const AttendanceRepository = {
       try {
         const result=await AttendanceRepository.addAttendanceRecords(records);
         if(generation!==appCache.generation()) break;
-        const saved=new Set(result.data.map(r=>`${r.student_id}|${r.scanner_session_date || r.session_date}`));
-        const acknowledged=chunk.filter(r=>saved.has(`${r.student_id}|${r.session_date}`));
+        const saved=new Set(result.data.map(r=>`${r.student_id}|${r.scanner_group_id || r.group_id || ""}|${r.scanner_session_date || r.session_date}`));
+        const acknowledged=chunk.filter(r=>saved.has(`${r.student_id}|${r.scanner_group_id || r.group_id || ""}|${r.session_date}`));
         AttendanceQueue.acknowledge(acknowledged);synced+=acknowledged.length;
-        for(const record of chunk.filter(r=>!saved.has(`${r.student_id}|${r.session_date}`))) AttendanceQueue.reject(record,"لم يؤكد الخادم السجل؛ راجع إيقاف الطالب وأهلية الجلسة.");
+        for(const record of chunk.filter(r=>!saved.has(`${r.student_id}|${r.scanner_group_id || r.group_id || ""}|${r.session_date}`))) AttendanceQueue.reject(record,"لم يؤكد الخادم السجل؛ راجع إيقاف الطالب وأهلية الجلسة.");
       } catch(error) {
         if(generation!==appCache.generation())break;
         // A rejected batch may contain individually valid rows. Never retry a

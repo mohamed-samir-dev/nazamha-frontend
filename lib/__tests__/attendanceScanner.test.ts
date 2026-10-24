@@ -169,11 +169,11 @@ test("confirmation stays visible during save and double confirmation saves once"
   );
   let pending: any;
   await act(async () => {
-    pending = h.value.handleConfirmCrossGroup();
+    pending = h.value.handleConfirmCrossGroup({action:"guest"});
   });
   expect(h.value.crossGroupConfirm.student.id).toBe("a");
   expect(h.value.busy).toContain("A");
-  await act(async () => h.value.handleConfirmCrossGroup());
+  await act(async () => h.value.handleConfirmCrossGroup({action:"guest"}));
   expect(AttendanceService.upsertAttendanceRecord).toHaveBeenCalledTimes(1);
   await act(async () => {
     save.resolve({ state: "saved", record: { id: "confirmed" } });
@@ -191,10 +191,10 @@ test("failed confirmation retains the same student for retry", async () => {
   (AttendanceService.upsertAttendanceRecord as jest.Mock).mockRejectedValueOnce(
     new Error("رفض الحضور"),
   );
-  await act(async () => h.value.handleConfirmCrossGroup());
+  await act(async () => h.value.handleConfirmCrossGroup({action:"guest"}));
   expect(h.value.crossGroupConfirm.student.id).toBe("a");
   expect(h.value.lastScan.success).toBe(false);
-  await act(async () => h.value.handleConfirmCrossGroup());
+  await act(async () => h.value.handleConfirmCrossGroup({action:"guest"}));
   expect(h.value.crossGroupConfirm).toBeNull();
   await h.close();
 });

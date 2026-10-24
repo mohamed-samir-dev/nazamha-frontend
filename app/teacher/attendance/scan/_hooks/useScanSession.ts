@@ -1290,7 +1290,7 @@ export function useScanSession() {
           let id = entry.recordId;
           if (!id) {
             const rows = await api.get<{ id?: string; _id?: string }[]>(
-              `/attendance?session_date=${sessionDate}&student_id=${studentId}&status=present`,
+              `/attendance?group_id=${selectedGroupId}&session_date=${sessionDate}&student_id=${studentId}&status=present`,
             );
             id = rows[0]?.id || rows[0]?._id;
           }

@@ -25,7 +25,7 @@ function buildWhatsAppMessage(row: StudentReportRow, month: number, year: number
     (row.pct < 75
       ? `⚠️ *تنبيه:* نسبة حضور الطالب أقل من 75%، نرجو الاهتمام بانتظام الحضور.\n\n`
       : row.pct === 100
-      ? `🌟 *ممتاز!* الطالب لم يغب يوماً هذا الشهر.\n\n`
+      ? `🌟 الطالب منتظم في الحصص المطلوبة بعد استبعاد التعويض والإعفاء.\n\n`
       : "") +
     `شكراً لتعاونكم 🙏`
   );
@@ -171,7 +171,7 @@ export function StudentReportTab({ rows, selectedMonth, selectedYear }: Props) {
                     </div>
                   </td>
                   <td className={tdCls}>
-                    <PctBar pct={row.pct} />
+                    {row.total>0?<PctBar pct={row.pct} />:<span title="لا توجد حصص مطلوبة بعد الاستبعاد">—</span>}
                   </td>
                   <td className={`${tdCls} text-center`}>
                     {waLink ? (

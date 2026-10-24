@@ -21,6 +21,7 @@ jest.mock("@/lib/services/groupsService",()=>({GroupsService:{getGroupsByTeacher
 jest.mock("@/lib/services/studentsService",()=>({StudentsService:{getStudentsByTeacherId:jest.fn()}}));
 jest.mock("@/lib/services/gradesService",()=>({GradesService:{getGradesByTeacherId:jest.fn()}}));
 beforeEach(()=>{
+ jest.useFakeTimers().setSystemTime(new Date("2026-10-23T12:00:00Z"));
  jest.clearAllMocks();localStorage.clear();Object.defineProperty(navigator,"onLine",{configurable:true,value:true});
  (globalThis as any).BroadcastChannel=class{onmessage:any;close(){}postMessage(){}};
  (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;

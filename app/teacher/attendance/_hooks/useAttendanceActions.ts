@@ -75,6 +75,7 @@ export function useAttendanceActions({
       a => a.student_id === student.id && a.session_date === dateStr && (!a.group_id||a.group_id===student.group_id)
     );
 
+    if(existing?.resolution){pendingKeys.current.delete(key);showToast("راجع التعويض أو الإعفاء في سكان الكاميرا قبل تعديل هذه الحصة","error");return;}
     if (existing?.status === "present") {
       setAttendance(prev => prev.filter(a => a.id !== existing.id));
     try { await deleteRecord(existing); invalidateAllTimeCache(userId); }
@@ -190,7 +191,7 @@ export function useAttendanceActions({
     try {
       const groupStudents = groupId ? filteredStudents.filter(s => s.group_id === groupId) : filteredStudents;
       const toDelete = attendanceRef.current.filter(
-        a => a.session_date === dateStr && (!groupId || a.group_id===groupId) && groupStudents.some(s => s.id === a.student_id)
+        a => !a.id.startsWith("resolution-") && a.session_date === dateStr && (!groupId || a.group_id===groupId) && groupStudents.some(s => s.id === a.student_id)
       );
       const results = await Promise.allSettled(toDelete.map(r => deleteRecord(r)));
       const deleted = toDelete.filter((_, i) => results[i].status === "fulfilled");
