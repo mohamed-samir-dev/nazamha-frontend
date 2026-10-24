@@ -16,19 +16,21 @@ import { AttendanceTable } from "./_components/AttendanceTable";
 import { QRModal } from "./_components/QRModal";
 import { ConfirmDeleteModal } from "./_components/ConfirmDeleteModal";
 import { AttendancePrintButton } from "./_components/AttendancePrintButton";
-import { exportAttendancePrint } from "./_utils/exportUtils";
+import { exportAttendanceMonth } from "./_utils/exportUtils";
+import { AttendanceReportModal } from "./_components/AttendanceReportModal";
 import { useOnlineSync } from "./scan/_hooks/useOnlineSync";
 import { Student } from "@/lib/types";
-import { getWeekLabel } from "./_utils/sessionDates";
+import { getMonthCairo,getYearCairo } from "@/lib/utils/dateUtils";
 
 export default function AttendancePage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [qrStudent, setQrStudent] = useState<Student | null>(null);
+  const [reportOpen,setReportOpen]=useState(false);
 
   const showToast = (message: string, type: "success" | "error" = "success") =>
     setToast({ message, type });
 
-  const data = useAttendanceData();
+  const data = useAttendanceData(true);
 
   useOnlineSync((count) => {
     if (count > 0) data.loadAttendance();
@@ -78,24 +80,15 @@ export default function AttendancePage() {
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 flex items-center gap-1">
               <CalendarDays size={12} className="inline ml-1" />
-              {getWeekLabel(data.weekOffset)}
+              {new Date(Date.UTC(getYearCairo(),getMonthCairo()-1,1)).toLocaleDateString("ar-EG",{month:"long",year:"numeric",timeZone:"Africa/Cairo"})}
               {selectedGroup ? ` — ${selectedGroup.name}` : ""}
             </p>
           </div>
         </div>
         <div className="grid w-full grid-cols-2 items-stretch gap-2 sm:flex sm:w-auto sm:items-center">
-          {data.monthlyStudents.length > 0 && data.monthSessionDates.length > 0 && (
+          {(
             <AttendancePrintButton
-              onPrint={() => exportAttendancePrint(
-                data.monthlyStudents,
-                data.monthSessionDates,
-                data.attendance,
-                data.selectedMonth,
-                data.selectedYear,
-                selectedGroup?.name || "الكل",
-                data.selectedGroupId === "all" ? data.groups : [selectedGroup!].filter(Boolean),
-                cancelledSet
-              )}
+              onPrint={async() => {setReportOpen(true);}}
               onError={message => showToast(message, "error")}
             />
           )}
@@ -133,6 +126,7 @@ export default function AttendancePage() {
       {/* Table */}
       <div className="glass-panel overflow-hidden py-4">
         <AttendanceTable key={`${data.selectedGradeId}-${data.selectedGroupId}-${data.weekOffset}`}
+          currentMonthOnly
           students={data.filteredStudents}
           sessionDates={data.sessionDates}
           attendance={data.attendance}
@@ -151,11 +145,13 @@ export default function AttendancePage() {
           onShowQR={setQrStudent}
           onShowToast={showToast}
           isSaving={actions.isSaving}
+          isCellSaving={actions.isCellSaving}
         />
       </div>
 
       {/* Modals */}
       <QRModal student={qrStudent} onClose={() => setQrStudent(null)} />
+      {reportOpen&&<AttendanceReportModal month={getMonthCairo()} year={getYearCairo()} onClose={()=>setReportOpen(false)} onReport={(month,year)=>exportAttendanceMonth(month,year,{gradeId:data.selectedGradeId,groupId:data.selectedGroupId})}/>}
 
       {actions.pendingDelete && (
         <ConfirmDeleteModal

@@ -97,3 +97,7 @@ test("camera completing after stop is released and cannot reactivate scanner",as
  await act(async()=>{starting=h.value.startScanner();});expect(camera.start).toHaveBeenCalledWith({facingMode:"environment"},expect.objectContaining({fps:10}),expect.any(Function),expect.any(Function));
  await act(async()=>h.value.stopScanner());await act(async()=>{resolve();await starting;});expect(h.value.scanning).toBe(false);expect(camera.stop).toHaveBeenCalled();expect(camera.clear).toHaveBeenCalled();await h.close();
 });
+
+test("live current-month table never follows the historical report month",async()=>{
+ const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);const h=await harness(()=>useAttendanceData(true));expect(h.value.sessionDates.every((d:string)=>d.startsWith("2026-10"))).toBe(true);expect(h.value.sessionDates.length).toBeGreaterThan(1);expect(read.mock.calls.every(c=>c[0]===10&&c[1]===2026)).toBe(true);await h.close();
+});

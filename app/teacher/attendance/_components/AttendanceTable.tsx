@@ -26,7 +26,6 @@ interface GroupBlock {
   group: Group | null;
   groupId: string;
   students: Student[];
-  currentMonthOnly?: boolean;
   sessionDates: string[];
   sessionStates: Record<string, SessionState>;
   activeDates: string[];
