@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderOpen, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { FolderOpen, TrendingUp, TrendingDown, AlertTriangle, Calendar } from "lucide-react";
 import { GroupReportRow } from "../_hooks/useAttendanceReports";
 
 interface Props {
@@ -12,7 +12,7 @@ export function GroupReportTab({ rows }: Props) {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
         <FolderOpen size={44} className="opacity-30" />
-        <p>لا توجد مجموعات في هذا الاختيار</p>
+        <p>لا توجد مجموعات مطابقة للاختيار الحالي</p>
       </div>
     );
   }
@@ -20,9 +20,32 @@ export function GroupReportTab({ rows }: Props) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {rows.map((row) => {
-        const pctColor = row.avgPct >= 75 ? "#10b981" : row.avgPct >= 50 ? "#f59e0b" : "#ef4444";
-        const pctBg = row.avgPct >= 75 ? "bg-emerald-500/10" : row.avgPct >= 50 ? "bg-amber-500/10" : "bg-red-500/10";
-        const pctText = row.avgPct >= 75 ? "text-emerald-400" : row.avgPct >= 50 ? "text-amber-400" : "text-red-400";
+        const hasSessions = row.totalSessions > 0;
+        const pctColor = !hasSessions
+          ? "#94a3b8"
+          : row.avgPct >= 75
+          ? "#10b981"
+          : row.avgPct >= 50
+          ? "#f59e0b"
+          : "#ef4444";
+
+        const pctBg = !hasSessions
+          ? "bg-slate-500/10"
+          : row.avgPct >= 75
+          ? "bg-emerald-500/10"
+          : row.avgPct >= 50
+          ? "bg-amber-500/10"
+          : "bg-red-500/10";
+
+        const pctText = !hasSessions
+          ? "text-slate-400"
+          : row.avgPct >= 75
+          ? "text-emerald-400"
+          : row.avgPct >= 50
+          ? "text-amber-400"
+          : "text-red-400";
+
+        const actualSessions = Math.max(0, row.totalSessions - row.cancelledSessions);
 
         return (
           <div
@@ -39,54 +62,86 @@ export function GroupReportTab({ rows }: Props) {
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-slate-100 text-[0.9rem] truncate">{row.group.name}</p>
-                  <p className="text-[0.72rem] text-slate-500">{row.gradeName}</p>
+                  <p className="text-[0.72rem] text-slate-400">{row.gradeName}</p>
                 </div>
               </div>
+
               <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${pctBg} border border-white/[0.07]`}>
-                {row.avgPct >= 75 ? <TrendingUp size={13} style={{ color: pctColor }} /> : <TrendingDown size={13} style={{ color: pctColor }} />}
-                <span className={`font-mono font-bold text-[0.82rem] ${pctText}`}>{row.avgPct}%</span>
+                {hasSessions ? (
+                  row.avgPct >= 75 ? (
+                    <TrendingUp size={13} style={{ color: pctColor }} />
+                  ) : (
+                    <TrendingDown size={13} style={{ color: pctColor }} />
+                  )
+                ) : (
+                  <Calendar size={13} className="text-slate-400" />
+                )}
+                <span className={`font-mono font-bold text-[0.82rem] ${pctText}`}>
+                  {hasSessions ? `${row.avgPct}%` : "—"}
+                </span>
               </div>
             </div>
 
             {/* Progress bar */}
             <div className="w-full h-[5px] bg-white/[0.06] rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all" style={{ width: `${row.avgPct}%`, background: pctColor }} />
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${hasSessions ? row.avgPct : 0}%`, background: pctColor }}
+              />
             </div>
 
-            {/* Stats */}
+            {/* Stats Grid */}
             <div className="grid grid-cols-3 gap-2">
               <div className="flex flex-col items-center gap-0.5 bg-white/[0.03] rounded-[10px] py-2">
                 <span className="text-[1rem] font-bold font-mono text-slate-100">{row.studentCount}</span>
                 <span className="text-[0.68rem] text-slate-500">طالب</span>
               </div>
+
               <div className="flex flex-col items-center gap-0.5 bg-white/[0.03] rounded-[10px] py-2">
-                <span className="text-[1rem] font-bold font-mono text-teal-400">{row.totalSessions - row.cancelledSessions}</span>
-                <span className="text-[0.68rem] text-slate-500">حصة فعلية</span>
+                <span className="text-[1rem] font-bold font-mono text-teal-400">
+                  {hasSessions ? actualSessions : 0}
+                </span>
+                <span className="text-[0.68rem] text-slate-500">
+                  {row.isFutureMonth ? "حصة منتهية" : "حصة فعلية"}
+                </span>
               </div>
+
               <div className="flex flex-col items-center gap-0.5 bg-white/[0.03] rounded-[10px] py-2">
                 {row.below75 > 0 ? (
                   <>
                     <span className="text-[1rem] font-bold font-mono text-red-400">{row.below75}</span>
                     <span className="text-[0.68rem] text-slate-500">تحت 75%</span>
                   </>
-                ) : (
+                ) : hasSessions ? (
                   <>
                     <span className="text-[1rem] font-bold font-mono text-emerald-400">✓</span>
-                    <span className="text-[0.68rem] text-slate-500">ممتاز</span>
+                    <span className="text-[0.68rem] text-slate-500">منتظم</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[1rem] font-bold font-mono text-slate-500">—</span>
+                    <span className="text-[0.68rem] text-slate-500">لا حصص</span>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Cancelled sessions warning */}
-            {row.cancelledSessions > 0 && (
+            {/* Sessions summary & cancellation info */}
+            {row.cancelledSessions > 0 ? (
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-500/[0.07] border border-amber-500/20 rounded-[8px]">
                 <AlertTriangle size={12} className="text-amber-400 flex-shrink-0" />
                 <span className="text-[0.72rem] text-amber-300/80">
-                  {row.cancelledSessions} حصة ملغاة من أصل {row.totalSessions}
+                  {row.cancelledSessions} حصة ملغاة من أصل {row.totalSessions} حصة مرت
                 </span>
               </div>
-            )}
+            ) : row.isFutureMonth ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-[8px]">
+                <Calendar size={12} className="text-slate-400 flex-shrink-0" />
+                <span className="text-[0.72rem] text-slate-400">
+                  {row.plannedSessions} حصة مجدولة لهذا الشهر
+                </span>
+              </div>
+            ) : null}
           </div>
         );
       })}

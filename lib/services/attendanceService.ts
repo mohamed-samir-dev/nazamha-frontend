@@ -16,7 +16,7 @@ export const AttendanceService = {
     return AttendanceRepository.getAllAttendanceRecords();
   },
 
-  async getLastSessionAbsentees(): Promise<Record<string, { sessionDate: string; absentees: { id: string; name: string; code: string | null }[] }>> {
+  async getLastSessionAbsentees(): Promise<Record<string, { sessionDate: string; absentees: { id: string; name: string; code: string | null; parent_phone?: string | null }[] }>> {
     return AttendanceRepository.getLastSessionAbsentees();
   },
 

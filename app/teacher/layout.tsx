@@ -87,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setIsBlocked(true);
       }
 
-      if ((pathname === "/teacher/attendance" || pathname === "/teacher/attendance/scan") && teacherData.has_attendance_feature === false) { router.replace("/teacher"); return; }
+      if (pathname.startsWith("/teacher/attendance") && teacherData.has_attendance_feature === false) { router.replace("/teacher"); return; }
       if (pathname === "/teacher/teachers" && !teacherData.is_center_mode) { router.replace("/teacher"); return; }
       const assistantFlag = !!(teacherData.effective_teacher_id);
       if (assistantFlag && (pathname === "/teacher/reports" || pathname === "/teacher/bills" || pathname === "/teacher/salaries")) {

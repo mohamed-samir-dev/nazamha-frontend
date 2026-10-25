@@ -125,7 +125,8 @@ export default function AttendancePage() {
 
       {/* Table */}
       <div className="glass-panel overflow-hidden py-4">
-        <AttendanceTable key={`${data.selectedGradeId}-${data.selectedGroupId}-${data.weekOffset}`}
+        <AttendanceTable key={`${data.selectedGradeId}-${data.selectedGroupId}`}
+          isWeekLoading={data.isWeekLoading}
           students={data.filteredStudents}
           sessionDates={data.sessionDates}
           attendance={data.attendance}

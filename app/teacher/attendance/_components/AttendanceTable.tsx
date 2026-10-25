@@ -5,7 +5,7 @@ import { Pagination } from "../../students/_components/Pagination";
 import { Student, AttendanceRecord, Group } from "@/lib/types";
 import {
   CheckSquare, XSquare, CalendarX, ChevronLeft, ChevronRight,
-  AlertTriangle, RotateCcw,
+  AlertTriangle, RotateCcw, LoaderCircle,
 } from "lucide-react";
 import {
   isSessionExpired, isSessionFuture,
@@ -80,6 +80,7 @@ function buildGroupBlocks(
 
 interface TableProps {
   students: Student[];
+  isWeekLoading?: boolean;
   currentMonthOnly?: boolean;
   sessionDates: string[];
   attendance: AttendanceRecord[];
@@ -104,7 +105,7 @@ interface TableProps {
 const PAGE_SIZE = 20;
 
 export function AttendanceTable({
-  students, sessionDates,
+  students, sessionDates, isWeekLoading = false,
   selectedGroupId, groups, weekOffset, onWeekChange, selectedMonth, selectedYear, currentMonthOnly=false,
   isPresent, getAttendancePercent,
   onToggle, onMarkAll, onClearSession, onCancelSession, onShowQR, onShowToast, isSaving, isCellSaving,
@@ -119,19 +120,21 @@ export function AttendanceTable({
       <button
         className="flex items-center justify-center w-[38px] h-[38px] rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-300 cursor-pointer transition-all flex-shrink-0 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-400 disabled:opacity-25 disabled:cursor-not-allowed"
         onClick={() => { onWeekChange(weekOffset - 1); setPage(1); }}
+        disabled={isWeekLoading}
         title="الأسبوع السابق"
       >
         <ChevronRight size={16} />
       </button>
       <div className="flex items-center gap-2.5 flex-1 justify-center">
         <span className="text-[0.92rem] font-bold text-slate-100 font-mono">{getWeekLabel(weekOffset)}</span>
+        {isWeekLoading && <LoaderCircle size={14} className="animate-spin text-teal-400 shrink-0" />}
         {isPastWeek && <span className="text-[0.72rem] px-2 py-px rounded-full bg-red-500/10 border border-red-500/20 text-red-400 font-semibold">🔒 مقفل</span>}
         {weekOffset === 0 && <span className="text-[0.5rem] sm:text-[0.72rem] px-1 sm:px-2 py-px rounded-full bg-teal-500/10 border border-teal-500/25 text-teal-400 font-semibold leading-tight">الأسبوع الحالي</span>}
       </div>
       <button
         className="flex items-center justify-center w-[38px] h-[38px] rounded-[10px] border border-white/10 bg-white/[0.04] text-slate-300 cursor-pointer transition-all flex-shrink-0 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-400 disabled:opacity-25 disabled:cursor-not-allowed"
         onClick={() => { onWeekChange(weekOffset + 1); setPage(1); }}
-        disabled={weekOffset >= 0}
+        disabled={weekOffset >= 0 || isWeekLoading}
         title="الأسبوع التالي"
       >
         <ChevronLeft size={16} />
@@ -215,29 +218,31 @@ export function AttendanceTable({
     <>
       {weekNav}
       {legend}
-      {pagedBlocks.map(block => (
-        <GroupTable
-          key={block.groupId}
-          group={block.group}
-          groupId={block.groupId}
-          students={block.visibleStudents}
-          sessionDates={block.sessionDates}
-          sessionStates={block.sessionStates}
-          activeDates={block.activeDates}
-          startIndex={block.startIndex - pageStart}
-          isPastWeek={isPastWeek}
-          isSaving={isSaving}
-          isCellSaving={isCellSaving}
-          isPresent={isPresent}
-          getAttendancePercent={getAttendancePercent}
-          onToggle={onToggle}
-          onMarkAll={onMarkAll}
-          onClearSession={onClearSession}
-          onCancelSession={onCancelSession}
-          onShowQR={onShowQR}
-          onShowToast={onShowToast}
-        />
-      ))}
+      <div className={`transition-opacity duration-150 ${isWeekLoading ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
+        {pagedBlocks.map(block => (
+          <GroupTable
+            key={block.groupId}
+            group={block.group}
+            groupId={block.groupId}
+            students={block.visibleStudents}
+            sessionDates={block.sessionDates}
+            sessionStates={block.sessionStates}
+            activeDates={block.activeDates}
+            startIndex={block.startIndex - pageStart}
+            isPastWeek={isPastWeek}
+            isSaving={isSaving}
+            isCellSaving={isCellSaving}
+            isPresent={isPresent}
+            getAttendancePercent={getAttendancePercent}
+            onToggle={onToggle}
+            onMarkAll={onMarkAll}
+            onClearSession={onClearSession}
+            onCancelSession={onCancelSession}
+            onShowQR={onShowQR}
+            onShowToast={onShowToast}
+          />
+        ))}
+      </div>
       <Pagination
         currentPage={page}
         totalPages={totalPages}

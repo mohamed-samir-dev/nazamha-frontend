@@ -102,6 +102,7 @@ export function useAttendanceData(currentMonthOnly = false) {
           setStudents(stData);
           setGrades(grdData);
           setAttendance(initialAtt || []);
+          setLoadedWeek(0);
           OfflineCache.saveStudents(stData);
           OfflineCache.saveGroups(contextGroups(grpData,context));
           OfflineCache.saveGrades(grdData);
@@ -201,7 +202,7 @@ export function useAttendanceData(currentMonthOnly = false) {
   }, [groups, selectedGroupId, selectedGradeId, selectedMonth, selectedYear]);
 
   return {
-    loading:loading || (!error && loadedWeek !== weekOffset), error, userId,
+    loading, isWeekLoading: !loading && loadedWeek !== null && loadedWeek !== weekOffset, error, userId,
     groups, setGroups, students, grades,
     attendance, setAttendance,
     selectedGradeId, setSelectedGradeId,
