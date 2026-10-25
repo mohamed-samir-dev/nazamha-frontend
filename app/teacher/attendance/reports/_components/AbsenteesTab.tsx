@@ -270,7 +270,7 @@ export function AbsenteesTab({
 
                 return (
                   <tr
-                    key={`${row.student.id}-${row.student.group_id}-${row.student.group_join_date}`}
+                    key={row.student.id}
                     className="transition-colors hover:bg-white/[0.03] group"
                   >
                     {/* Sticky # */}

@@ -45,13 +45,20 @@ function buildGroupTable(
     const cells = activeDates.map(d => {
       const p = isPresent(s.id, d);
       const resolution = attendanceSlot(attendance, s.id, d, group?.id)?.resolution;
-      if (resolution) return `<td class="cell-center resolution">${resolution === "compensated" ? "معوّض" : "معفى"}</td>`;
+      if (resolution) return `<td class="cell-center resolution">${resolution === "compensated" ? "معوّض" : "معفي"}</td>`;
       const isPastOrExpired = isSessionExpired(d, group ? sessionTime(group, d) : "23:59");
       const beforeJoin = joinDate != null && d < joinDate;
       const excluded = !!s.attendance_excluded_dates?.includes(d) && !attendanceSlot(attendance, s.id, d, group?.id)?.resolution;
       const afterEnd = !!(s.attendance_ends_on && d > s.attendance_ends_on);
-      const neutral = excluded || afterEnd || beforeJoin || !isPastOrExpired;
-      return `<td class="cell-center" style="color:${p ? "#0d9488" : neutral ? "#94a3b8" : "#dc2626"};font-weight:700">${p ? "✓" : neutral ? "—" : "✗"}</td>`;
+      const isExempt = beforeJoin || excluded || afterEnd;
+
+      if (isExempt) {
+        return `<td class="cell-center resolution" style="color:#d97706;font-size:9.5px;font-weight:700">معفي</td>`;
+      }
+      if (!isPastOrExpired) {
+        return `<td class="cell-center" style="color:#94a3b8;font-weight:700">—</td>`;
+      }
+      return `<td class="cell-center" style="color:${p ? "#0d9488" : "#dc2626"};font-weight:700">${p ? "✓" : "✗"}</td>`;
     }).join("");
 
     const relevantDates = activeDates.filter(d =>

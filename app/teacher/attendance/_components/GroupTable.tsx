@@ -20,7 +20,7 @@ interface GroupTableProps {
   isSaving: (gid: string, date: string) => boolean;
   isCellSaving?: (sid:string,date:string,gid?:string|null) => boolean;
   isPresent: (sid: string, date: string,groupId?:string|null) => boolean;
-  getAttendancePercent: (sid: string, activeDates: string[], joinDate?: string,groupId?:string|null) => number;
+  getAttendancePercent: (sid: string, activeDates: string[], joinDate?: string,groupId?:string|null) => number | null;
   onToggle: (student: Student, date: string) => void;
   onMarkAll: (date: string, gid: string) => void;
   onClearSession: (date: string, gid: string) => void;
@@ -128,7 +128,7 @@ export function GroupTable({
                 {students.map((student, i) => {
                   const joinDate = student.group_join_date || student.created_at?.slice(0, 10);
                   const pct = getAttendancePercent(student.id, activeDates.filter(d=>(!student.attendance_ends_on || d<=student.attendance_ends_on)&&!student.attendance_excluded_dates?.includes(d)), joinDate,student.group_id);
-                  const pctColor = pct >= 75 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
+                  const pctColor = pct !== null ? (pct >= 75 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444") : "#94a3b8";
                   return (
                     <tr key={`${student.id}-${student.group_id}-${student.group_join_date}`} className="transition-colors hover:[&>td]:bg-white/[0.02]">
                       <td className="text-center text-slate-500 font-semibold text-[0.78rem] px-1 py-2 border-b border-white/[0.04]">{startIndex + i + 1}</td>
@@ -142,7 +142,7 @@ export function GroupTable({
                         if (beforeJoin) {
                           return (
                             <td key={d} className="text-center px-1.5 py-2 border-b border-white/[0.04]">
-                              <span className="text-slate-700 text-[0.7rem]">—</span>
+                              <span className="text-amber-400 text-xs font-semibold" title="معفي — قبل تاريخ الانضمام">معفي</span>
                             </td>
                           );
                         }

@@ -34,3 +34,16 @@ test("month selection belongs to the report and does not invoke a table callback
 test("historical report uses historical membership and fresh server records",async()=>{const read=jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);jest.spyOn(AttendanceService,"getContext").mockResolvedValue({groups:[{...group,id:"old",name:"المجموعة القديمة"}],memberships:[{student_id:"s",group_id:"old",starts_on:"2026-09-01",ends_on:"2026-09-30"}],sessions:[]});(api.get as jest.Mock).mockResolvedValue([{...student,group_id:"new",group_join_date:"2026-10-01"}]);await exportAttendanceMonth(9,2026,{gradeId:"all",groupId:"old"});expect(read).toHaveBeenCalledTimes(1);expect(read).toHaveBeenCalledWith(9,2026);const html=(printInPlace as jest.Mock).mock.calls[0][0].html;expect(html).toContain("سبتمبر 2026");expect(html).toContain("المجموعة القديمة");expect(html).toContain("أحمد")});
 test("report refuses a stale fallback and never merges unconfirmed queue",async()=>{jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);AttendanceQueue.add(row);await exportAttendancePrint([student],[],[row],10,2026,"أ",[group]);expect((printInPlace as jest.Mock).mock.calls[0][0].html).not.toContain(">✓</td>");(AttendanceService.getAttendanceRecords as jest.Mock).mockRejectedValueOnce(new Error("network"));await expect(exportAttendancePrint([student],[],[row],10,2026,"أ",[group])).rejects.toThrow("تعذر تحديث")});
 test("landscape report uses safe margins and single unified table per group",async()=>{jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([]);await exportAttendancePrint([{...student,name:"اسم طويل ".repeat(10)}],[],[],10,2026,"أ",[group]);const html=(printInPlace as jest.Mock).mock.calls[0][0].html;expect(html).toContain("size: A4 landscape");expect(html).toContain("margin: 8mm");const host=document.createElement("div");host.innerHTML=html;expect(host.querySelectorAll("table")).toHaveLength(1);});
+test("dates before join date are marked as exempt and excluded from attendance percentage in print report",async()=>{
+  jest.spyOn(AttendanceService,"getAttendanceRecords").mockResolvedValue([{...row,session_date:"2026-10-19",status:"present"}]);
+  const midStudent = {...student, group_join_date: "2026-10-15"};
+  const customGroup = {...group, attendance_sessions: [
+    {session_date: "2026-10-05", time: "10:00", cancelled: false},
+    {session_date: "2026-10-19", time: "10:00", cancelled: false},
+    {session_date: "2026-10-26", time: "10:00", cancelled: false},
+  ]};
+  await exportAttendancePrint([midStudent],[],[],10,2026,"أ",[customGroup]);
+  const html=(printInPlace as jest.Mock).mock.calls[0][0].html;
+  expect(html).toContain(">معفي</td>");
+  expect(html).toContain(">100%</td>");
+});

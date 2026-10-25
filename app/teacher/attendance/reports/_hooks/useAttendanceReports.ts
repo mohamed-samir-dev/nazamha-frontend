@@ -195,54 +195,88 @@ export function useAttendanceReports() {
     return map;
   }, [groups, selectedMonth, selectedYear]);
 
-  // حساب صفوف تقرير الطلاب
+  // حساب صفوف تقرير الطلاب (طالب واحد = صف واحد بدون أي تكرار)
   const studentRows: StudentReportRow[] = useMemo(() => {
-    const studentCountMap = new Map<string, number>();
+    const studentEntriesMap = new Map<string, Student[]>();
     for (const s of filteredStudents) {
-      studentCountMap.set(s.id, (studentCountMap.get(s.id) || 0) + 1);
+      const list = studentEntriesMap.get(s.id) || [];
+      list.push(s);
+      studentEntriesMap.set(s.id, list);
     }
 
-    return filteredStudents.map((s) => {
-      const grp = groups.find((g) => g.id === s.group_id);
-      const att = attendanceMap.get(`${s.id}|${s.group_id || ""}`) ?? {
-        presentDates: new Set<string>(),
-        absentDates: new Set<string>(),
-      };
-      const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0, 10) || null;
-      const grpActiveDates = grp ? (groupSessionDatesMap.get(grp.id) ?? []) : [];
-      const relevantDates = grpActiveDates.filter(
-        (d) =>
-          (!joinDate || d >= joinDate) &&
-          (!s.attendance_ends_on || d <= s.attendance_ends_on) &&
-          !s.attendance_excluded_dates?.includes(d) &&
-          !s.attendance_resolutions?.[d]
-      );
-      const relevantSet = new Set(relevantDates);
-      const present = [...att.presentDates].filter((d) => relevantSet.has(d)).length;
-      const absent = relevantDates.filter((d) => !att.presentDates.has(d)).length;
-      const total = relevantDates.length;
+    const rows: StudentReportRow[] = [];
+
+    for (const [studentId, entries] of studentEntriesMap.entries()) {
+      const firstEntry = entries[0];
+      const studentBase = students.find((s) => s.id === studentId) || firstEntry;
+
+      const allRelevantDates = new Set<string>();
+      let compCount = 0;
+      let exemptCount = 0;
+
+      for (const s of entries) {
+        const grp = groups.find((g) => g.id === s.group_id);
+        const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0, 10) || null;
+        const grpActiveDates = grp ? (groupSessionDatesMap.get(grp.id) ?? []) : [];
+        const relevant = grpActiveDates.filter(
+          (d) =>
+            (!joinDate || d >= joinDate) &&
+            (!s.attendance_ends_on || d <= s.attendance_ends_on) &&
+            !s.attendance_excluded_dates?.includes(d) &&
+            !s.attendance_resolutions?.[d]
+        );
+        for (const d of relevant) allRelevantDates.add(d);
+
+        compCount += Object.values(s.attendance_resolutions || {}).filter((v) => v === "compensated").length;
+        exemptCount += Object.values(s.attendance_resolutions || {}).filter((v) => v === "exempt").length;
+      }
+
+      const presentDatesSet = new Set<string>();
+      for (const s of entries) {
+        const att = attendanceMap.get(`${s.id}|${s.group_id || ""}`);
+        if (att) {
+          for (const d of att.presentDates) {
+            if (allRelevantDates.has(d)) presentDatesSet.add(d);
+          }
+        }
+      }
+
+      const present = presentDatesSet.size;
+      const relevantList = [...allRelevantDates];
+      const absent = relevantList.filter((d) => !presentDatesSet.has(d)).length;
+      const total = relevantList.length;
       const pct = total > 0 ? Math.round((present / total) * 100) : null;
 
-      return {
-        student: s,
+      // المجموعة الأساسية أو الأحدث
+      const activeEntry = entries.find((e) => e.group_id === studentBase.group_id) || entries[entries.length - 1];
+      const grp = groups.find((g) => g.id === activeEntry.group_id);
+      const grade = grades.find((g) => g.id === (studentBase.grade_id || grp?.grade_id));
+
+      const distinctGroups = new Set(entries.map((e) => e.group_id).filter(Boolean));
+      const isTransferred = distinctGroups.size > 1;
+
+      rows.push({
+        student: studentBase,
         groupName: grp?.name ?? "—",
-        gradeName: grades.find((g) => g.id === (s.grade_id || grp?.grade_id))?.name ?? "—",
+        gradeName: grade?.name ?? "—",
         present,
-        compensated: Object.values(s.attendance_resolutions || {}).filter((v) => v === "compensated").length,
-        exempt: Object.values(s.attendance_resolutions || {}).filter((v) => v === "exempt").length,
+        compensated: compCount,
+        exempt: exemptCount,
         absent,
         total,
         pct,
-        isTransferred: (studentCountMap.get(s.id) || 0) > 1,
-      };
-    }).sort((a, b) => {
+        isTransferred,
+      });
+    }
+
+    return rows.sort((a, b) => {
       // وضع الطلاب الذين لا يملكون حصصاً (pct === null) في ذيل القائمة
       if (a.pct === null && b.pct === null) return 0;
       if (a.pct === null) return 1;
       if (b.pct === null) return -1;
       return a.pct - b.pct;
     });
-  }, [filteredStudents, attendanceMap, groupSessionDatesMap, groups, grades]);
+  }, [filteredStudents, students, groups, grades, groupSessionDatesMap, attendanceMap]);
 
   // حساب صفوف تقرير المجموعات
   const groupRows: GroupReportRow[] = useMemo(() => {
@@ -250,7 +284,9 @@ export function useAttendanceReports() {
     const isFuture = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}` > today.slice(0, 7);
 
     return filteredGroups.map((g) => {
-      const grpStudents = periodStudents.filter((s) => s.group_id === g.id);
+      // حساب الطلاب الفريدين في المجموعة
+      const grpStudentIds = new Set(periodStudents.filter((s) => s.group_id === g.id).map((s) => s.id));
+      const grpStudents = [...grpStudentIds].map((id) => periodStudents.find((s) => s.id === id && s.group_id === g.id)!);
       const allSessionDates = getGroupSessionDates(g, selectedMonth, selectedYear);
       const cancelledSet = new Set(g.cancelled_sessions ?? []);
       const activeSessions = allSessionDates.filter(
@@ -288,7 +324,7 @@ export function useAttendanceReports() {
       return {
         group: g,
         gradeName: grades.find((gr) => gr.id === g.grade_id)?.name ?? "—",
-        studentCount: grpStudents.length,
+        studentCount: grpStudentIds.size,
         avgPct,
         below75,
         totalSessions: expiredAll.length,
@@ -300,15 +336,28 @@ export function useAttendanceReports() {
     });
   }, [filteredGroups, periodStudents, attendanceMap, grades, selectedMonth, selectedYear]);
 
-  // حساب الغائبين المتكررين
+  // حساب الغائبين المتكررين (طالب واحد = صف واحد بدون تكرار)
   const absenteeRows: AbsenteeRow[] = useMemo(() => {
-    return filteredStudents
-      .map((s) => {
+    const studentEntriesMap = new Map<string, Student[]>();
+    for (const s of filteredStudents) {
+      const list = studentEntriesMap.get(s.id) || [];
+      list.push(s);
+      studentEntriesMap.set(s.id, list);
+    }
+
+    const rows: AbsenteeRow[] = [];
+
+    for (const [studentId, entries] of studentEntriesMap.entries()) {
+      const firstEntry = entries[0];
+      const studentBase = students.find((s) => s.id === studentId) || firstEntry;
+
+      const allAbsentDates: string[] = [];
+
+      for (const s of entries) {
         const att = attendanceMap.get(`${s.id}|${s.group_id || ""}`) ?? {
           presentDates: new Set<string>(),
           absentDates: new Set<string>(),
         };
-        const grp = groups.find((g) => g.id === s.group_id);
         const joinDate = s.group_join_date?.slice(0, 10) || s.created_at?.slice(0, 10) || null;
         const absentDates = (groupSessionDatesMap.get(s.group_id || "") || []).filter(
           (d) =>
@@ -318,17 +367,25 @@ export function useAttendanceReports() {
             !s.attendance_resolutions?.[d] &&
             !att.presentDates.has(d)
         );
-        const sortedDates = [...absentDates].sort().reverse();
-        return {
-          student: s,
+        allAbsentDates.push(...absentDates);
+      }
+
+      const distinctAbsentDates = [...new Set(allAbsentDates)].sort().reverse();
+      if (distinctAbsentDates.length >= absentThreshold) {
+        const activeEntry = entries.find((e) => e.group_id === studentBase.group_id) || entries[entries.length - 1];
+        const grp = groups.find((g) => g.id === activeEntry.group_id);
+
+        rows.push({
+          student: studentBase,
           groupName: grp?.name ?? "—",
-          absentCount: absentDates.length,
-          lastAbsentDate: sortedDates[0] ?? "",
-        };
-      })
-      .filter((r) => r.absentCount >= absentThreshold)
-      .sort((a, b) => b.absentCount - a.absentCount);
-  }, [filteredStudents, attendanceMap, groups, absentThreshold, groupSessionDatesMap]);
+          absentCount: distinctAbsentDates.length,
+          lastAbsentDate: distinctAbsentDates[0] ?? "",
+        });
+      }
+    }
+
+    return rows.sort((a, b) => b.absentCount - a.absentCount);
+  }, [filteredStudents, students, groups, groupSessionDatesMap, attendanceMap, absentThreshold]);
 
   // جلب غائبي آخر حصة عند الطلب
   const fetchLastSessionIfNeeded = useCallback(async () => {
@@ -366,7 +423,6 @@ export function useAttendanceReports() {
 
   // إحصائيات عامة ملخصة
   const stats = useMemo(() => {
-    // عدد الطلاب الفريدين الفعلي
     const total = new Set(filteredStudents.map((s) => s.id)).size;
     const validRows = studentRows.filter((r) => r.total > 0 && r.pct !== null);
     const pcts = validRows.map((r) => r.pct as number);

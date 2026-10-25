@@ -91,7 +91,7 @@ interface TableProps {
   weekOffset: number;
   onWeekChange: (offset: number) => void;
   isPresent: (sid: string, date: string,groupId?:string|null) => boolean;
-  getAttendancePercent: (sid: string, activeDates: string[], joinDate?: string,groupId?:string|null) => number;
+  getAttendancePercent: (sid: string, activeDates: string[], joinDate?: string,groupId?:string|null) => number | null;
   onToggle: (student: Student, date: string) => void;
   onMarkAll: (date: string, gid: string) => void;
   onClearSession: (date: string, gid: string) => void;

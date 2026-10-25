@@ -52,11 +52,11 @@ export function useAttendanceActions({
 
   const isPresent = (studentId: string, dateStr: string,groupId?:string|null) => attendanceSlot(attendance,studentId,dateStr,groupId)?.status==="present";
 
-  const getAttendancePercent = (studentId: string, activeDates: string[], studentJoinDate?: string,groupId?:string|null) => {
+  const getAttendancePercent = (studentId: string, activeDates: string[], studentJoinDate?: string,groupId?:string|null): number | null => {
     const relevantDates = studentJoinDate
       ? activeDates.filter(d => d >= studentJoinDate && d <= today)
       : activeDates.filter(d => d <= today);
-    if (relevantDates.length === 0) return 0;
+    if (relevantDates.length === 0) return null;
     return attendanceForDates(attendance,studentId,relevantDates,groupId).percent;
   };
 
