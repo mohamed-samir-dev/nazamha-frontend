@@ -184,25 +184,27 @@ export function getMonthSessionDates(group: Group, month?: number, year?: number
   return Array.from(dates).sort();
 }
 
-// توليد التواريخ المسموح بالتسجيل فيها (حصص الأسبوع الحالي فقط من السبت إلى الجمعة)
-export function getValidSessionDates(group: Group): string[] {
+// توليد حصص المجموعة المستقبلية بالإضافة إلى حصة اليوم فقط (إخفاء أي حصة سابقة عدا موعدها)
+export function getFutureAndTodaySessionDates(group: Group): string[] {
+  const todayStr = getTodayCairo();
   const allDates = getMonthSessionDates(group);
-  const { start, end } = getCurrentWeekRange();
-  return allDates.filter((d) => d >= start && d <= end);
+  // إظهار فقط اليوم والأيام المستقبلية، وإخفاء أي يوم مضى
+  return allDates.filter((date) => date >= todayStr);
 }
 
-// أقرب تاريخ صالح للمجموعة في الأسبوع الحالي
+// توليد التواريخ المسموح بالتسجيل فيها في السكان (حصة اليوم فقط إذا كانت من أيام المجموعة)
+export function getValidSessionDates(group: Group): string[] {
+  const todayStr = getTodayCairo();
+  const futureAndToday = getFutureAndTodaySessionDates(group);
+  return futureAndToday.includes(todayStr) ? [todayStr] : [];
+}
+
+// تاريخ الجلسة الافتراضي للمجموعة (اليوم إذا وُجد، وإلا أقرب حصة قادمة)
 export function getNearestValidDate(group: Group): string {
-  const dates = getValidSessionDates(group);
-  const today = getTodayCairo();
-  if (!dates.length) return group.start_date ?? today;
-  // اليوم نفسه لو موجود في جدول المجموعة للأسبوع الحالي
-  if (dates.includes(today)) return today;
-  // أقرب يوم سابق في هذا الأسبوع
-  const pastInWeek = dates.filter((d) => d <= today);
-  if (pastInWeek.length) return pastInWeek[pastInWeek.length - 1];
-  // أول يوم قادم في هذا الأسبوع (لو لسه ما بدأتش حصص الأسبوع)
-  return dates[0];
+  const todayStr = getTodayCairo();
+  const futureAndToday = getFutureAndTodaySessionDates(group);
+  if (futureAndToday.includes(todayStr)) return todayStr;
+  return futureAndToday.length ? futureAndToday[0] : todayStr;
 }
 
 function detectCurrentGroup(groups: Group[]): Group | null {
@@ -558,11 +560,11 @@ export function useScanSession() {
     if (match.grade_id) setSelectedGradeId(match.grade_id);
     setAutoDetected(true);
     stateRef.current.selectedGroupId = match.id;
-    // ضبط التواريخ الصالحة وحصص الشهر
+    // ضبط التواريخ الصالحة وحصص اليوم والمستقبل
     const dates = getValidSessionDates(match);
-    const monthDates = getMonthSessionDates(match);
+    const visibleDates = getFutureAndTodaySessionDates(match);
     setValidSessionDates(dates);
-    setMonthSessionDates(monthDates);
+    setMonthSessionDates(visibleDates);
     const nearest = getNearestValidDate(match);
     setSessionDate(nearest);
     stateRef.current.sessionDate = nearest;
@@ -711,14 +713,14 @@ export function useScanSession() {
     autoGroupRef.current = match.id;
     stateRef.current.selectedGroupId = match.id;
     const dates = getValidSessionDates(match);
-    const monthDates = getMonthSessionDates(match);
+    const visibleDates = getFutureAndTodaySessionDates(match);
     const nearest = getNearestValidDate(match);
     Promise.resolve().then(() => {
       setSelectedGroupId(match.id);
       if (match.grade_id) setSelectedGradeId(match.grade_id);
       setAutoDetected(false);
       setValidSessionDates(dates);
-      setMonthSessionDates(monthDates);
+      setMonthSessionDates(visibleDates);
       setSessionDate(nearest);
       stateRef.current.sessionDate = nearest;
     });
@@ -919,9 +921,9 @@ export function useScanSession() {
               const currentGrp = merged.find((g) => g.id === currentSelected);
               if (currentGrp) {
                 const dates = getValidSessionDates(currentGrp);
-                const monthDates = getMonthSessionDates(currentGrp);
+                const visibleDates = getFutureAndTodaySessionDates(currentGrp);
                 setValidSessionDates(dates);
-                setMonthSessionDates(monthDates);
+                setMonthSessionDates(visibleDates);
               }
             }
             return merged;
@@ -1260,9 +1262,9 @@ export function useScanSession() {
         if (grp) {
           if (grp.grade_id) setSelectedGradeId(grp.grade_id);
           const dates = getValidSessionDates(grp);
-          const monthDates = getMonthSessionDates(grp);
+          const visibleDates = getFutureAndTodaySessionDates(grp);
           setValidSessionDates(dates);
-          setMonthSessionDates(monthDates);
+          setMonthSessionDates(visibleDates);
           const nearest = getNearestValidDate(grp);
           setSessionDate(nearest);
           stateRef.current.sessionDate = nearest;
@@ -1290,28 +1292,28 @@ export function useScanSession() {
       );
       if (!group) return;
 
-      const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
+      const todayStr = getTodayCairo();
 
-      // 1. حصة مستقبلية بعد نهاية الأسبوع الحالي
-      if (date > weekEnd) {
-        const msg = "غير مسموح بتسجيل او تعديل غياب حصه مستقبليه";
+      // 1. حصة مستقبلية (لم يأتِ موعدها بعد)
+      if (date > todayStr) {
+        const msg = "غير مسموح، موعد الحصة لم يأتِ بعد";
         setSessionDateError(msg);
         showLastScan(msg, false);
         return;
       }
 
-      // 2. حصة من أسبوع منتهي قبل بداية الأسبوع الحالي
-      if (date < weekStart) {
-        const msg = "أسبوع منتهي — غير مسموح بتسجيل أو تعديل غياب حصة في أسبوع منتهي";
+      // 2. حصة سابقة انتهت
+      if (date < todayStr) {
+        const msg = "هذه الحصة انتهت وغير متاحة في السكان";
         setSessionDateError(msg);
         showLastScan(msg, false);
         return;
       }
 
-      // 3. التأكد من أن الحصة متاحة في جدول الأسبوع الحالي
+      // 3. التأكد من أن الحصة متاحة اليوم
       const currentValid = getValidSessionDates(group);
       if (!currentValid.includes(date)) {
-        const msg = "هذه الحصة غير متاحة في جدول المجموعة لهذا الأسبوع";
+        const msg = "لا توجد حصة مسجلة للمجموعة في هذا التاريخ";
         setSessionDateError(msg);
         showLastScan(msg, false);
         return;

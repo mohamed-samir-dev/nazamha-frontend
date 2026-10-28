@@ -114,29 +114,23 @@ export function SessionConfig(p: Props) {
               });
 
               const isToday = date === today;
-              const isCurrentWeek = p.validSessionDates.includes(date);
-              const isFuture = date > weekEndStr;
-              const isPastWeek = date < weekStartStr;
+              const isFuture = date > today;
 
               let labelPrefix = "";
               if (extraSession) {
                 const titleStr = extraSession.title ? ` (${extraSession.title})` : "";
                 if (isToday) labelPrefix = `حصة إضافية${titleStr} · اليوم · `;
-                else if (isCurrentWeek) labelPrefix = `حصة إضافية${titleStr} · هذا الأسبوع · `;
-                else if (isFuture) labelPrefix = `حصة إضافية مستقبلية${titleStr} (غير مسموح) · `;
-                else labelPrefix = `حصة إضافية سابقة${titleStr} (أسبوع منتهي) · `;
+                else labelPrefix = `حصة إضافية قادمة${titleStr} (لم يحن موعدها) · `;
               } else {
                 if (isToday) labelPrefix = "اليوم · ";
-                else if (isCurrentWeek) labelPrefix = "هذا الأسبوع · ";
-                else if (isFuture) labelPrefix = "حصة مستقبلية (غير مسموح) · ";
-                else labelPrefix = "أسبوع منتهي · ";
+                else labelPrefix = "حصة قادمة (لم يحن موعدها) · ";
               }
 
               return (
                 <option
                   key={date}
                   value={date}
-                  style={!isCurrentWeek ? { color: "#94a3b8" } : undefined}
+                  style={isFuture ? { color: "#94a3b8" } : undefined}
                 >
                   {labelPrefix}{formattedDate}
                 </option>
@@ -149,10 +143,12 @@ export function SessionConfig(p: Props) {
             </p>
           )}
           {p.selectedGroupId && !p.validSessionDates.length && (
-            <p className={styles.warning}>
-              {start && start > today
+            <p className={styles.warning} style={{ marginTop: "6px", padding: "8px 12px" }}>
+              {datesToDisplay.length > 0
+                ? `لا توجد حصة اليوم لهذه المجموعة. أقرب حصة قادمة: ${datesToDisplay[0]} (لا يمكن بدء السكان قبل موعد الحصة).`
+                : start && start > today
                 ? `المجموعة لم تبدأ بعد؛ موعد البداية ${start}`
-                : "لا توجد حصص مجدولة لهذه المجموعة في هذا الأسبوع؛ راجع مواعيد المجموعة."}
+                : "لا توجد حصص مجدولة لهذه المجموعة حالياً؛ راجع مواعيد المجموعة."}
             </p>
           )}
         </div>

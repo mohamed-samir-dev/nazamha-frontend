@@ -50,10 +50,30 @@ export function SessionHeaderCell({
           <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-red-500/10 border border-red-500/25 text-red-400 tracking-wide">ملغاة</span>
         )}
         {state === "expired" && (
-          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-amber-500/10 border border-amber-500/25 text-amber-400 tracking-wide">منتهية</span>
+          <span
+            className={`text-[0.6rem] font-bold px-1.5 py-px rounded tracking-wide ${
+              isPastWeek
+                ? "bg-red-500/10 border border-red-500/25 text-red-400"
+                : "bg-teal-500/10 border border-teal-500/25 text-teal-300"
+            }`}
+            title={
+              isPastWeek
+                ? "أسبوع منتهي — انتهى الأسبوع ولا يمكن التعديل"
+                : "حصة سابقة في الأسبوع الحالي — مسموح بالتعديل طوال الأسبوع"
+            }
+          >
+            {isPastWeek ? "أسبوع منتهي" : "متاح التعديل"}
+          </span>
+        )}
+        {state === "active" && (
+          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 tracking-wide" title="حصة اليوم — نشطة للتعديل">
+            اليوم (نشطة)
+          </span>
         )}
         {state === "future" && (
-          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-slate-500/10 border border-slate-500/15 text-slate-400 tracking-wide">قادمة</span>
+          <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-slate-500/10 border border-slate-500/15 text-slate-400 tracking-wide" title="حصة مستقبلية — مغلقة حتى موعد الحصة">
+            قادمة (مغلقة)
+          </span>
         )}
 
         <div className="flex flex-row gap-0.5 items-center">

@@ -1,10 +1,12 @@
 import {
   getCurrentWeekRange,
   getMonthSessionDates,
+  getFutureAndTodaySessionDates,
   getValidSessionDates,
   getNearestValidDate,
 } from "@/app/teacher/attendance/scan/_hooks/useScanSession";
 import { Group } from "@/lib/types";
+import { getTodayCairo } from "@/lib/utils/dateUtils";
 
 describe("Scan Session Dates & Week Restriction Tests", () => {
   const satMonWedGroup: Group = {
@@ -86,14 +88,24 @@ describe("Scan Session Dates & Week Restriction Tests", () => {
     expect(monthDates).toContain("2026-10-15");
   });
 
-  test("getValidSessionDates only returns sessions of the current week", () => {
-    // Current week range
-    const { start, end } = getCurrentWeekRange();
+  test("getFutureAndTodaySessionDates only returns today and future sessions, hiding elapsed dates", () => {
+    const today = getTodayCairo();
+    const futureAndTodayDates = getFutureAndTodaySessionDates(satMonWedGroup);
+
+    for (const d of futureAndTodayDates) {
+      expect(d >= today).toBe(true);
+    }
+  });
+
+  test("getValidSessionDates in scan only allows today's session", () => {
+    const today = getTodayCairo();
     const validDates = getValidSessionDates(satMonWedGroup);
 
-    // All valid dates must be within [start, end]
-    for (const d of validDates) {
-      expect(d >= start && d <= end).toBe(true);
+    // Valid scan session can ONLY be today if today is an active session day
+    if (validDates.length > 0) {
+      expect(validDates).toEqual([today]);
+    } else {
+      expect(validDates).toEqual([]);
     }
   });
 });

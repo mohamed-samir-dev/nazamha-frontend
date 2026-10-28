@@ -187,12 +187,10 @@ export function AddExtraSessionModal({
   return (
     <dialog
       ref={dialog}
-      className="modal-content"
+      className="modal-content w-[94vw] max-w-[480px] p-4 sm:p-6 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto"
       aria-labelledby="add-extra-session-title"
       style={{
-        maxWidth: 460,
         margin: "auto",
-        padding: "1.5rem",
         color: "var(--text-primary)",
       }}
       onClick={(e) => {
@@ -343,10 +341,18 @@ export function AddExtraSessionModal({
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-2.5 mt-2">
+        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-2.5 mt-3">
+          <button
+            type="button"
+            className="btn btn-secondary w-full sm:flex-1 justify-center min-h-[42px] rounded-xl text-sm font-semibold"
+            disabled={busy}
+            onClick={close}
+          >
+            إلغاء
+          </button>
           <button
             type="submit"
-            className="btn btn-primary flex-1 justify-center gap-1.5"
+            className="btn btn-primary w-full sm:flex-1 justify-center gap-1.5 min-h-[42px] rounded-xl text-sm font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-[0_4px_14px_rgba(99,102,241,0.25)]"
             disabled={busy || !!validationError || !groupId}
           >
             {busy ? (
@@ -360,14 +366,6 @@ export function AddExtraSessionModal({
                 <span>إضافة الحصة</span>
               </>
             )}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary flex-1 justify-center"
-            disabled={busy}
-            onClick={close}
-          >
-            إلغاء
           </button>
         </div>
       </form>

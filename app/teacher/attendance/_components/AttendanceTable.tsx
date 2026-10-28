@@ -142,6 +142,35 @@ export function AttendanceTable({
     </div>
   );
 
+  const rulesBanner = (
+    <div className={`flex flex-wrap items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl border text-xs mb-3 transition-colors ${
+      isPastWeek
+        ? "bg-red-500/[0.08] border-red-500/20 text-red-200"
+        : "bg-teal-500/[0.07] border-teal-500/20 text-slate-300"
+    }`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[0.72rem] ${
+          isPastWeek
+            ? "bg-red-500/20 text-red-300 border border-red-500/30"
+            : "bg-teal-500/20 text-teal-300 border border-teal-500/30"
+        }`}>
+          {isPastWeek ? "🔒 أسبوع منتهي" : "🟢 الأسبوع الحالي"}
+        </span>
+        <span className="font-medium text-[0.78rem] sm:text-xs">
+          {isPastWeek
+            ? "الأسبوع منتهي — غير مسموح بتعديل غياب أو حضور الحصص السابقة (للقراءة والتقارير فقط)."
+            : "مسموح بتسجيل وتعديل حضور وغياب أي حصة ماضية طالما في حدود الأسبوع الحالي."}
+        </span>
+      </div>
+      {!isPastWeek && (
+        <span className="text-[0.72rem] text-slate-400/90 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+          الحصص القادمة: مغلقة ولا يمكن تعديلها حتى يحين موعدها
+        </span>
+      )}
+    </div>
+  );
+
   const legend = (
     <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-white/[0.02] border border-white/[0.07] rounded-lg mb-3 text-[0.72rem] sm:text-[0.75rem] text-slate-500">
       <span className="flex items-center gap-1.5">
@@ -170,6 +199,7 @@ export function AttendanceTable({
     return (
       <>
         {weekNav}
+        {rulesBanner}
         {legend}
         <div className="text-center py-12 text-slate-500 flex flex-col items-center gap-3">
           <AlertTriangle size={40} className="opacity-30" />
@@ -183,6 +213,7 @@ export function AttendanceTable({
     return (
       <>
         {weekNav}
+        {rulesBanner}
         {legend}
         <div className="text-center py-12 text-slate-500 flex flex-col items-center gap-3">
           <CalendarX size={40} className="opacity-30" />
@@ -217,6 +248,7 @@ export function AttendanceTable({
   return (
     <>
       {weekNav}
+      {rulesBanner}
       {legend}
       <div className={`transition-opacity duration-150 ${isWeekLoading ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
         {pagedBlocks.map(block => (

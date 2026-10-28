@@ -29,8 +29,8 @@ export function AttendanceCell({
 
   const handleClick = () => {
     if(saving||sessionSaving)return;
-    if (isPastWeek) { onShowToast?.("أسبوع منتهي — لا يمكن التعديل", "error"); return; }
-    if (isFuture) { onShowToast?.("لا يمكن تسجيل حضور في تاريخ مستقبلي", "error"); return; }
+    if (isPastWeek) { onShowToast?.("أسبوع منتهي — لا يمكن تعديل غياب أو حضور أسابيع سابقة", "error"); return; }
+    if (isFuture) { onShowToast?.("حصة مستقبلية — لا يمكن تسجيل أو تعديل غياب حصة قبل موعدها", "error"); return; }
     if (isSuspended) { onShowToast?.("هذا الطالب موقوف — لا يمكن تسجيل حضوره", "error"); return; }
     if (canEdit) onToggle(student, dateStr);
   };
@@ -56,9 +56,9 @@ export function AttendanceCell({
         style={saving?{color:"var(--text-primary, #e2e8f0)"}:undefined}
         title={
           isPastWeek ? "أسبوع منتهي — لا يمكن التعديل" :
-          isFuture ? "لا يمكن تسجيل حضور في تاريخ مستقبلي" :
-          present ? `إلغاء حضور ${student.name}` :
-          state === "expired" ? `تسجيل حضور ${student.name}` :
+          isFuture ? "حصة مستقبلية — لا يمكن التعديل حتى موعد الحصة" :
+          present ? `إلغاء حضور ${student.name} (متاح التعديل طوال الأسبوع الحالي)` :
+          state === "expired" ? `تسجيل حضور ${student.name} (متاح التعديل طوال الأسبوع الحالي)` :
           `تسجيل حضور ${student.name}`
         }
       >

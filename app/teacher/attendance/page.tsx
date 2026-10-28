@@ -87,13 +87,13 @@ export default function AttendancePage() {
             </p>
           </div>
         </div>
-        <div className="grid w-full grid-cols-3 items-stretch gap-2 sm:flex sm:w-auto sm:items-center">
+        <div className="grid w-full grid-cols-3 items-stretch gap-1.5 sm:gap-2.5 sm:flex sm:w-auto sm:items-center">
           <button
             type="button"
             onClick={() => setExtraModalOpen(true)}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-[10px] bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[0.82rem] sm:text-[0.88rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(99,102,241,0.25)] hover:from-violet-500 hover:to-indigo-500 hover:-translate-y-px cursor-pointer"
+            className="inline-flex min-h-[42px] sm:min-h-11 items-center justify-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs sm:text-[0.88rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(99,102,241,0.25)] hover:from-violet-500 hover:to-indigo-500 hover:-translate-y-px active:translate-y-0 cursor-pointer whitespace-nowrap"
           >
-            <PlusCircle size={16} />
+            <PlusCircle size={16} className="shrink-0 text-violet-200" />
             <span>حصة إضافية</span>
           </button>
           <AttendancePrintButton
@@ -102,9 +102,9 @@ export default function AttendancePage() {
           />
           <Link
             href="/teacher/attendance/scan"
-            className="inline-flex min-h-11 items-center justify-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 rounded-[10px] bg-teal-500 text-white text-[0.85rem] sm:text-[0.9rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(20,184,166,0.3)] hover:bg-teal-600 hover:-translate-y-px"
+            className="inline-flex min-h-[42px] sm:min-h-11 items-center justify-center gap-1.5 px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white text-xs sm:text-[0.88rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(20,184,166,0.3)] hover:from-teal-400 hover:to-emerald-500 hover:-translate-y-px active:translate-y-0 whitespace-nowrap"
           >
-            <ScanLine size={16} />
+            <ScanLine size={16} className="shrink-0 text-teal-100" />
             <span>سكان QR</span>
           </Link>
         </div>
