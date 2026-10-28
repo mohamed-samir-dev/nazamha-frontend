@@ -164,6 +164,38 @@ export function useAttendanceData(currentMonthOnly = false) {
     OfflineCache.saveGroups(cached.map(g => g.id === updated.id ? updated : g));
   };
 
+  const addExtraSessionLocally = useCallback((session: {
+    id: string;
+    group_id: string;
+    session_date: string;
+    time: string;
+    cancelled?: boolean;
+    is_extra?: boolean;
+    title?: string;
+  }) => {
+    setGroups(prev => {
+      const updated = prev.map(g => {
+        if (g.id !== session.group_id) return g;
+        const currentSessions = g.attendance_sessions || [];
+        const filtered = currentSessions.filter(s => s.session_date !== session.session_date);
+        const newSessionItem = {
+          id: session.id,
+          session_date: session.session_date,
+          time: session.time,
+          cancelled: !!session.cancelled,
+          is_extra: session.is_extra ?? true,
+          title: session.title,
+        };
+        return {
+          ...g,
+          attendance_sessions: [...filtered, newSessionItem],
+        };
+      });
+      OfflineCache.saveGroups(updated);
+      return updated;
+    });
+  }, []);
+
   const weekStart = new Date(getTodayCairo()+"T12:00:00Z"); weekStart.setUTCDate(weekStart.getUTCDate()-((weekStart.getUTCDay()+1)%7)+weekOffset*7);
   const weekEnd=new Date(weekStart);weekEnd.setUTCDate(weekEnd.getUTCDate()+6);
   const monthStart=`${todayYear}-${String(todayMonth).padStart(2,"0")}-01`;
@@ -216,5 +248,6 @@ export function useAttendanceData(currentMonthOnly = false) {
     monthSessionDates,
     loadAttendance,
     updateGroupLocally,
+    addExtraSessionLocally,
   };
 }

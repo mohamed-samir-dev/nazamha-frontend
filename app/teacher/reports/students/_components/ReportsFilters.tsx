@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { HiOutlineMagnifyingGlass, HiOutlineCalendarDays, HiOutlineAcademicCap, HiOutlineUserGroup } from "react-icons/hi2";
+import { HiOutlineMagnifyingGlass, HiOutlineCalendarDays, HiOutlineAcademicCap, HiOutlineUserGroup, HiOutlineCreditCard } from "react-icons/hi2";
 import { Grade, Group } from "@/lib/types";
 
 const arabicMonths = [
@@ -23,6 +23,8 @@ interface Props {
   setFilterGradeId: (v: string) => void;
   filterGroupId: string;
   setFilterGroupId: (v: string) => void;
+  filterPayment: "all" | "paid" | "unpaid";
+  setFilterPayment: (v: "all" | "paid" | "unpaid") => void;
   grades: Grade[];
   filteredGroups: Group[];
   allGroups: Group[];
@@ -34,6 +36,7 @@ export default function ReportsFilters({
   selectedYear, setSelectedYear,
   filterGradeId, setFilterGradeId,
   filterGroupId, setFilterGroupId,
+  filterPayment, setFilterPayment,
   grades, filteredGroups, allGroups,
 }: Props) {
   // السنوات الدراسية الموجودة في المجموعات فقط
@@ -47,10 +50,11 @@ export default function ReportsFilters({
       <div className="sr-filters-row">
         {/* Search */}
         <div className="sr-filter-group sr-search-group">
-          <span className="sr-filters-label">بحث</span>
+          <label className="sr-filters-label" htmlFor="filter-search-input">بحث</label>
           <div className="sr-search-wrap">
             <HiOutlineMagnifyingGlass className="sr-search-icon" size={16} />
             <input
+              id="filter-search-input"
               className="form-input sr-search-input"
               type="text"
               placeholder="ابحث بالاسم أو الكود..."
@@ -62,11 +66,12 @@ export default function ReportsFilters({
 
         {/* Month */}
         <div className="sr-filter-group">
-          <span className="sr-filters-label">
+          <label className="sr-filters-label" htmlFor="filter-month-select">
             <HiOutlineCalendarDays size={12} style={{ display: "inline", marginLeft: "4px" }} />
             الشهر
-          </span>
+          </label>
           <select
+            id="filter-month-select"
             className="form-input sr-select"
             value={selectedMonthIndex}
             onChange={(e) => setSelectedMonthIndex(Number(e.target.value))}
@@ -79,8 +84,9 @@ export default function ReportsFilters({
 
         {/* Year */}
         <div className="sr-filter-group" style={{ flex: "0 1 100px" }}>
-          <span className="sr-filters-label">السنة</span>
+          <label className="sr-filters-label" htmlFor="filter-year-select">السنة</label>
           <select
+            id="filter-year-select"
             className="form-input sr-select"
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
@@ -91,13 +97,14 @@ export default function ReportsFilters({
           </select>
         </div>
 
-        {/* Grade — من المجموعات فقط */}
+        {/* Grade */}
         <div className="sr-filter-group">
-          <span className="sr-filters-label">
+          <label className="sr-filters-label" htmlFor="filter-grade-select">
             <HiOutlineAcademicCap size={12} style={{ display: "inline", marginLeft: "4px" }} />
             السنة الدراسية
-          </span>
+          </label>
           <select
+            id="filter-grade-select"
             className="form-input sr-select"
             value={filterGradeId}
             onChange={(e) => { setFilterGradeId(e.target.value); setFilterGroupId("all"); }}
@@ -109,17 +116,36 @@ export default function ReportsFilters({
 
         {/* Group */}
         <div className="sr-filter-group">
-          <span className="sr-filters-label">
+          <label className="sr-filters-label" htmlFor="filter-group-select">
             <HiOutlineUserGroup size={12} style={{ display: "inline", marginLeft: "4px" }} />
             المجموعة
-          </span>
+          </label>
           <select
+            id="filter-group-select"
             className="form-input sr-select"
             value={filterGroupId}
             onChange={(e) => setFilterGroupId(e.target.value)}
           >
             <option value="all">كل المجموعات</option>
             {filteredGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+
+        {/* Payment Filter */}
+        <div className="sr-filter-group">
+          <label className="sr-filters-label" htmlFor="filter-payment-select">
+            <HiOutlineCreditCard size={12} style={{ display: "inline", marginLeft: "4px" }} />
+            حالة الدفع
+          </label>
+          <select
+            id="filter-payment-select"
+            className="form-input sr-select"
+            value={filterPayment}
+            onChange={(e) => setFilterPayment(e.target.value as "all" | "paid" | "unpaid")}
+          >
+            <option value="all">كل الطلاب</option>
+            <option value="paid">مسددين فقط ✅</option>
+            <option value="unpaid">متأخرات / غير مسددين ⚠️</option>
           </select>
         </div>
       </div>

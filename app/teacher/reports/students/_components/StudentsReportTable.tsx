@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
 import {
   HiOutlineChevronRight, HiOutlineChevronLeft,
   HiOutlineChevronUp, HiOutlineChevronDown,
   HiOutlineExclamationCircle, HiOutlineExclamationTriangle, HiOutlineCreditCard,
 } from "react-icons/hi2";
-import { RiMedalFill } from "react-icons/ri";
+import { RiMedalFill, RiWhatsappLine } from "react-icons/ri";
 import { LuInbox, LuPrinter } from "react-icons/lu";
 import { PAGE_SIZE } from "../_hooks/useStudentReports";
-import { TableProps, AlertItem, SortKey, SortDir } from "./types";
+import { TableProps, AlertItem, SortKey } from "./types";
 import { getConsecutiveAbsences, getAlerts } from "./reportUtils";
 import { printStudentReport } from "./printReport";
 import { Exam } from "@/lib/types";
@@ -33,41 +32,23 @@ export default function StudentsReportTable({
   isStudentPaid, lastAttendanceMap, last10Sessions,
   studentSubsInfo, selectedMonthIndex, selectedYear,
   page, totalPages, setPage, totalFiltered, onSendWhatsApp,
-  getLastExam,
+  sortKey, sortDir, onSort, isMonthLoading,
+  getLastExam, examAverages,
 }: TableProps & { getLastExam?: (id: string) => (Exam & { score: number | null }) | null }) {
-  const [sortKey, setSortKey] = useState<SortKey>("attendancePct");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("asc"); }
-  };
-
-  const sorted = useMemo(() => [...students].sort((a, b) => {
-    const attA = getAttendance(a.id);
-    const attB = getAttendance(b.id);
-    const pctA = attA.total > 0 ? attA.present / attA.total : 0;
-    const pctB = attB.total > 0 ? attB.present / attB.total : 0;
-    let cmp = 0;
-    if (sortKey === "attendancePct") cmp = pctA - pctB;
-    else if (sortKey === "absent") cmp = attA.absent - attB.absent;
-    else if (sortKey === "name") cmp = a.name.localeCompare(b.name, "ar");
-    else if (sortKey === "lastAttendance") {
-      const dA = lastAttendanceMap.get(a.id) ?? "";
-      const dB = lastAttendanceMap.get(b.id) ?? "";
-      cmp = dA.localeCompare(dB);
-    }
-    return sortDir === "asc" ? cmp : -cmp;
-  }), [students, sortKey, sortDir, getAttendance, lastAttendanceMap]);
 
   return (
     <div className="glass-panel sr-table-panel">
+      {isMonthLoading && (
+        <div className="sr-table-loading-bar" role="progressbar" aria-label="جاري تحميل حضور الشهر">
+          <div className="sr-table-loading-indeterminate" />
+        </div>
+      )}
       {/* Legend */}
       <div className="sr-legend">
         <span className="sr-legend-title">دليل التنبيهات:</span>
-        <span className="sr-legend-item"><RiMedalFill size={15} color="#fbbf24" /> طالب متميز (حضور 90%+ ومدفوع)</span>
+        <span className="sr-legend-item"><RiMedalFill size={15} color="#fbbf24" /> طالب متميز (حضور 80%+ ومتفوق دراسياً وسدد)</span>
         <span className="sr-legend-item"><HiOutlineExclamationCircle size={15} color="#ef4444" /> معرض للفصل (حضور &lt; 50%)</span>
-        <span className="sr-legend-item"><HiOutlineExclamationTriangle size={15} color="#f59e0b" /> غياب 3 أيام أو أكثر</span>
+        <span className="sr-legend-item"><HiOutlineExclamationTriangle size={15} color="#f59e0b" /> غياب 3 حصص أو أكثر</span>
         <span className="sr-legend-item"><HiOutlineCreditCard size={15} color="#ef4444" /> متأخر شهرين أو أكثر في الدفع</span>
       </div>
 
@@ -79,7 +60,7 @@ export default function StudentsReportTable({
             <button
               key={key}
               className={`sr-sort-chip ${sortKey === key ? "active" : ""}`}
-              onClick={() => handleSort(key)}
+              onClick={() => onSort(key)}
             >
               {label}
               {sortKey === key && (sortDir === "asc" ? <HiOutlineChevronUp size={12} /> : <HiOutlineChevronDown size={12} />)}
@@ -101,13 +82,14 @@ export default function StudentsReportTable({
               <th>متأخرات</th>
               <th>تنبيهات</th>
               <th>آخر امتحان</th>
+              <th>واتساب ولي الأمر</th>
               <th>طباعة</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.length === 0 ? (
+            {students.length === 0 ? (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={11}>
                   <div className="sr-empty">
                     <LuInbox size={44} />
                     <span className="sr-empty-title">لا يوجد طلاب مطابقون</span>
@@ -116,7 +98,7 @@ export default function StudentsReportTable({
                 </td>
               </tr>
             ) : (
-              sorted.map((student, idx) => {
+              students.map((student, idx) => {
                 const att = getAttendance(student.id);
                 const total = att.total;
                 const pct = total > 0 ? Math.round((att.present / total) * 100) : 0;
@@ -127,7 +109,8 @@ export default function StudentsReportTable({
                 const { lastPaidMonth, arrears } = subsInfo;
                 const consAbsences = getConsecutiveAbsences(student.id, last10Sessions, getAttendance);
                 const paid = isStudentPaid(student.id);
-                const alerts = getAlerts(student, att, pct, arrears, consAbsences, paid, subsInfo.hasAllPaid);
+                const examAvg = examAverages?.get(student.id) ?? null;
+                const alerts = getAlerts(student, att, pct, arrears, consAbsences, paid, subsInfo.hasAllPaid, examAvg);
                 const receivedBookNames = (student.received_books || [])
                   .map((bid) => teacherBooks.find((b) => b.id === bid)?.name)
                   .filter(Boolean) as string[];
@@ -135,6 +118,7 @@ export default function StudentsReportTable({
                 const examPct = lastExam?.score !== null && lastExam?.score !== undefined && lastExam?.max_score
                   ? Math.round((lastExam.score / lastExam.max_score) * 100) : null;
                 const examColor = examPct === null ? "var(--text-muted)" : examPct >= 85 ? "#10b981" : examPct >= 50 ? "#f59e0b" : "#ef4444";
+                const hasPhone = Boolean(student.parent_phone);
 
                 return (
                   <tr key={student.id} className={pct < 50 && total > 0 ? "sr-row-atrisk" : att.absent > 3 ? "sr-row-unpaid" : ""}>
@@ -193,9 +177,24 @@ export default function StudentsReportTable({
                       )}
                     </td>
                     <td>
+                      {hasPhone ? (
+                        <button
+                          className="sr-wa-btn active"
+                          title={`إرسال تقرير ${student.name} لولي الأمر عبر واتساب`}
+                          aria-label={`إرسال تقرير ${student.name} لولي الأمر عبر واتساب`}
+                          onClick={() => onSendWhatsApp(student)}
+                        >
+                          <RiWhatsappLine size={16} />
+                        </button>
+                      ) : (
+                        <span className="sr-zero" title="لا يوجد هاتف مسجل لولي الأمر">—</span>
+                      )}
+                    </td>
+                    <td>
                       <button
                         className="sr-print-btn"
                         title="طباعة تقرير الطالب"
+                        aria-label={`طباعة تقرير ${student.name}`}
                         onClick={() => printStudentReport(
                           student, att, pct, lastPaidMonth, arrears,
                           gradeName, groupName, selectedMonthIndex, selectedYear,
@@ -237,7 +236,7 @@ export default function StudentsReportTable({
                 ) : (
                   <button
                     key={p}
-                    className={`sr-page-btn ${page === p ? "active" : ""}`}
+                    className={`sr-page-btn ${page === p ? "active" : ""}`} aria-current={page === p ? "page" : undefined}
                     onClick={() => setPage(p as number)}
                   >
                     {p}

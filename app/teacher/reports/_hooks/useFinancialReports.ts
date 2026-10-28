@@ -65,7 +65,6 @@ const netAmount = (sub: MonthlySubscription): number =>
     : Math.max(0, Number(sub.amount ?? 0) - Number(sub.discount ?? 0));
 
 export function useFinancialReports() {
-  // ── التاريخ الحالي يُحسب داخل الـ hook وليس على مستوى الـ module ──────────
   const now = useMemo(() => new Date(), []);
   const CURRENT_YEAR = now.getFullYear();
   const CURRENT_MONTH = now.getMonth(); // 0-based index
@@ -96,7 +95,6 @@ export function useFinancialReports() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      // استخدم in-memory cache للـ user — لا waterfall
       const user = await AuthService.getUser();
       if (!user || version !== loadVersion.current) return;
 
@@ -154,7 +152,7 @@ export function useFinancialReports() {
       setBills(billsData || []);
       setSalaries(salariesData || []);
       setTeacherExpenses(expensesData || []);
-    } catch (err: unknown) {
+    } catch {
       if (version === loadVersion.current) setError(DEFAULT_ERROR);
     } finally {
       if (version === loadVersion.current) setLoading(false);
@@ -173,7 +171,6 @@ export function useFinancialReports() {
   }, [load]);
 
   // re-fetch on financial change event or tab visibility
-  // throttle: لا تعيد الجلب إذا مضى أقل من 5 دقائق
   useEffect(() => {
     const THROTTLE_MS = 5 * 60 * 1000;
     let mutationTimer: ReturnType<typeof setTimeout>;
@@ -224,7 +221,7 @@ export function useFinancialReports() {
     [allSubs, selectedYear, studentIdSet]
   );
 
-  // مبيعات الكتب للطلاب المفلترين — بدون فلتر سنة (مستخدم لـ booksStats الكاملة)
+  // مبيعات الكتب للطلاب المفلترين
   const filteredSales = useMemo(() =>
     allSales.filter(sale => {
       const sid = sale.student_id && typeof sale.student_id === "object"
@@ -235,7 +232,7 @@ export function useFinancialReports() {
     [allSales, studentIdSet]
   );
 
-  // مبيعات الكتب للسنة المختارة فقط — تُستخدم في الـ KPIs والتقرير الشهري
+  // مبيعات الكتب للسنة المختارة فقط
   const yearFilteredSales = useMemo(() =>
     filteredSales.filter(sale => Number(sale.year) === selectedYear),
     [filteredSales, selectedYear]
@@ -258,7 +255,6 @@ export function useFinancialReports() {
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const totalSubscriptionEarnings = yearSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-  // FIX: use yearFilteredSales (selectedYear-scoped) not filteredSales (all years)
   const totalBookEarnings = yearFilteredSales.reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
   const totalExpenses = yearBills.reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
     + yearSalaries.reduce((sum, s) => sum + Number(s.amount ?? 0), 0)
@@ -270,6 +266,24 @@ export function useFinancialReports() {
   const paidThisMonthCount = new Set(
     yearSubs.filter(sub => sub.month === currentMonthNum && sub.status === "paid").map(sub => s(sub.student_id))
   ).size;
+
+  // ── الشهر الحالي (المختار/الحالي) للشارات ────────────────────────────────────
+  const curMonthSubs = yearSubs.filter(sub => sub.month === currentMonthNum);
+  const currentMonthSubEarnings = curMonthSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
+  const currentMonthBookEarnings = yearFilteredSales
+    .filter(sale => sale.month === currentMonthNum)
+    .reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
+  const currentMonthExpenses = yearBills
+    .filter(b => Number(b.billing_month) === currentMonthNum)
+    .reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
+    + yearSalaries
+    .filter(s => Number(s.month) === currentMonthNum)
+    .reduce((sum, s) => sum + Number(s.amount ?? 0), 0)
+    + yearTeacherExpenses
+    .filter(e => Number(e.month) === currentMonthNum)
+    .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const currentMonthGrossEarnings = currentMonthSubEarnings + currentMonthBookEarnings;
+  const currentMonthNetProfit = currentMonthGrossEarnings - currentMonthExpenses;
 
   // ── الشهر السابق ──────────────────────────────────────────────────────────
   const prevMonthNum = CURRENT_MONTH === 0 ? 12 : CURRENT_MONTH; // 1-based
@@ -311,7 +325,6 @@ export function useFinancialReports() {
       return { id: grade.id, name: grade.name, paidThisMonth, earnings };
     });
 
-    // طلاب بدون سنة دراسية
     const generalIds = new Set(
       filteredStudents.filter(st => !getEffectiveGradeId(st)).map(st => st.id)
     );
@@ -331,7 +344,6 @@ export function useFinancialReports() {
   // ── books stats ───────────────────────────────────────────────────────────
   const booksStats: BookStat[] = useMemo(() => {
     const map = new Map<string, BookStat>();
-    // Use yearFilteredSales so the breakdown matches the selected year KPIs
     for (const sale of yearFilteredSales) {
       const bookObj = typeof sale.book_id === "object" ? sale.book_id as { id?: string; _id?: string; name?: string; price?: number } : null;
       const bookId = bookObj ? s(bookObj.id || bookObj._id) : s(sale.book_id);
@@ -375,7 +387,6 @@ export function useFinancialReports() {
       const monthSubs = yearSubs.filter(sub => sub.month === monthNum);
       const paidCount = new Set(monthSubs.filter(sub => sub.status === "paid").map(sub => s(sub.student_id))).size;
       const subscriptionEarnings = monthSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-      // FIX: use yearFilteredSales — already scoped to selectedYear, no extra year check needed
       const bookEarnings = yearFilteredSales
         .filter(sale => sale.month === monthNum)
         .reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
@@ -410,11 +421,12 @@ export function useFinancialReports() {
     selectedTeacherId, setSelectedTeacherId,
     hasCenterMode,
     CURRENT_YEAR, CURRENT_MONTH,
-    // KPIs
+    // Annual KPIs
     totalSubscriptionEarnings, totalBookEarnings,
     totalExpenses, totalGrossEarnings, totalNetProfit,
     paidThisMonthCount,
-    // prev month
+    // Month-over-Month KPIs
+    currentMonthNetProfit, currentMonthGrossEarnings, currentMonthExpenses, currentMonthBookEarnings,
     prevMonthSubEarnings, prevMonthBookEarnings,
     prevMonthExpenses, prevMonthGrossEarnings, prevMonthNetProfit,
     // breakdowns

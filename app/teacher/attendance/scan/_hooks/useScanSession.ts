@@ -36,6 +36,7 @@ import { useScanSound } from "./useScanSound";
 import { resolveManualStudent } from "../_utils/resolveManualStudent";
 import {
   studentsForPeriod,
+  contextGroups,
   type AttendanceContext,
 } from "@/lib/utils/attendancePeriod";
 import {
@@ -93,58 +94,115 @@ export function parseGroupDayNumbers(day_of_week: string): number[] {
     .filter((n) => n !== -1);
 }
 
-// توليد كل التواريخ الصالحة في نطاق [من أسبوع ماضي → اليوم فقط (لا تواريخ مستقبلية)]
-export function getValidSessionDates(group: Group): string[] {
-  const dayNums = parseGroupDayNumbers(group.day_of_week ?? "");
-  if (!dayNums.length) return [];
-
-  const startDate = group.start_date ?? group.created_at?.slice(0, 10) ?? null;
-
-  // استخدام توقيت القاهرة
-  const todayStr = getTodayCairo();
+// حساب نطاق الأسبوع الحالي بتوقيت القاهرة (السبت 00:00:00 -> الجمعة 23:59:59)
+export function getCurrentWeekRange(referenceDateStr?: string): { start: string; end: string } {
+  const todayStr = referenceDateStr || getTodayCairo();
   const today = new Date(todayStr + "T00:00:00");
-
-  // بداية الأسبوع الماضي (سبت الأسبوع السابق)
-  const day = today.getDay();
+  const day = today.getDay(); // 0=أحد..6=سبت
   const diffToSat = day === 6 ? 0 : day + 1;
-  const currentWeekSat = new Date(today);
-  currentWeekSat.setDate(today.getDate() - diffToSat);
+  const weekStart = new Date(today);
+  weekStart.setDate(weekStart.getDate() - diffToSat);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
 
-  const minDate = new Date(currentWeekSat);
-  minDate.setDate(currentWeekSat.getDate() - 7); // أسبوع ماضٍ
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  // نهاية النطاق = اليوم الحالي فقط (لا تواريخ مستقبلية)
-  const maxDate = new Date(today);
+  return {
+    start: formatDate(weekStart),
+    end: formatDate(weekEnd),
+  };
+}
 
-  const dates: string[] = [];
-  const cursor = new Date(minDate);
-  while (cursor <= maxDate) {
+// توليد كل تواريخ حصص المجموعة في الشهر بالكامل (بما في ذلك الحصص الإضافية وحصص الأسبوع الحالي)
+export function getMonthSessionDates(group: Group, month?: number, year?: number): string[] {
+  const todayStr = getTodayCairo();
+  const todayDate = new Date(todayStr + "T00:00:00");
+  const targetMonth = month ?? (todayDate.getMonth() + 1);
+  const targetYear = year ?? todayDate.getFullYear();
+
+  const dayNums = parseGroupDayNumbers(group.day_of_week ?? "");
+  const startDate = group.start_date ?? group.created_at?.slice(0, 10) ?? null;
+  const cancelled = new Set(group.cancelled_sessions || []);
+  const dates = new Set<string>();
+
+  // 1. كل الحصص الدورية في الشهر المستهدف
+  const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(targetYear, targetMonth - 1, day);
+    if (dayNums.includes(d.getDay())) {
+      const dateStr = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      if ((!startDate || dateStr >= startDate) && !cancelled.has(dateStr)) {
+        dates.add(dateStr);
+      }
+    }
+  }
+
+  // 2. الحصص الإضافية في الشهر
+  const monthPrefix = `${targetYear}-${String(targetMonth).padStart(2, "0")}-`;
+  const extraSessions = (group.attendance_sessions || []).filter(
+    (s) => s.is_extra && !s.cancelled
+  );
+  for (const s of extraSessions) {
+    if (
+      s.session_date.startsWith(monthPrefix) &&
+      (!startDate || s.session_date >= startDate) &&
+      !cancelled.has(s.session_date)
+    ) {
+      dates.add(s.session_date);
+    }
+  }
+
+  // 3. ضمان وجود حصص الأسبوع الحالي كاملة حتى لو امتد الأسبوع لبداية أو نهاية شهر آخر
+  const { start: weekStartStr, end: weekEndStr } = getCurrentWeekRange(todayStr);
+  const weekStart = new Date(weekStartStr + "T00:00:00");
+  const weekEnd = new Date(weekEndStr + "T00:00:00");
+  const cursor = new Date(weekStart);
+  while (cursor <= weekEnd) {
     if (dayNums.includes(cursor.getDay())) {
       const y = cursor.getFullYear();
       const m = String(cursor.getMonth() + 1).padStart(2, "0");
       const d = String(cursor.getDate()).padStart(2, "0");
       const dateStr = `${y}-${m}-${d}`;
-      if (
-        (!startDate || dateStr >= startDate) &&
-        !group.cancelled_sessions?.includes(dateStr)
-      )
-        dates.push(dateStr);
+      if ((!startDate || dateStr >= startDate) && !cancelled.has(dateStr)) {
+        dates.add(dateStr);
+      }
     }
     cursor.setDate(cursor.getDate() + 1);
   }
-  return dates;
+  for (const s of extraSessions) {
+    if (
+      s.session_date >= weekStartStr &&
+      s.session_date <= weekEndStr &&
+      (!startDate || s.session_date >= startDate) &&
+      !cancelled.has(s.session_date)
+    ) {
+      dates.add(s.session_date);
+    }
+  }
+
+  return Array.from(dates).sort();
 }
 
-// أقرب تاريخ صالح للمجموعة (اليوم فقط إذا كان من أيام المجموعة، وإلا أقرب يوم سابق)
+// توليد التواريخ المسموح بالتسجيل فيها (حصص الأسبوع الحالي فقط من السبت إلى الجمعة)
+export function getValidSessionDates(group: Group): string[] {
+  const allDates = getMonthSessionDates(group);
+  const { start, end } = getCurrentWeekRange();
+  return allDates.filter((d) => d >= start && d <= end);
+}
+
+// أقرب تاريخ صالح للمجموعة في الأسبوع الحالي
 export function getNearestValidDate(group: Group): string {
   const dates = getValidSessionDates(group);
   const today = getTodayCairo();
   if (!dates.length) return group.start_date ?? today;
-  // اليوم نفسه لو موجود في جدول المجموعة
+  // اليوم نفسه لو موجود في جدول المجموعة للأسبوع الحالي
   if (dates.includes(today)) return today;
-  // أقرب يوم سابق (لا نختار أبداً يوم مستقبلي)
-  const past = dates.filter((d) => d < today);
-  return past.length ? past[past.length - 1] : today;
+  // أقرب يوم سابق في هذا الأسبوع
+  const pastInWeek = dates.filter((d) => d <= today);
+  if (pastInWeek.length) return pastInWeek[pastInWeek.length - 1];
+  // أول يوم قادم في هذا الأسبوع (لو لسه ما بدأتش حصص الأسبوع)
+  return dates[0];
 }
 
 function detectCurrentGroup(groups: Group[]): Group | null {
@@ -211,6 +269,7 @@ export function useScanSession() {
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [sessionDate, setSessionDate] = useState(today);
   const [validSessionDates, setValidSessionDates] = useState<string[]>([]);
+  const [monthSessionDates, setMonthSessionDates] = useState<string[]>([]);
   const [autoDetected, setAutoDetected] = useState(false);
 
   const [scanning, setScanning] = useState(false);
@@ -395,6 +454,7 @@ export function useScanSession() {
             await qr.stop();
             qr.clear();
           } catch {}
+          scannerRef.current = null;
           return;
         }
         setScanning(true);
@@ -444,8 +504,15 @@ export function useScanSession() {
           ),
         );
       } catch (err: unknown) {
+        try {
+          if (scannerRef.current) {
+            await scannerRef.current.stop().catch(() => {});
+            scannerRef.current.clear();
+          }
+        } catch {}
+        scannerRef.current = null;
+        setScanning(false);
         if (generation === cameraGeneration.current) {
-          scannerRef.current = null;
           showLastScan(getCameraErrorMessage(err), false);
         }
       } finally {
@@ -491,9 +558,11 @@ export function useScanSession() {
     if (match.grade_id) setSelectedGradeId(match.grade_id);
     setAutoDetected(true);
     stateRef.current.selectedGroupId = match.id;
-    // ضبط التواريخ الصالحة
+    // ضبط التواريخ الصالحة وحصص الشهر
     const dates = getValidSessionDates(match);
+    const monthDates = getMonthSessionDates(match);
     setValidSessionDates(dates);
+    setMonthSessionDates(monthDates);
     const nearest = getNearestValidDate(match);
     setSessionDate(nearest);
     stateRef.current.sessionDate = nearest;
@@ -642,12 +711,14 @@ export function useScanSession() {
     autoGroupRef.current = match.id;
     stateRef.current.selectedGroupId = match.id;
     const dates = getValidSessionDates(match);
+    const monthDates = getMonthSessionDates(match);
     const nearest = getNearestValidDate(match);
     Promise.resolve().then(() => {
       setSelectedGroupId(match.id);
       if (match.grade_id) setSelectedGradeId(match.grade_id);
       setAutoDetected(false);
       setValidSessionDates(dates);
+      setMonthSessionDates(monthDates);
       setSessionDate(nearest);
       stateRef.current.sessionDate = nearest;
     });
@@ -838,7 +909,24 @@ export function useScanSession() {
     let active = true;
     AttendanceService.getContext()
       .then((context) => {
-        if (active && context?.memberships) setAttendanceContext(context);
+        if (active && context?.memberships) {
+          setAttendanceContext(context);
+          setGroups((prev) => {
+            const merged = contextGroups(prev, context);
+            stateRef.current.groups = merged;
+            const currentSelected = stateRef.current.selectedGroupId;
+            if (currentSelected) {
+              const currentGrp = merged.find((g) => g.id === currentSelected);
+              if (currentGrp) {
+                const dates = getValidSessionDates(currentGrp);
+                const monthDates = getMonthSessionDates(currentGrp);
+                setValidSessionDates(dates);
+                setMonthSessionDates(monthDates);
+              }
+            }
+            return merged;
+          });
+        }
       })
       .catch(() => {});
     return () => {
@@ -980,10 +1068,13 @@ export function useScanSession() {
           );
         student = resolveManualStudent(context.students, item.text, group);
       }
-      if (!student)
-        student = navigator.onLine
-          ? await StudentsService.getStudentByQR(item.text)
-          : findStudentByQR(context.students, item.text);
+      if (!student) {
+        // فحص الذاكرة المحلية أولاً للاستجابة اللحظية (0ms) وتفادي انتظار الشبكة لكل طالب
+        student = findStudentByQR(context.students, item.text);
+        if (!student && navigator.onLine) {
+          student = await StudentsService.getStudentByQR(item.text).catch(() => undefined);
+        }
+      }
       if (!active()) return;
       if (!student) throw new Error("الكود غير موجود؛ راجع كود الطالب كاملًا");
       if (
@@ -994,8 +1085,9 @@ export function useScanSession() {
         throw new Error(
           `${student.name} — الطالب موقوف${student.suspension_reason ? " — " + student.suspension_reason : ""}`,
         );
+      // فحص التكرار لجميع الطلاب سواء من نفس المجموعة أو من مجموعة أخرى لمنع تعليق الطابور بنافذة تأكيد
       if (
-        student.group_id === context.selectedGroupId && stateRef.current.scannedToday.some((e) => e.studentId === student.id)
+        stateRef.current.scannedToday.some((e) => e.studentId === student.id)
       ) {
         const queued = stateRef.current.scannedToday.some(
           (e) => e.studentId === student.id && e.queued,
@@ -1142,6 +1234,7 @@ export function useScanSession() {
       stateRef.current.selectedGroupId = "";
       await stopScanner();
       setValidSessionDates([]);
+      setMonthSessionDates([]);
       setSelectedGradeId(v);
       setSelectedGroupId("");
       setScannedToday([]);
@@ -1167,13 +1260,16 @@ export function useScanSession() {
         if (grp) {
           if (grp.grade_id) setSelectedGradeId(grp.grade_id);
           const dates = getValidSessionDates(grp);
+          const monthDates = getMonthSessionDates(grp);
           setValidSessionDates(dates);
+          setMonthSessionDates(monthDates);
           const nearest = getNearestValidDate(grp);
           setSessionDate(nearest);
           stateRef.current.sessionDate = nearest;
         }
       } else {
         setValidSessionDates([]);
+        setMonthSessionDates([]);
       }
       if (scanning) {
         await stopScanner();
@@ -1192,7 +1288,35 @@ export function useScanSession() {
       const group = stateRef.current.groups.find(
         (g) => g.id === stateRef.current.selectedGroupId,
       );
-      if (!group || !getValidSessionDates(group).includes(date)) return;
+      if (!group) return;
+
+      const { start: weekStart, end: weekEnd } = getCurrentWeekRange();
+
+      // 1. حصة مستقبلية بعد نهاية الأسبوع الحالي
+      if (date > weekEnd) {
+        const msg = "غير مسموح بتسجيل او تعديل غياب حصه مستقبليه";
+        setSessionDateError(msg);
+        showLastScan(msg, false);
+        return;
+      }
+
+      // 2. حصة من أسبوع منتهي قبل بداية الأسبوع الحالي
+      if (date < weekStart) {
+        const msg = "أسبوع منتهي — غير مسموح بتسجيل أو تعديل غياب حصة في أسبوع منتهي";
+        setSessionDateError(msg);
+        showLastScan(msg, false);
+        return;
+      }
+
+      // 3. التأكد من أن الحصة متاحة في جدول الأسبوع الحالي
+      const currentValid = getValidSessionDates(group);
+      if (!currentValid.includes(date)) {
+        const msg = "هذه الحصة غير متاحة في جدول المجموعة لهذا الأسبوع";
+        setSessionDateError(msg);
+        showLastScan(msg, false);
+        return;
+      }
+
       void stopScanner();
       resetOperation();
       setSessionDateError(null);
@@ -1201,7 +1325,7 @@ export function useScanSession() {
       setScannedToday([]);
       scannedIdsRef.current.clear();
     },
-    [validSessionDates, stopScanner, resetOperation],
+    [stopScanner, resetOperation, showLastScan],
   );
 
   const handleConfirmCrossGroup = useCallback(async (choice?:{action:"guest"|"compensate"|"exempt";target_date?:string;reason?:string}) => {
@@ -1290,7 +1414,7 @@ export function useScanSession() {
           let id = entry.recordId;
           if (!id) {
             const rows = await api.get<{ id?: string; _id?: string }[]>(
-              `/attendance?group_id=${selectedGroupId}&session_date=${sessionDate}&student_id=${studentId}&status=present`,
+              `/attendance?session_date=${sessionDate}&student_id=${studentId}&status=present`,
             );
             id = rows[0]?.id || rows[0]?._id;
           }
@@ -1444,6 +1568,7 @@ export function useScanSession() {
     selectedGroupId,
     sessionDate,
     validSessionDates,
+    monthSessionDates,
     scanning,
     isStarting,
     setIsStarting,

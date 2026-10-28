@@ -208,7 +208,11 @@ export async function exportAttendancePrint(
 }
 
 /** Report selection is separate from the live current-month table. */
-export async function exportAttendanceMonth(month: number, year: number, selection: { gradeId: string; groupId: string }) {
+export async function exportAttendanceMonth(
+  month: number,
+  year: number,
+  selection: { gradeId: string; groupId: string; gradeName?: string; groupName?: string }
+) {
   if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000 || year > 2100) throw new Error("اختر شهرًا وسنة صحيحين");
   if (!navigator.onLine) throw new Error("عرض التقرير يحتاج اتصالًا لتأكيد بيانات الحضور");
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -219,7 +223,9 @@ export async function exportAttendanceMonth(month: number, year: number, selecti
     api.get<Student[]>("/students?fields=id,name,code,group_id,grade_id,created_at,group_join_date"),
   ]);
   const groups = contextGroups([], context), byGroup = new Map(groups.map(g => [g.id, g]));
-  const targetGroups = selection.groupId !== "all" ? groups.filter(g => g.id === selection.groupId) : groups;
+  const targetGroups = selection.groupId !== "all"
+    ? groups.filter(g => g.id === selection.groupId)
+    : (selection.gradeId !== "all" ? groups.filter(g => !g.grade_id || g.grade_id === selection.gradeId) : groups);
   const roster = studentsForPeriod(students, context.memberships, start, end, records).filter(s => {
     const hasRecord = records.some(r => r.student_id === s.id);
     const joinDateValid = !s.group_join_date || s.group_join_date <= end || hasRecord;
@@ -228,5 +234,16 @@ export async function exportAttendanceMonth(month: number, year: number, selecti
     return joinDateValid && groupMatch && gradeMatch;
   });
   if (!roster.length) throw new Error("لا يوجد طلاب في الشهر والاختيار المحددين");
-  await exportAttendancePrint(roster, [], [], month, year, byGroup.get(selection.groupId)?.name || "الكل", targetGroups, new Set(), records);
+
+  let titleHeader = "الكل";
+  const matchedGroupName = byGroup.get(selection.groupId)?.name || selection.groupName;
+  if (selection.groupId !== "all" && matchedGroupName) {
+    titleHeader = selection.gradeName && selection.gradeId !== "all"
+      ? `${selection.gradeName} - ${matchedGroupName}`
+      : matchedGroupName;
+  } else if (selection.gradeId !== "all" && selection.gradeName) {
+    titleHeader = selection.gradeName;
+  }
+
+  await exportAttendancePrint(roster, [], [], month, year, titleHeader, targetGroups, new Set(), records);
 }

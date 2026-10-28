@@ -107,19 +107,24 @@ export function GroupTable({
                   <th className="w-6 text-center px-1 py-2.5 text-[0.68rem] font-bold text-slate-400 border-b border-teal-500/10 whitespace-nowrap uppercase tracking-widest">#</th>
                   <th className="w-[70px] min-w-[70px] text-center px-1 py-2.5 text-[0.68rem] font-bold text-slate-400 border-b border-teal-500/10 whitespace-nowrap uppercase tracking-widest">الكود</th>
                   <th className="min-w-[100px] px-1.5 py-2.5 text-[0.68rem] font-bold text-slate-400 border-b border-teal-500/10 whitespace-nowrap uppercase tracking-widest">الطالب</th>
-                  {sessionDates.map(d => (
-                    <SessionHeaderCell
-                      key={d}
-                      dateStr={d}
-                      state={sessionStates[d] ?? "active"}
-                      saving={isSaving(groupId, d)}
-                      groupId={groupId}
-                      isPastWeek={isPastWeek}
-                      onMarkAll={onMarkAll}
-                      onClearSession={onClearSession}
-                      onCancelSession={onCancelSession}
-                    />
-                  ))}
+                  {sessionDates.map(d => {
+                    const extraInfo = group?.attendance_sessions?.find(s => s.session_date === d && s.is_extra);
+                    return (
+                      <SessionHeaderCell
+                        key={d}
+                        dateStr={d}
+                        state={sessionStates[d] ?? "active"}
+                        saving={isSaving(groupId, d)}
+                        groupId={groupId}
+                        isPastWeek={isPastWeek}
+                        isExtra={!!extraInfo}
+                        extraTitle={extraInfo?.title}
+                        onMarkAll={onMarkAll}
+                        onClearSession={onClearSession}
+                        onCancelSession={onCancelSession}
+                      />
+                    );
+                  })}
                   <th className="w-16 text-center px-1.5 py-2.5 text-[0.68rem] font-bold text-slate-400 border-b border-teal-500/10 whitespace-nowrap uppercase tracking-widest">النسبة</th>
                   <th className="w-10 text-center px-1.5 py-2.5 text-[0.68rem] font-bold text-slate-400 border-b border-teal-500/10 whitespace-nowrap uppercase tracking-widest">QR</th>
                 </tr>

@@ -1,7 +1,7 @@
 "use client";
 
-import { sanitizeHtml } from "@/lib/sanitizeHtml";
 import { Calendar, Printer } from "lucide-react";
+import { printHtml } from "@/lib/printHtml";
 
 export interface MonthReport {
   name: string;
@@ -22,22 +22,23 @@ interface Props {
 
 export function MonthlyTable({ monthsReport, selectedYear }: Props) {
   function handlePrint() {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
     const totalSubs = monthsReport.reduce((s, m) => s + m.subscriptionEarnings, 0);
     const totalBooks = monthsReport.reduce((s, m) => s + m.bookEarnings, 0);
     const totalGross = totalSubs + totalBooks;
     const totalExpenses = monthsReport.reduce((s, m) => s + m.monthExpenses, 0);
     const totalNet = monthsReport.reduce((s, m) => s + m.netProfit, 0);
     const totalPaid = monthsReport.reduce((s, m) => s + m.paidCount, 0);
-    const avgPercent = Math.round(monthsReport.filter(m => m.paidCount > 0).reduce((s, m) => s + m.percentage, 0) / (monthsReport.filter(m => m.paidCount > 0).length || 1));
+    const avgPercent = Math.round(
+      monthsReport.filter((m) => m.paidCount > 0).reduce((s, m) => s + m.percentage, 0) /
+        (monthsReport.filter((m) => m.paidCount > 0).length || 1)
+    );
 
-    const rows = monthsReport.map((m) => {
-      const gross = m.subscriptionEarnings + m.bookEarnings;
-      const netRed = m.netProfit < 0 ? "color:#dc2626;" : "";
-      const expRed = m.monthExpenses > 0 ? "color:#dc2626;" : "";
-      return `<tr>
+    const rows = monthsReport
+      .map((m) => {
+        const gross = m.subscriptionEarnings + m.bookEarnings;
+        const netRed = m.netProfit < 0 ? "color:#dc2626;" : "";
+        const expRed = m.monthExpenses > 0 ? "color:#dc2626;" : "";
+        return `<tr>
         <td>${m.name}${m.isCurrentMonth ? " (الحالي)" : ""}</td>
         <td>${m.subscriptionEarnings.toLocaleString()} ج.م</td>
         <td>${m.bookEarnings > 0 ? m.bookEarnings.toLocaleString() + " ج.م" : "—"}</td>
@@ -47,13 +48,14 @@ export function MonthlyTable({ monthsReport, selectedYear }: Props) {
         <td style="font-weight:700;${netRed}">${m.netProfit.toLocaleString()} ج.م</td>
         <td>${m.percentage}%</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
 
     const totalNetRed = totalNet < 0 ? "color:#dc2626;" : "";
     const totalExpRed = totalExpenses > 0 ? "color:#dc2626;" : "";
     const printDate = new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
 
-    printWindow.document.write(sanitizeHtml(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>التقرير المالي الشهري</title>
     <style>
@@ -72,28 +74,7 @@ export function MonthlyTable({ monthsReport, selectedYear }: Props) {
       th{background:#f5f5f5;font-weight:700}
       .total-row td{font-weight:800;background:#f5f5f5;border-top:2px solid #bbb}
       .footer{text-align:center;margin-top:18px;font-size:11px;color:#aaa}
-
-      .mobile-print-btn {
-        display: none;
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #111;
-        color: #fff;
-        border: none;
-        padding: 14px 32px;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 700;
-        cursor: pointer;
-        z-index: 9999;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        font-family: inherit;
-      }
-
-      @media print{body{padding:16px} .mobile-print-btn{display:none !important;}}
-      @media (max-width: 768px) { .mobile-print-btn { display: block; } }
+      @media print{body{padding:16px}}
     </style></head><body>
 <div class="header">
   <h2>التقرير المالي الشهري${selectedYear ? " — " + selectedYear : ""}</h2>
@@ -122,11 +103,11 @@ export function MonthlyTable({ monthsReport, selectedYear }: Props) {
   </tr></tbody>
 </table>
  <div class="footer">Student Tracker — تم الإنشاء تلقائياً</div>
- <button class="mobile-print-btn" onclick="window.print()">🖨 طباعة التقرير</button>
- <script>window.onload=()=>setTimeout(()=>window.print(), 300)<\/script></body></html>`));
-    printWindow.document.close();
-    printWindow.document.querySelector(".mobile-print-btn")?.addEventListener("click", () => printWindow.print());
+</body></html>`;
+
+    printHtml(html);
   }
+
   const maxEarnings = Math.max(...monthsReport.map((m) => m.subscriptionEarnings + m.bookEarnings), 1);
 
   return (

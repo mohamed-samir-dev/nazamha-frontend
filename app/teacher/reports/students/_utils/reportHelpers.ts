@@ -17,7 +17,40 @@ export function formatPhone(raw: string): string {
   return p;
 }
 
-/** بناء رسالة واتساب من القالب */
+/** بناء رسالة واتساب مفصلة لتقرير الطالب ترسل لولي الأمر */
+export function buildStudentWhatsAppMessage(
+  student: Student,
+  attendance: { present: number; absent: number; total: number },
+  isPaid: boolean,
+  monthName: string,
+  year: number,
+  lastExam?: { title: string; score: number | null; max_score: number } | null,
+  arrears = 0
+): string {
+  const pct = attendance.total > 0 ? Math.round((attendance.present / attendance.total) * 100) : 0;
+  const examLine = lastExam
+    ? `\n📝 آخر امتحان (${lastExam.title}): ${lastExam.score !== null ? `${lastExam.score}/${lastExam.max_score}` : "لم يُرصد"}`
+    : "";
+  const paymentLine = isPaid
+    ? "✅ مسدد بالكامل"
+    : arrears > 0
+    ? `⚠️ غير مسدد (متأخرات: ${arrears} شهر)`
+    : "⚠️ لم يتم السداد بعد";
+
+  return `السلام عليكم ولي أمر الطالب: ${student.name} 🌸\n` +
+    `📌 تقرير المتابعة لشهر ${monthName} ${year}:\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `▫️ عدد الحصص الكلية: ${attendance.total} حصة\n` +
+    `▫️ أيام الحضور: ${attendance.present} حصة ✅\n` +
+    `▫️ أيام الغياب: ${attendance.absent} حصة ❌\n` +
+    `▫️ نسبة الالتزام: ${pct}%\n` +
+    `▫️ حالة الاشتراك: ${paymentLine}` +
+    `${examLine}\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `نتمنى له دوام التفوق والنجاح ✨`;
+}
+
+/** بناء رسالة واتساب من القالب (للتوافق القديم) */
 export function buildMessage(
   student: Student,
   template: string,

@@ -82,6 +82,7 @@ export function useAttendanceReports() {
   const loadData = useCallback(async () => {
     try {
       setError(null);
+      lastSessionFetchedRef.current = false;
       const user = await AuthService.getUser();
       if (!user) return;
       const [grp, stu, grd, att, context] = await Promise.all([
@@ -116,6 +117,7 @@ export function useAttendanceReports() {
       isInitialMount.current = false;
       return;
     }
+    lastSessionFetchedRef.current = false;
     let active = true;
     setPeriodLoading(true);
     setError(null);

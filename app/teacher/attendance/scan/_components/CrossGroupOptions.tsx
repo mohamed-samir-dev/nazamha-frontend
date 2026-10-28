@@ -1,6 +1,6 @@
 "use client";
 
-import {useState} from "react";
+import {useState, useEffect} from "react";
 import {UsersRound,History,CalendarCheck2,ArrowLeftRight} from "lucide-react";
 import type {CrossGroupConfirm} from "../_hooks/useScanSession";
 import styles from "../scan.module.css";
@@ -25,6 +25,12 @@ export function CrossGroupOptions({confirmation,busy,onConfirm,onCancel}:Props){
   const options=action==="compensate"?validation?.previous||[]:validation?.future||[];
   const canRecord=!validation?.alreadyPresent&&validation?.canRecord!==false;
   const valid=!!action&&(action==="guest"||options.some(lesson=>lesson.date===target));
+
+  useEffect(() => {
+    if ((action === "compensate" || action === "exempt") && options.length === 1 && !target) {
+      setTarget(options[0].date);
+    }
+  }, [action, options, target]);
   const choices=[
     {value:"guest" as const,title:"حضور كضيف",Icon:UsersRound,available:true,unavailable:""},
     {value:"compensate" as const,title:"تعويض حصة سابقة",Icon:History,available:!!validation?.previous?.length,unavailable:validation?.previousUnavailable||"لا يوجد غياب سابق للتعويض"},

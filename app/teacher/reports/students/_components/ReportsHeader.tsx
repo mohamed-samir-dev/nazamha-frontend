@@ -14,8 +14,6 @@ interface Props {
   monthIndex: number;
   year: number;
   totalFiltered: number;
-  withPhone: number;
-  onSendAll: () => void;
   allStudents: Student[];
   grades: Grade[];
   groups: Group[];
@@ -27,7 +25,7 @@ interface Props {
 }
 
 export default function ReportsHeader({
-  monthIndex, year, totalFiltered, withPhone, onSendAll,
+  monthIndex, year, totalFiltered,
   allStudents, grades, groups, getAttendance, isStudentPaid, last10Sessions, studentSubsInfo, getLastExam,
 }: Props) {
   const handlePrint = () =>

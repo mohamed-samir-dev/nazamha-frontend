@@ -30,13 +30,16 @@ export function getGroupSessionDates(group: Group, month: number, year: number):
     }
   }
 
-  const frozen = group.attendance_sessions || [];
+  const allSessions = group.attendance_sessions || [];
+  const frozen = allSessions.filter(s => !s.is_extra);
+  const extraSessions = allSessions.filter(s => s.is_extra);
   const latest = frozen.map(s => s.session_date).sort().at(-1);
   const earliest = frozen.map(s => s.session_date).sort()[0];
   const datesInRange = dates.filter(d => !latest || d > latest || d < earliest);
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}-`;
   const monthFrozen = frozen.filter(s => s.session_date.startsWith(monthPrefix)).map(s => s.session_date);
-  return [...new Set([...datesInRange, ...monthFrozen])].sort();
+  const monthExtra = extraSessions.filter(s => s.session_date.startsWith(monthPrefix)).map(s => s.session_date);
+  return [...new Set([...datesInRange, ...monthFrozen, ...monthExtra])].sort();
 }
 
 /** بداية الأسبوع (السبت) لتاريخ معين */
@@ -128,4 +131,12 @@ export function formatTimeTo12H(t: string): string {
   const ap = h >= 12 ? "م" : "ص";
   const h12 = h % 12 || 12;
   return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ap}`;
+}
+
+export function isExtraSession(group: Group | null | undefined, dateStr: string): boolean {
+  return !!group?.attendance_sessions?.some(s => s.session_date === dateStr && s.is_extra);
+}
+
+export function getExtraSessionInfo(group: Group | null | undefined, dateStr: string) {
+  return group?.attendance_sessions?.find(s => s.session_date === dateStr && s.is_extra);
 }

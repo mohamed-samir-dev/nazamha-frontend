@@ -37,7 +37,7 @@ export function InsightsStrip({ topGrade, unpaidCount, topBook, totalStudents, c
           <GraduationCap size={18} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.2rem" }}>أعلى سنة ربحاً — {currentMonthName}</p>
+          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.2rem" }}>أعلى مرحلة دراسية ربحاً (سنوي)</p>
           {topGrade ? (
             <>
               <p style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{topGrade.name}</p>

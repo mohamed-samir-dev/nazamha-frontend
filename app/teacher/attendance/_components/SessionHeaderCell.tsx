@@ -1,15 +1,16 @@
 "use client";
 
-import { Ban, RotateCcw, CheckSquare, XSquare, Clock, CalendarX, LoaderCircle } from "lucide-react";
+import { Ban, RotateCcw, CheckSquare, XSquare, Clock, CalendarX, LoaderCircle, Sparkles } from "lucide-react";
 import { formatDateShort } from "../_utils/sessionDates";
 
 export type SessionState = "future" | "expired" | "active" | "cancelled";
 
 export function SessionHeaderCell({
-  dateStr, state, saving, groupId, isPastWeek,
+  dateStr, state, saving, groupId, isPastWeek, isExtra, extraTitle,
   onMarkAll, onClearSession, onCancelSession,
 }: {
   dateStr: string; state: SessionState; saving: boolean; groupId: string | null; isPastWeek: boolean;
+  isExtra?: boolean; extraTitle?: string;
   onMarkAll: (d: string, gid: string) => void; onClearSession: (d: string, gid: string) => void;
   onCancelSession: (gid: string, d: string) => void;
 }) {
@@ -34,6 +35,16 @@ export function SessionHeaderCell({
           {state === "future" && <span className="w-[5px] h-[5px] rounded-full bg-slate-500 flex-shrink-0" />}
           <span>{short}</span>
         </div>
+
+        {isExtra && (
+          <span
+            className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-violet-500/15 border border-violet-500/30 text-violet-300 tracking-wide max-w-[95px] truncate inline-flex items-center gap-0.5"
+            title={extraTitle ? `حصة إضافية: ${extraTitle}` : "حصة إضافية"}
+          >
+            <Sparkles size={8} className="shrink-0 text-violet-400" />
+            <span>إضافية{extraTitle ? ` (${extraTitle})` : ""}</span>
+          </span>
+        )}
 
         {state === "cancelled" && (
           <span className="text-[0.6rem] font-bold px-1.5 py-px rounded bg-red-500/10 border border-red-500/25 text-red-400 tracking-wide">ملغاة</span>

@@ -111,7 +111,7 @@ export function DueMonthsCard({
       </div>
 
       {/* Footer */}
-      <div data-payment-actions className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 px-4 py-3 bg-black/20 border-t border-[var(--border-color)]">
+      <div data-payment-actions className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 px-4 py-3 bg-black/20 border-t border-[var(--border-color)]">
         <div className="flex items-center gap-2 justify-center sm:justify-start">
           <Wallet size={14} className="text-[var(--text-muted)]" />
           <span className="text-xs text-[var(--text-muted)]">الإجمالي</span>
@@ -119,15 +119,26 @@ export function DueMonthsCard({
             {totalSelected.toLocaleString("ar-EG")} ج
           </span>
         </div>
-        <button
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl bg-teal-500 text-white text-sm font-bold hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_2px_10px_rgba(20,184,166,0.25)] w-full sm:w-auto sm:min-w-fit"
-          onClick={onConfirm}
-          disabled={selectedSubs.size === 0 || isConfirming}
-        >
-          {isConfirming
-            ? <><Spinner /> جاري الحفظ…</>
-            : <><CheckCircle2 size={13} /> {uncertain ? "التحقق وإعادة نفس العملية" : `تأكيد استلام الدفع (${selectedSubs.size})`}</>}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 rounded-xl border border-white/10 hover:bg-white/5 text-xs text-[var(--text-muted)] hover:text-white transition-all disabled:opacity-50 cursor-pointer"
+            onClick={onDismiss}
+            disabled={locked || isConfirming}
+          >
+            إلغاء
+          </button>
+          <button
+            type="button"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl bg-teal-500 text-white text-sm font-bold hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_2px_10px_rgba(20,184,166,0.25)]"
+            onClick={onConfirm}
+            disabled={selectedSubs.size === 0 || isConfirming}
+          >
+            {isConfirming
+              ? <><Spinner /> جاري الحفظ…</>
+              : <><CheckCircle2 size={13} /> {uncertain ? "التحقق وإعادة نفس العملية" : `تأكيد الدفع (${selectedSubs.size})`}</>}
+          </button>
+        </div>
       </div>
     </div>
   );

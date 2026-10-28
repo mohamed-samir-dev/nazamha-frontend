@@ -41,7 +41,7 @@ export function PaymentScanModal({ ownerId, students, groups = [], subsMap, onCl
       {cameraMode && <ScannerView scanning={state.scanning} isStarting={state.isStarting} disabled={state.locked || state.loadingCode || !!state.currentStudent} onStart={state.startScanner} onStop={state.stopScanner} />}
       <FlashMessage flashMsg={state.flashMsg} loading={state.loadingCode} />
       {state.uncertain && !state.currentStudent && <button type="button" className="btn btn-primary" disabled={state.isConfirming} onClick={state.handleConfirmPayment}>{state.isConfirming ? "جاري التحقق…" : "التحقق وإعادة نفس العملية"}</button>}
-      {state.currentStudent && state.dueMonths && <>
+      {state.currentStudent && state.dueMonths && state.flashMsg?.type !== "success" && <>
         <DueMonthsCard student={state.currentStudent} dueMonths={state.dueMonths} selectedSubs={state.selectedSubs} isConfirming={state.isConfirming} locked={state.locked} uncertain={state.uncertain} totalSelected={state.totalSelected} resolveAmount={state.resolveAmount}
           onToggle={id => state.setSelectedSubs(old => { const next = new Set(old); next.has(id) ? next.delete(id) : next.add(id); return next; })}
           onConfirm={state.handleConfirmPayment} onDismiss={state.dismissCard} cardRef={cardRef} />

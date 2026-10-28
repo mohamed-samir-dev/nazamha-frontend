@@ -11,7 +11,7 @@ export interface AttendanceMembership {
 export interface AttendanceContext {
   memberships: AttendanceMembership[];
   groups: Group[];
-  sessions: { group_id: string; session_date: string; time: string; cancelled: boolean }[];
+  sessions: { group_id: string; session_date: string; time: string; cancelled: boolean; is_extra?: boolean; title?: string }[];
 }
 
 export function contextGroups(current: Group[], context: AttendanceContext): Group[] {

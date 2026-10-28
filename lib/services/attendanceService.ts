@@ -8,6 +8,12 @@ export const AttendanceService = {
   revokeSubstitution:(id:string,reason:string)=>AttendanceRepository.revokeSubstitution(id,reason),
   isSyncing: () => AttendanceRepository.isSyncing(),
   getContext(): Promise<AttendanceContext> { return api.get("/attendance/context"); },
+  createExtraSession(data: { group_id: string; session_date: string; time: string; title?: string }): Promise<{ session: { id: string; group_id: string; session_date: string; time: string; cancelled: boolean; is_extra: boolean; title?: string } }> {
+    return api.post("/attendance/sessions/extra", data);
+  },
+  deleteExtraSession(groupId: string, sessionDate: string): Promise<void> {
+    return api.delete("/attendance/sessions/extra", { data: { group_id: groupId, session_date: sessionDate } });
+  },
   async getAttendanceRecords(month: number, year: number): Promise<AttendanceRecord[]> {
     return AttendanceRepository.getAttendanceRecords(month, year);
   },

@@ -44,7 +44,7 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
   const lastCode = useRef("");
   const cooldown = useRef({ code: "", until: 0 });
   const audio = useRef<AudioContext | null>(null);
-  const autoPay = useRef<(student: Student, due: DueMonth[], target: {month: number; year: number}) => Promise<void>>(async () => {});
+  const autoPay = useRef<(student: Student, due: DueMonth[], target: {month: number; year: number}, successMessage?: string) => Promise<void>>(async () => {});
   const attempt = useRef<{ key: string; studentId: string; items: { id: string; amount: number; discount: number }[]; autoPeriod?: {month: number; year: number} } | null>(null);
 
   const storageKey = ownerId ? `payment-scan:pending:${ownerId}` : null;
@@ -80,14 +80,15 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
     if (saving.current || attempt.current) return;
     epoch.current++; busy.current = false; cardOpen.current = false;
     setLoadingCode(false); setCurrentStudent(null); setDueMonths(null); setSelection(new Set());
+    setFlashMsg(null);
   }, []);
   const setSelectedMonth = (value: number) => {
     if (saving.current || attempt.current) return;
-    period.current.month = value + 1; setMonth(value); dismissCard(); void stopScanner();
+    period.current.month = value + 1; setMonth(value); dismissCard();
   };
   const setSelectedYear = (value: number) => {
     if (saving.current || attempt.current || !Number.isInteger(value) || value < 2000 || value > 2100) return;
-    period.current.year = value; setYear(value); dismissCard(); void stopScanner();
+    period.current.year = value; setYear(value); dismissCard();
   };
   const setSelectedSubs = (update: Set<string> | ((old: Set<string>) => Set<string>)) => {
     if (!saving.current && !attempt.current) setSelection(update);
@@ -111,37 +112,75 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
     lastCode.current = code;
     cardOpen.current = false;
     setLoadingCode(true); setFlashMsg(null); setCurrentStudent(null); setDueMonths(null);
-    if (!camera) void stopScanner();
     try {
-      const { student, subscriptions: subs } = await SubscriptionsService.lookupPaymentStudent(code);
+      const { student, subscriptions: subs, evaluation } = await SubscriptionsService.lookupPaymentStudent(code, target.month, target.year);
       if (!mounted.current || request !== epoch.current) return;
       setManualCode(student.center_student_code || student.code || "");
+      onSubsPaid?.(student.id, subs);
+
+      // إذا كان الشهر مدفوعاً بالفعل
+      if (evaluation?.status === "already_paid") {
+        setFlashMsg({ text: `${student.name} — مسدد بالفعل: ${evaluation.message}`, type: "warn" });
+        return;
+      }
+      if (evaluation?.status === "no_due") {
+        setFlashMsg({ text: `${student.name} — ${evaluation.message}`, type: "warn" });
+        return;
+      }
+
       const due = subs.filter(s => s.status === "due" && (s.year < target.year || (s.year === target.year && s.month <= target.month)))
         .sort((a,b) => a.year - b.year || a.month - b.month)
         .map(sub => ({ sub, label: `${ARABIC_MONTHS[sub.month - 1]} ${sub.year}`, isOld: sub.year < target.year || sub.month < target.month }));
-      onSubsPaid?.(student.id, subs);
+
       if (!due.length) {
         const settled = subs.some(s => s.month === target.month && s.year === target.year && (s.status === "paid" || s.status === "exempt"));
-        setFlashMsg({ text: `${student.name} — ${settled ? "مسدد بالفعل أو معفي" : "الشهر المختار غير مستحق أو غير موجود"}. لم يتم تسجيل أي دفع.`, type: "warn" });
+        setFlashMsg({ text: `${student.name} — ${settled ? `مسدد بالفعل أو معفي. اشتراك شهر ${ARABIC_MONTHS[target.month - 1]} مدفوع بالفعل، ولا يمكن تسجيل الدفع مرة أخرى.` : "الشهر المختار غير مستحق أو غير موجود. لم يتم تسجيل أي دفع."}`, type: "warn" });
         return;
       }
+
+      // التحقق من الدفع التلقائي:
+      // إذا كانت الحالة مؤهلة للدفع التلقائي (الحالة طبيعية) في وضع الدفع الذكي (autoCamera)
+      if (autoCamera && evaluation?.eligibleForAuto) {
+        const payTarget = evaluation.payPeriod;
+        const targetDue = due.find(d => d.sub.month === payTarget.month && d.sub.year === payTarget.year);
+        const subDiscount = targetDue?.sub.discount ?? 0;
+        const subAmount = targetDue?.sub.amount ?? 0;
+        if (targetDue && !student.is_suspended &&
+            Number.isFinite(subAmount) && Number.isFinite(subDiscount) &&
+            subAmount > subDiscount && subDiscount >= 0 && subAmount > 0) {
+          busy.current = false; setLoadingCode(false);
+          await autoPay.current(student, [targetDue], payTarget, evaluation.message);
+          return;
+        }
+      } else if (camera && autoCamera && !evaluation) {
+        const only = due[0]?.sub;
+        const onlyDiscount = only?.discount ?? 0;
+        const onlyAmount = only?.amount ?? 0;
+        if (due.length === 1 && only.month === target.month && only.year === target.year &&
+            !student.is_suspended && Number.isFinite(onlyAmount) && Number.isFinite(onlyDiscount) &&
+            onlyAmount > onlyDiscount && onlyDiscount >= 0 && onlyAmount > 0) {
+          busy.current = false; setLoadingCode(false);
+          await autoPay.current(student, due, target);
+          return;
+        }
+      }
+
+      // إذا كانت الحالة تتطلب تأكيد المدرس أو الإدخال يدوي
       cardOpen.current = true;
       setCurrentStudent(student); setDueMonths(due); setSelection(new Set(due.map(d => d.sub.id)));
-      const only = due[0].sub;
-      if (camera && autoCamera && due.length === 1 && only.month === target.month && only.year === target.year &&
-          !student.is_suspended && Number.isFinite(only.amount) && Number.isFinite(only.discount) &&
-          only.amount > only.discount && only.discount >= 0) {
-        busy.current = false; setLoadingCode(false);
-        await autoPay.current(student, due, target);
-        return;
+      let reviewMessage = "راجع الطالب والشهور والمبلغ، ثم أكد استلام الدفع.";
+      if (evaluation?.action === "require_confirmation") {
+        reviewMessage = evaluation.message;
+      } else if (evaluation?.eligibleForAuto || evaluation?.action === "auto_pay") {
+        reviewMessage = `اشتراك شهر ${ARABIC_MONTHS[target.month - 1]} مستحق. راجع بيانات الطالب والمبلغ، ثم اضغط تأكيد الدفع.`;
       }
-      setFlashMsg({ text: "راجع الطالب والشهور والمبلغ، ثم أكد استلام الدفع.", type: "warn" });
+      setFlashMsg({ text: reviewMessage, type: "warn" });
     } catch (error) {
       if (mounted.current && request === epoch.current) setFlashMsg({ text: getErrorMessage(error, "تعذر تحميل الطالب. أعد المحاولة بنفس الكود."), type: "error" });
     } finally {
       if (mounted.current && request === epoch.current) { busy.current = false; setLoadingCode(false); }
     }
-  }, [onSubsPaid, stopScanner, autoCamera]);
+  }, [onSubsPaid, autoCamera]);
   const processQR = useCallback(async (raw: string) => {
     if (cardOpen.current || busy.current || saving.current || attempt.current) return;
     const code = raw.trim();
@@ -156,7 +195,7 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
   const handleManualSubmit = async () => { await handleCode(manualCode); };
   const reloadStudent = async () => { if (!attempt.current) await handleCode(lastCode.current); };
 
-  const submitPayment = async (automatic?: { student: Student; due: DueMonth[]; target: {month: number; year: number} }) => {
+  const submitPayment = async (automatic?: { student: Student; due: DueMonth[]; target: {month: number; year: number}; successMessage?: string }) => {
     if (saving.current || busy.current || (!attempt.current && !automatic && (!currentStudent || !dueMonths || !selectedSubs.size))) return;
     const chosen = automatic?.due ?? (dueMonths ?? []).filter(d => selectedSubs.has(d.sub.id));
     if (chosen.some(({sub}) => !Number.isFinite(sub.amount) || !Number.isFinite(sub.discount) || sub.amount < 0 || sub.discount < 0 || sub.discount > sub.amount)) {
@@ -186,7 +225,8 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
           oscillator.start(); oscillator.stop(audio.current.currentTime + .16);
         } catch { /* Audio is optional; a saved payment remains successful. */ }
       }
-      setFlashMsg({ text: `تم تسجيل دفع ${result.receipt.name}: ${result.receipt.amount.toLocaleString("ar-EG")} ج. رقم العملية ${result.receipt.id}`, type: "success" });
+      const successText = automatic?.successMessage || result.message || `تم تسجيل دفع ${result.receipt.name}: ${result.receipt.amount.toLocaleString("ar-EG")} ج. رقم العملية ${result.receipt.id}`;
+      setFlashMsg({ text: successText, type: "success" });
       cardOpen.current = false; setCurrentStudent(null); setDueMonths(null); setSelection(new Set()); setManualCode(result.receipt.code || "");
     } catch (error) {
       if (!mounted.current) return;
@@ -200,7 +240,7 @@ export function usePaymentScan({ ownerId, autoCamera = false, onStudentUpdated, 
       }
     } finally { saving.current = false; if (mounted.current) setIsConfirming(false); }
   };
-  autoPay.current = (student, due, target) => submitPayment({student, due, target});
+  autoPay.current = (student, due, target, successMessage) => submitPayment({student, due, target, successMessage});
   const handleConfirmPayment = () => submitPayment();
 
   const startScanner = useCallback(async () => {

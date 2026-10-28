@@ -24,6 +24,11 @@ export interface TableProps {
   setPage: (p: number) => void;
   totalFiltered: number;
   onSendWhatsApp: (student: Student) => void;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+  isMonthLoading?: boolean;
+  examAverages?: Map<string, number | null>;
 }
 
 export type AlertItem = { type: "expulsion" | "absence" | "arrears" | "star"; title: string };

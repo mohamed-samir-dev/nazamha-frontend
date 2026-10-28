@@ -9,6 +9,7 @@ interface Props {
   selectedGroupId: string;
   sessionDate: string;
   validSessionDates: string[];
+  monthSessionDates?: string[];
   scanning: boolean;
   isStarting: boolean;
   manualCode: string;
@@ -31,6 +32,25 @@ export function SessionConfig(p: Props) {
   const group = p.groups.find((g) => g.id === p.selectedGroupId),
     today = getTodayCairo();
   const start = group?.start_date || group?.created_at?.slice(0, 10);
+
+  const datesToDisplay =
+    p.monthSessionDates && p.monthSessionDates.length > 0
+      ? p.monthSessionDates
+      : p.validSessionDates;
+
+  // حساب حدود الأسبوع الحالي لتوضيح حالة الحصص في القائمة
+  const todayDate = new Date(today + "T00:00:00");
+  const day = todayDate.getDay();
+  const diffToSat = day === 6 ? 0 : day + 1;
+  const weekStart = new Date(todayDate);
+  weekStart.setDate(weekStart.getDate() - diffToSat);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const weekStartStr = formatDate(weekStart);
+  const weekEndStr = formatDate(weekEnd);
+
   return (
     <section className={styles.card} aria-label="إعداد الجلسة والإدخال اليدوي">
       <div className={styles.settings}>
@@ -74,33 +94,65 @@ export function SessionConfig(p: Props) {
           <label htmlFor="scan-date">تاريخ الجلسة بتوقيت القاهرة</label>
           <select
             id="scan-date"
-            value={
-              p.validSessionDates.includes(p.sessionDate) ? p.sessionDate : ""
-            }
+            value={p.sessionDate}
             onChange={(e) => p.onSessionDateChange(e.target.value)}
-            disabled={!p.validSessionDates.length || p.busy}
+            disabled={!datesToDisplay.length || p.busy}
           >
-            {!p.validSessionDates.length && (
-              <option value="">لا توجد جلسة متاحة</option>
+            {!datesToDisplay.length && (
+              <option value="">لا توجد جلسة متاحة في هذا الشهر</option>
             )}
-            {[...p.validSessionDates].reverse().map((date) => (
-              <option key={date} value={date}>
-                {date === today ? "اليوم · " : "جلسة سابقة · "}
-                {new Date(date + "T12:00:00Z").toLocaleDateString("ar-EG", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "Africa/Cairo",
-                })}
-              </option>
-            ))}
+            {datesToDisplay.map((date) => {
+              const extraSession = group?.attendance_sessions?.find(
+                (s) => s.session_date === date && s.is_extra
+              );
+              const formattedDate = new Date(date + "T12:00:00Z").toLocaleDateString("ar-EG", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                timeZone: "Africa/Cairo",
+              });
+
+              const isToday = date === today;
+              const isCurrentWeek = p.validSessionDates.includes(date);
+              const isFuture = date > weekEndStr;
+              const isPastWeek = date < weekStartStr;
+
+              let labelPrefix = "";
+              if (extraSession) {
+                const titleStr = extraSession.title ? ` (${extraSession.title})` : "";
+                if (isToday) labelPrefix = `حصة إضافية${titleStr} · اليوم · `;
+                else if (isCurrentWeek) labelPrefix = `حصة إضافية${titleStr} · هذا الأسبوع · `;
+                else if (isFuture) labelPrefix = `حصة إضافية مستقبلية${titleStr} (غير مسموح) · `;
+                else labelPrefix = `حصة إضافية سابقة${titleStr} (أسبوع منتهي) · `;
+              } else {
+                if (isToday) labelPrefix = "اليوم · ";
+                else if (isCurrentWeek) labelPrefix = "هذا الأسبوع · ";
+                else if (isFuture) labelPrefix = "حصة مستقبلية (غير مسموح) · ";
+                else labelPrefix = "أسبوع منتهي · ";
+              }
+
+              return (
+                <option
+                  key={date}
+                  value={date}
+                  style={!isCurrentWeek ? { color: "#94a3b8" } : undefined}
+                >
+                  {labelPrefix}{formattedDate}
+                </option>
+              );
+            })}
           </select>
+          {p.sessionDateError && (
+            <p role="alert" className={styles.warning} style={{ marginTop: "6px", padding: "8px 12px" }}>
+              {p.sessionDateError}
+            </p>
+          )}
           {p.selectedGroupId && !p.validSessionDates.length && (
             <p className={styles.warning}>
               {start && start > today
                 ? `المجموعة لم تبدأ بعد؛ موعد البداية ${start}`
-                : "لا توجد حصص متاحة حتى اليوم في هذا الأسبوع والأسبوع السابق؛ راجع مواعيد المجموعة والحصص الملغاة."}
+                : "لا توجد حصص مجدولة لهذه المجموعة في هذا الأسبوع؛ راجع مواعيد المجموعة."}
             </p>
           )}
         </div>

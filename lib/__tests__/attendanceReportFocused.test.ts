@@ -47,3 +47,19 @@ test("dates before join date are marked as exempt and excluded from attendance p
   expect(html).toContain(">معفي</td>");
   expect(html).toContain(">100%</td>");
 });
+test("grade and group selection in report modal passes selection to onReport",async()=>{
+  const report=jest.fn().mockResolvedValue(undefined),close=jest.fn();
+  const testGrades=[{id:"gr-1",name:"الصف الأول",teacher_id:"t"}];
+  const testGroups=[{id:"gp-1",name:"مجموعة السبت",grade_id:"gr-1",day_of_week:"السبت",time:"10:00"}];
+  const h=await mount(React.createElement(AttendanceReportModal,{month:10,year:2026,grades:testGrades,groups:testGroups as any,onReport:report,onClose:close}));
+  const gradeSelect=h.host.querySelector("#attendance-report-grade") as HTMLSelectElement;
+  const groupSelect=h.host.querySelector("#attendance-report-group") as HTMLSelectElement;
+  expect(gradeSelect).toBeTruthy();
+  expect(groupSelect).toBeTruthy();
+  await act(async()=>{gradeSelect.value="gr-1";gradeSelect.dispatchEvent(new Event("change",{bubbles:true}))});
+  await act(async()=>{groupSelect.value="gp-1";groupSelect.dispatchEvent(new Event("change",{bubbles:true}))});
+  const button=[...h.host.querySelectorAll("button")].find(b=>b.textContent?.includes("عرض التقرير"))!;
+  await act(async()=>button.click());
+  expect(report).toHaveBeenCalledWith(10,2026,{gradeId:"gr-1",groupId:"gp-1",gradeName:"الصف الأول",groupName:"مجموعة السبت"});
+  await h.close();
+});

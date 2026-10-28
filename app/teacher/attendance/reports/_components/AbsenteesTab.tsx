@@ -100,13 +100,19 @@ function buildAbsenceMessage(row: AbsenteeRow, month: number, year: number): str
   );
 }
 
-function formatPhone(raw: string): string {
-  let p = raw.replace(/\D/g, "");
+function formatPhone(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let p = String(raw).trim().replace(/[^\d+]/g, "");
+  if (p.startsWith("+")) p = p.slice(1);
   if (p.startsWith("00")) p = p.slice(2);
-  if (p.startsWith("0")) p = "2" + p;
-  else if (p.length === 10 && (p.startsWith("10") || p.startsWith("11") || p.startsWith("12") || p.startsWith("15"))) {
-    p = "20" + p;
-  }
+  // Egyptian numbers (010, 011, 012, 015)
+  if (/^0(10|11|12|15)\d{8}$/.test(p)) return "2" + p;
+  if (/^(10|11|12|15)\d{8}$/.test(p)) return "20" + p;
+  // Saudi numbers (05xxxxxxxx)
+  if (/^05\d{8}$/.test(p)) return "966" + p.slice(1);
+  if (/^5\d{8}$/.test(p)) return "966" + p;
+  // If starts with 0 and longer than 9 digits, strip leading 0
+  if (p.startsWith("0") && p.length > 9) return p.slice(1);
   return p;
 }
 

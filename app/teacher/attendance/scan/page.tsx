@@ -76,7 +76,7 @@ function QRScanPageInner() {
           </strong>
           <p>
             {valid
-              ? `${past ? "جلسة سابقة" : "اليوم"} · ${s.sessionDate}`
+              ? `${s.sessionDate === getTodayCairo() ? "اليوم" : past ? "جلسة سابقة" : "هذا الأسبوع"} · ${s.sessionDate}`
               : "لا توجد جلسة محددة صالحة"}
           </p>
         </div>
@@ -193,6 +193,8 @@ function QRScanPageInner() {
               selectedGroupId={s.selectedGroupId}
               sessionDate={s.sessionDate}
               validSessionDates={s.validSessionDates}
+              monthSessionDates={s.monthSessionDates}
+              sessionDateError={s.sessionDateError}
               scanning={s.scanning}
               isStarting={s.isStarting}
               manualCode={s.manualCode}

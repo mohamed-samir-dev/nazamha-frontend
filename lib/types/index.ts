@@ -229,7 +229,7 @@ export interface Grade {
 }
 
 export interface Group {
-  attendance_sessions?: {session_date:string;time:string;cancelled:boolean}[];
+  attendance_sessions?: {id?:string;group_id?:string;session_date:string;time:string;cancelled:boolean;is_extra?:boolean;title?:string}[];
   id: string;
   name: string;
   code?: string | null;

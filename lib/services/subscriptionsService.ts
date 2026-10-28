@@ -13,11 +13,37 @@ export interface SubscriptionSummaryEntry {
   dueEntries: { month: number; year: number }[];
 }
 
+export interface PaymentEvaluation {
+  status:
+    | "regular_auto"
+    | "grace_period_auto"
+    | "grace_period_expired"
+    | "arrears_require_confirmation"
+    | "already_paid"
+    | "no_due"
+    | "suspended"
+    | "invalid_amount"
+    | "review_required";
+  action: "auto_pay" | "require_confirmation" | "none";
+  eligibleForAuto: boolean;
+  payPeriod: { month: number; year: number };
+  targetPeriod: { month: number; year: number };
+  isGracePeriod?: boolean;
+  gracePeriodDays?: number;
+  arrears?: { month: number; year: number }[];
+  message: string;
+}
+
 export interface PaymentReceipt { id: string; name: string; code: string; amount: number; months: { month: number; year: number }[]; created_at: string }
 export const SubscriptionsService = {
-  async lookupPaymentStudent(code: string): Promise<{ student: Student; subscriptions: MonthlySubscription[] }> { return apiClient.get(`/subscriptions/lookup?qr=${encodeURIComponent(code)}`); },
-  async pay(studentId: string, items: { id: string; amount: number; discount: number }[], key: string, autoPeriod?: {month: number; year: number}): Promise<{ receipt: PaymentReceipt; student: Student; subscriptions: MonthlySubscription[] }> {
-    const result = await apiClient.post<{ receipt: PaymentReceipt; student: Student; subscriptions: MonthlySubscription[] }>(`/subscriptions/student/${studentId}/pay`, { items, ...(autoPeriod ? {autoPeriod} : {}) }, key);
+  async lookupPaymentStudent(code: string, month?: number, year?: number): Promise<{ student: Student; subscriptions: MonthlySubscription[]; evaluation?: PaymentEvaluation }> {
+    const params = new URLSearchParams({ qr: code });
+    if (month !== undefined) params.set("month", String(month));
+    if (year !== undefined) params.set("year", String(year));
+    return apiClient.get(`/subscriptions/lookup?${params.toString()}`);
+  },
+  async pay(studentId: string, items: { id: string; amount: number; discount: number }[], key: string, autoPeriod?: {month: number; year: number}): Promise<{ receipt: PaymentReceipt; student: Student; subscriptions: MonthlySubscription[]; message?: string }> {
+    const result = await apiClient.post<{ receipt: PaymentReceipt; student: Student; subscriptions: MonthlySubscription[]; message?: string }>(`/subscriptions/student/${studentId}/pay`, { items, ...(autoPeriod ? {autoPeriod} : {}) }, key);
     appCache.invalidate(SUBS_ALL_KEY); appCache.invalidate(SUBS_SUMMARY_KEY); notifyFinancialChange();
     return result;
   },

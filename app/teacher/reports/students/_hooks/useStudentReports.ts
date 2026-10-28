@@ -12,9 +12,10 @@ import { AttendanceService } from "@/lib/services/attendanceService";
 import { SubscriptionsService, SubscriptionSummaryEntry } from "@/lib/services/subscriptionsService";
 import { examsService } from "@/lib/services/examsService";
 import { Student, Group, Grade, AttendanceRecord, BookDef, Exam } from "@/lib/types";
+import { SortKey, SortDir } from "../_components/types";
 import { appCache } from "@/lib/appCache";
 import { getGroupSessionDates } from "../../../attendance/_utils/sessionDates";
-import { buildMessage, countMembershipAttendance } from "../_utils/reportHelpers";
+import { buildStudentWhatsAppMessage, formatPhone, countMembershipAttendance } from "../_utils/reportHelpers";
 
 const ALL_TIME_ATT_KEY = "allTimeAttendanceMap";
 const SUBS_SUMMARY_KEY = "subscriptions:summary";
@@ -42,9 +43,6 @@ export function useStudentReports() {
   const [teacherBooks, setTeacherBooks] = useState<BookDef[]>([]);
   const [examAverages, setExamAverages] = useState<Map<string, number | null>>(new Map());
   const [latestExamMapState, setLatestExamMapState] = useState<Map<string, (Exam & { score: number | null }) | null>>(new Map());
-  const [whatsappTemplate, setWhatsappTemplate] = useState(
-    "مرحباً ولي أمر الطالب [اسم_الطالب]،\nنود إعلامكم بتقرير الطالب كالتالي:\nأيام الحضور: [الحضور]\nأيام الغياب: [الغياب]\nحالة الدفع: [حالة_الدفع]\nشكراً لتعاونكم."
-  );
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // Filters
@@ -65,14 +63,34 @@ export function useStudentReports() {
   const handleSetSelectedYear = (v: number) => { resetPage(); setSelectedYear(v); };
 
   const monthNum = selectedMonthIndex + 1;
+  const [isMonthLoading, setIsMonthLoading] = useState(false);
+  const isInitialMonthMount = useRef(true);
+
+  // Sorting
+  const [sortKey, setSortKey] = useState<SortKey>("attendancePct");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const handleSort = (key: SortKey) => {
+    resetPage();
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   // A previous month request must never overwrite the currently selected month.
   useEffect(() => {
     let cancelled = false;
-    setAttendanceRecords([]);
+    if (isInitialMonthMount.current) {
+      isInitialMonthMount.current = false;
+    } else {
+      setIsMonthLoading(true);
+    }
     AttendanceService.getAttendanceRecords(monthNum, selectedYear)
       .then(data => { if (!cancelled) setAttendanceRecords(data || []); })
-      .catch(() => { if (!cancelled) setToast({message:"تعذر تحميل الحضور للشهر المحدد",type:"error"}); });
+      .catch(() => { if (!cancelled) setToast({message:"تعذر تحميل الحضور للشهر المحدد",type:"error"}); })
+      .finally(() => { if (!cancelled) setIsMonthLoading(false); });
     return () => { cancelled = true; };
   }, [monthNum, selectedYear]);
 
@@ -89,32 +107,34 @@ export function useStudentReports() {
         // Clear subscription cache to get fresh data
         appCache.invalidate(SUBS_SUMMARY_KEY);
 
-        const [teacher, studentsData, groupsData, gradesData, summaryData] = await Promise.all([
+        let allTimeMap = appCache.get<Map<string, { present: number; absent: number }>>(cacheKey);
+
+        const [teacher, studentsData, groupsData, gradesData, summaryData, statsData, examSummary] = await Promise.all([
           TeachersService.getTeacherProfile(currentUser.id),
-          StudentsService.getStudentsByTeacherId(),
+          StudentsService.getStudentsByTeacherId("id,name,code,grade_id,group_id,group_join_date,parent_phone,phone,notes,discount_value,discount_reason,custom_monthly_price,received_books"),
           GroupsService.getGroupsByTeacherId(),
           GradesService.getGradesByTeacherId(currentUser.id),
           SubscriptionsService.getSubscriptionsSummary(),
+          allTimeMap ? Promise.resolve(null) : AttendanceService.getAllTimeAttendanceStats(),
+          examsService.getReportSummary(),
         ]);
 
-        let allTimeMap = appCache.get<Map<string, { present: number; absent: number }>>(cacheKey);
-        if (!allTimeMap) {
-          const statsData = await AttendanceService.getAllTimeAttendanceStats();
+        if (cancelled) return;
+
+        if (!allTimeMap && statsData) {
           allTimeMap = new Map<string, { present: number; absent: number }>();
           for (const [sid, counts] of Object.entries(statsData || {})) {
             allTimeMap.set(sid, counts);
           }
           appCache.set(cacheKey, allTimeMap, 5 * 60 * 1000);
         }
-        if (cancelled) return;
-        setAllTimeAttendanceMapState(allTimeMap);
+        if (allTimeMap) setAllTimeAttendanceMapState(allTimeMap);
 
-        const examSummary = await examsService.getReportSummary();
-        if (cancelled) return;
-        setExamAverages(new Map(Object.entries(examSummary).map(([id, row])=>[id,row.average])));
-        setLatestExamMapState(new Map(Object.entries(examSummary).map(([id,row])=>[id,row.latest])));
+        if (examSummary) {
+          setExamAverages(new Map(Object.entries(examSummary).map(([id, row])=>[id,row.average])));
+          setLatestExamMapState(new Map(Object.entries(examSummary).map(([id,row])=>[id,row.latest])));
+        }
 
-        setWhatsappTemplate(teacher?.whatsapp_template || "مرحباً ولي أمر الطالب [اسم_الطالب]،\nنود إعلامكم بتقرير الطالب كالتالي:\nأيام الحضور: [الحضور]\nأيام الغياب: [الغياب]\nحالة الدفع: [حالة_الدفع]\nشكراً لتعاونكم.");
         setStudents(studentsData || []);
         setGroups(groupsData || []);
         setGrades(gradesData || []);
@@ -170,10 +190,8 @@ export function useStudentReports() {
     const selectedDate = selectedYear * 100 + monthNum;
 
     for (const entry of subsSummary) {
-      // getLastPaidMonth: آخر شهر مدفوع فعلياً (حتى الشهر الحالي)
       let lastPaidMonth = "—";
       if (entry.paidEntries.length > 0) {
-        // نفلتر الأشهر المدفوعة اللي قبل أو تساوي الشهر الحالي (مش المختار)
         const eligiblePaid = entry.paidEntries.filter(e => e.year * 100 + e.month <= nowDate);
         if (eligiblePaid.length > 0) {
           const latest = eligiblePaid.reduce((max, e) =>
@@ -183,10 +201,7 @@ export function useStudentReports() {
         }
       }
 
-      // getArrears: due entries where date <= selectedDate
       const arrears = entry.dueEntries.filter(e => e.year * 100 + e.month <= selectedDate).length;
-
-      // hasAllSubsPaid: due entries where date < nowDate < 2
       const overdueNow = entry.dueEntries.filter(e => e.year * 100 + e.month < nowDate).length;
       const hasAllPaid = overdueNow < 2;
 
@@ -232,7 +247,7 @@ export function useStudentReports() {
       map.set(s.id, countMembershipAttendance(relevantDates, att.presentDates, att.absentDates));
     }
     return map;
-  }, [students, groups, groupSessionDatesMap, attendanceDatesMap,attendanceRecords]);
+  }, [students, groups, groupSessionDatesMap, attendanceDatesMap, attendanceRecords]);
 
   const getStudentAttendance = (studentId: string) =>
     attendanceMap.get(studentId) ?? { present: 0, absent: 0, total: 0 };
@@ -240,7 +255,6 @@ export function useStudentReports() {
   const getAllTimeAttendance = (studentId: string) =>
     allTimeAttendanceMapState.get(studentId) ?? { present: 0, absent: 0 };
 
-  // O(1) — pre-sorted at load time
   const getStudentLastExam = (studentId: string) =>
     latestExamMapState.get(studentId) ?? null;
 
@@ -260,14 +274,6 @@ export function useStudentReports() {
     return list;
   }, [students, filterGradeId, filterGroupId, filterPayment, searchQuery, subsMap, isStudentPaid]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
-  const pagedStudents = filteredStudents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const filteredGroups = useMemo(
-    () => (filterGradeId !== "all" ? groups.filter((g) => g.grade_id === filterGradeId) : groups),
-    [groups, filterGradeId]
-  );
-
   const lastAttendanceMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const r of attendanceRecords) {
@@ -278,6 +284,31 @@ export function useStudentReports() {
     }
     return map;
   }, [attendanceRecords]);
+
+  const sortedStudents = useMemo(() => [...filteredStudents].sort((a, b) => {
+    const attA = getStudentAttendance(a.id);
+    const attB = getStudentAttendance(b.id);
+    const pctA = attA.total > 0 ? attA.present / attA.total : 0;
+    const pctB = attB.total > 0 ? attB.present / attB.total : 0;
+    let cmp = 0;
+    if (sortKey === "attendancePct") cmp = pctA - pctB;
+    else if (sortKey === "absent") cmp = attA.absent - attB.absent;
+    else if (sortKey === "name") cmp = a.name.localeCompare(b.name, "ar");
+    else if (sortKey === "lastAttendance") {
+      const dA = lastAttendanceMap.get(a.id) ?? "";
+      const dB = lastAttendanceMap.get(b.id) ?? "";
+      cmp = dA.localeCompare(dB);
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  }), [filteredStudents, sortKey, sortDir, attendanceMap, lastAttendanceMap]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedStudents.length / PAGE_SIZE));
+  const pagedStudents = sortedStudents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const filteredGroups = useMemo(
+    () => (filterGradeId !== "all" ? groups.filter((g) => g.grade_id === filterGradeId) : groups),
+    [groups, filterGradeId]
+  );
 
   const last10Sessions = useMemo(() => {
     const dates = [...new Set(attendanceRecords.map((r) => r.session_date))].sort().reverse().slice(0, 10);
@@ -318,35 +349,36 @@ export function useStudentReports() {
   }, [filteredStudents, subsMap, isStudentPaid, attendanceMap]);
 
   const sendWhatsApp = async (student: Student) => {
-    if (!student.parent_phone) {
-      setToast({ message: "لا يوجد رقم هاتف لولي أمر هذا الطالب.", type: "error" });
+    const rawPhone = student.parent_phone;
+    if (!rawPhone) {
+      setToast({ message: `لا يوجد رقم هاتف مسجل لولي أمر ${student.name}`, type: "error" });
       return;
     }
-    try {
-      const msg = buildMessage(student, whatsappTemplate, getStudentAttendance(student.id), isStudentPaid(student.id));
-      await WhatsAppService.send(student.parent_phone, msg);
-      setToast({ message: `تم إرسال الرسالة لولي أمر ${student.name} ✅`, type: "success" });
-    } catch (e: any) {
-      setToast({ message: e.message === "واتساب غير متصل" ? "الواتساب غير متصل، اذهب لصفحة ربط الواتساب أولاً" : "فشل الإرسال، حاول مرة أخرى", type: "error" });
-    }
-  };
+    const phone = formatPhone(rawPhone);
+    const att = getStudentAttendance(student.id);
+    const paid = isStudentPaid(student.id);
+    const lastExam = getStudentLastExam(student.id);
+    const subsInfo = studentSubsInfo.get(student.id);
+    const monthName = ARABIC_MONTHS_LOCAL[selectedMonthIndex] || "";
+    const msg = buildStudentWhatsAppMessage(
+      student,
+      att,
+      paid,
+      monthName,
+      selectedYear,
+      lastExam,
+      subsInfo?.arrears ?? 0
+    );
 
-  const sendAllWhatsApp = async () => {
-    const list = filteredStudents.filter((s) => s.parent_phone);
-    if (list.length === 0) {
-      setToast({ message: "لا يوجد طلاب لديهم أرقام هواتف أولياء أمور.", type: "error" });
-      return;
+    try {
+      await WhatsAppService.send(phone, msg);
+      setToast({ message: `تم إرسال التقرير لولي أمر ${student.name} بنجاح ✅`, type: "success" });
+    } catch {
+      // Fallback: Open WhatsApp directly in new window
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      setToast({ message: `تم فتح واتساب لإرسال تقرير ${student.name} 📱`, type: "success" });
     }
-    let sent = 0;
-    for (const student of list) {
-      try {
-        const msg = buildMessage(student, whatsappTemplate, getStudentAttendance(student.id), isStudentPaid(student.id));
-        await WhatsAppService.send(student.parent_phone!, msg);
-        sent++;
-        await new Promise((r) => setTimeout(r, 800));
-      } catch { break; }
-    }
-    setToast({ message: `تم إرسال ${sent} رسالة بنجاح ✅`, type: "success" });
   };
 
   return {
@@ -365,8 +397,6 @@ export function useStudentReports() {
     getAllTimeAttendance,
     isStudentPaid,
     subsMap,
-    whatsappTemplate,
-    setWhatsappTemplate,
     toast,
     setToast,
     searchQuery, setSearchQuery: handleSetSearchQuery,
@@ -376,9 +406,13 @@ export function useStudentReports() {
     selectedMonthIndex, setSelectedMonthIndex: handleSetSelectedMonthIndex,
     selectedYear, setSelectedYear: handleSetSelectedYear,
     page, setPage, totalPages,
+    sortKey, setSortKey,
+    sortDir, setSortDir,
+    onSort: handleSort,
+    isMonthLoading,
+    sortedStudents,
     teacherBooks,
     sendWhatsApp,
-    sendAllWhatsApp,
     getStudentLastExam,
     examAverages,
     studentSubsInfo,

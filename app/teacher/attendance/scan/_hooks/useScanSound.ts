@@ -41,18 +41,28 @@ export function useScanSound() {
   }, []);
   useEffect(() => {
     window.addEventListener("pointerdown", unlockSound);
+    window.addEventListener("touchstart", unlockSound);
+    window.addEventListener("click", unlockSound);
     window.addEventListener("keydown", unlockSound);
     return () => {
       window.removeEventListener("pointerdown", unlockSound);
+      window.removeEventListener("touchstart", unlockSound);
+      window.removeEventListener("click", unlockSound);
       window.removeEventListener("keydown", unlockSound);
     };
   }, [unlockSound]);
   const playSuccess = useCallback(async () => {
     if (!enabled.current) return;
-    const audio = context.current;
-    if (!audio || audio.state === "closed") return;
     try {
-      if (audio.state !== "running") await audio.resume();
+      if (!context.current || context.current.state === "closed") {
+        unlockSound();
+      }
+      const audio = context.current;
+      if (!audio) return;
+      if (audio.state === "suspended") {
+        await audio.resume().catch(() => {});
+      }
+      if (audio.state !== "running") return;
       if (
         !enabled.current ||
         context.current !== audio ||

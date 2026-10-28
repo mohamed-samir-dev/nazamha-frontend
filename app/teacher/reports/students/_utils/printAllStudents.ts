@@ -148,5 +148,5 @@ export function printAllStudentsReport(
 </body>
 </html>`;
 
-  printHtml(html);
+  printHtml(html, { inPlace: true });
 }

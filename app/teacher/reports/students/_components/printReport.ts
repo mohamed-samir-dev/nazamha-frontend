@@ -275,5 +275,5 @@ export function printStudentReport(
 </body>
 </html>`;
 
-  printHtml(html);
+  printHtml(html, { inPlace: true });
 }

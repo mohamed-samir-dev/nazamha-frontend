@@ -7,45 +7,56 @@ interface Props {
   totalGrossEarnings: number;
   totalExpenses: number;
   totalBookEarnings: number;
+  currentMonthNetProfit?: number;
+  currentMonthGrossEarnings?: number;
+  currentMonthExpenses?: number;
+  currentMonthBookEarnings?: number;
   prevMonthNetProfit: number;
   prevMonthGrossEarnings: number;
   prevMonthExpenses: number;
   prevMonthBookEarnings: number;
+  currentMonthName?: string;
 }
 
-function TrendBadge({ current, prev }: { current: number; prev: number }) {
-  if (prev === 0 && current === 0) return null;
-  const diff = prev === 0 ? 100 : Math.round(((current - prev) / prev) * 100);
+function TrendBadge({ current, prev, monthName }: { current?: number; prev?: number; monthName?: string }) {
+  if (current === undefined || prev === undefined || (prev === 0 && current === 0)) return null;
+  const diff = prev === 0 ? 100 : Math.round(((current - prev) / Math.abs(prev || 1)) * 100);
   if (diff === 0) return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "2px", fontSize: "0.75rem", color: "var(--text-muted)", background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: "999px" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "2px", fontSize: "0.72rem", color: "var(--text-muted)", background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: "999px" }}>
       <Minus size={11} /> لا تغيير
     </span>
   );
   const up = diff > 0;
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "2px", fontSize: "0.75rem",
-      color: up ? "#10b981" : "#f87171",
-      background: up ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
-      border: `1px solid ${up ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
-      padding: "2px 8px", borderRadius: "999px", fontFamily: "'JetBrains Mono', monospace"
-    }}>
+    <span
+      style={{
+        display: "inline-flex", alignItems: "center", gap: "2px", fontSize: "0.72rem",
+        color: up ? "#10b981" : "#f87171",
+        background: up ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+        border: `1px solid ${up ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+        padding: "2px 8px", borderRadius: "999px", fontFamily: "'JetBrains Mono', monospace",
+      }}
+      title={`مقارنة أداء ${monthName || "الشهر الحالي"} بالشهر السابق`}
+    >
       {up ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-      {Math.abs(diff)}%
+      {Math.abs(diff)}% شهرياً
     </span>
   );
 }
 
 export function ReportsSummaryCards({
   totalNetProfit, totalGrossEarnings, totalExpenses, totalBookEarnings,
+  currentMonthNetProfit, currentMonthGrossEarnings, currentMonthExpenses, currentMonthBookEarnings,
   prevMonthNetProfit, prevMonthGrossEarnings, prevMonthExpenses, prevMonthBookEarnings,
+  currentMonthName,
 }: Props) {
   const netProfitNegative = Number(totalNetProfit) < 0;
   const cards = [
     {
-      label: "صافي الأرباح الكلي",
+      label: "صافي الأرباح (السنوي)",
       value: totalNetProfit,
-      prev: prevMonthNetProfit,
+      curMonthVal: currentMonthNetProfit,
+      prevMonthVal: prevMonthNetProfit,
       icon: <DollarSign size={22} />,
       color: netProfitNegative ? "#ef4444" : "#10b981",
       bg: netProfitNegative ? "rgba(239,68,68,0.12)" : "rgba(16,185,129,0.12)",
@@ -54,9 +65,10 @@ export function ReportsSummaryCards({
       colSpan: true,
     },
     {
-      label: "إجمالي الإيرادات",
+      label: "إجمالي الإيرادات (السنوي)",
       value: totalGrossEarnings,
-      prev: prevMonthGrossEarnings,
+      curMonthVal: currentMonthGrossEarnings,
+      prevMonthVal: prevMonthGrossEarnings,
       icon: <TrendingUp size={22} />,
       color: "var(--color-teal)",
       bg: "rgba(20,184,166,0.12)",
@@ -65,9 +77,10 @@ export function ReportsSummaryCards({
       colSpan: false,
     },
     {
-      label: "إجمالي المصروفات",
+      label: "إجمالي المصروفات (السنوي)",
       value: totalExpenses,
-      prev: prevMonthExpenses,
+      curMonthVal: currentMonthExpenses,
+      prevMonthVal: prevMonthExpenses,
       icon: <Receipt size={22} />,
       color: "#f87171",
       bg: "rgba(239,68,68,0.12)",
@@ -76,9 +89,10 @@ export function ReportsSummaryCards({
       colSpan: false,
     },
     {
-      label: "أرباح الكتب",
+      label: "أرباح مبيعات الكتب (السنوي)",
       value: totalBookEarnings,
-      prev: prevMonthBookEarnings,
+      curMonthVal: currentMonthBookEarnings,
+      prevMonthVal: prevMonthBookEarnings,
       icon: <BookOpen size={22} />,
       color: "var(--color-amber)",
       bg: "rgba(245,158,11,0.12)",
@@ -115,7 +129,7 @@ export function ReportsSummaryCards({
             >
               {card.icon}
             </div>
-            <TrendBadge current={card.value} prev={card.prev} />
+            <TrendBadge current={card.curMonthVal} prev={card.prevMonthVal} monthName={currentMonthName} />
           </div>
 
           <div>
@@ -129,7 +143,7 @@ export function ReportsSummaryCards({
             <div style={{
               height: "100%", borderRadius: "2px",
               background: card.color,
-              width: card.prev > 0 && card.value > 0 ? `${Math.min(100, Math.round((card.value / Math.max(card.value, card.prev)) * 100))}%` : card.value > 0 ? "100%" : "0%",
+              width: card.value > 0 ? "100%" : "0%",
               transition: "width 0.8s ease",
             }} />
           </div>

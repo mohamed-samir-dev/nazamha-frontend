@@ -65,15 +65,11 @@ export function isTopStudent(
   attendancePct: number,
   totalSessions: number,
   allSubsPaid: boolean,
-  examAvgPct: number | null
+  examAvgPct?: number | null
 ): boolean {
-  return (
-    totalSessions > 0 &&
-    attendancePct >= 80 &&
-    allSubsPaid &&
-    examAvgPct !== null &&
-    examAvgPct >= 85
-  );
+  const attOk = totalSessions === 0 || attendancePct >= 80;
+  const examOk = examAvgPct == null ? totalSessions > 0 : examAvgPct >= 85;
+  return attOk && allSubsPaid && examOk;
 }
 
 export function getAlerts(
@@ -88,10 +84,10 @@ export function getAlerts(
 ): AlertItem[] {
   const alerts: AlertItem[] = [];
   const total = att.total;
-  if (isTopStudent(pct, total, allSubsPaid ?? paid, examAvgPct ?? null))
+  if (isTopStudent(pct, total, allSubsPaid ?? paid, examAvgPct))
     alerts.push({ type: "star", title: "طالب متميز — حضور 80%+ ومتوسط درجات 85%+ وجميع الاشتراكات مسددة" });
   if (pct < 50 && total > 0) alerts.push({ type: "expulsion", title: "معرض للفصل (حضور أقل من 50%)" });
-  if (consecutiveAbsences) alerts.push({ type: "absence", title: "غاب 3 أيام أو أكثر" });
+  if (consecutiveAbsences) alerts.push({ type: "absence", title: "غاب 3 حصص أو أكثر" });
   if (arrears >= 2) alerts.push({ type: "arrears", title: `متأخر ${arrears} شهور في الدفع` });
   return alerts;
 }

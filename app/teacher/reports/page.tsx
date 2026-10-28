@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { AlertCircle, BarChart3, Filter, BookOpen, GraduationCap, Info } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
@@ -22,6 +21,8 @@ export default function ReportsPage() {
     CURRENT_YEAR, CURRENT_MONTH,
     totalSubscriptionEarnings, totalBookEarnings,
     totalExpenses, totalGrossEarnings, totalNetProfit,
+    currentMonthNetProfit, currentMonthGrossEarnings,
+    currentMonthExpenses, currentMonthBookEarnings,
     prevMonthSubEarnings, prevMonthBookEarnings,
     prevMonthExpenses, prevMonthGrossEarnings, prevMonthNetProfit,
     gradesStats, booksStats, unpaidStudents, monthsReport,
@@ -105,10 +106,15 @@ export default function ReportsPage() {
         totalGrossEarnings={totalGrossEarnings}
         totalExpenses={totalExpenses}
         totalBookEarnings={totalBookEarnings}
+        currentMonthNetProfit={currentMonthNetProfit}
+        currentMonthGrossEarnings={currentMonthGrossEarnings}
+        currentMonthExpenses={currentMonthExpenses}
+        currentMonthBookEarnings={currentMonthBookEarnings}
         prevMonthNetProfit={prevMonthNetProfit}
         prevMonthGrossEarnings={prevMonthGrossEarnings}
         prevMonthExpenses={prevMonthExpenses}
         prevMonthBookEarnings={prevMonthBookEarnings}
+        currentMonthName={ARABIC_MONTHS[CURRENT_MONTH]}
       />
 
       <InsightsStrip

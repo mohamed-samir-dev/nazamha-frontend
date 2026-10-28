@@ -20,7 +20,8 @@ export function GroupReportTab({ rows }: Props) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {rows.map((row) => {
-        const hasSessions = row.totalSessions > 0;
+        const actualSessions = Math.max(0, row.totalSessions - row.cancelledSessions);
+        const hasSessions = actualSessions > 0;
         const pctColor = !hasSessions
           ? "#94a3b8"
           : row.avgPct >= 75
@@ -44,8 +45,6 @@ export function GroupReportTab({ rows }: Props) {
           : row.avgPct >= 50
           ? "text-amber-400"
           : "text-red-400";
-
-        const actualSessions = Math.max(0, row.totalSessions - row.cancelledSessions);
 
         return (
           <div

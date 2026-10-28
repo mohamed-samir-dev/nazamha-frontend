@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ClipboardList, ScanLine, CalendarDays } from "lucide-react";
+import { ClipboardList, ScanLine, CalendarDays, PlusCircle } from "lucide-react";
+import { AddExtraSessionModal } from "./_components/AddExtraSessionModal";
 
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
@@ -26,6 +27,7 @@ export default function AttendancePage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [qrStudent, setQrStudent] = useState<Student | null>(null);
   const [reportOpen,setReportOpen]=useState(false);
+  const [extraModalOpen, setExtraModalOpen] = useState(false);
 
   const showToast = (message: string, type: "success" | "error" = "success") =>
     setToast({ message, type });
@@ -85,13 +87,19 @@ export default function AttendancePage() {
             </p>
           </div>
         </div>
-        <div className="grid w-full grid-cols-2 items-stretch gap-2 sm:flex sm:w-auto sm:items-center">
-          {(
-            <AttendancePrintButton
-              onPrint={async() => {setReportOpen(true);}}
-              onError={message => showToast(message, "error")}
-            />
-          )}
+        <div className="grid w-full grid-cols-3 items-stretch gap-2 sm:flex sm:w-auto sm:items-center">
+          <button
+            type="button"
+            onClick={() => setExtraModalOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-[10px] bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[0.82rem] sm:text-[0.88rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(99,102,241,0.25)] hover:from-violet-500 hover:to-indigo-500 hover:-translate-y-px cursor-pointer"
+          >
+            <PlusCircle size={16} />
+            <span>حصة إضافية</span>
+          </button>
+          <AttendancePrintButton
+            onPrint={async() => {setReportOpen(true);}}
+            onError={message => showToast(message, "error")}
+          />
           <Link
             href="/teacher/attendance/scan"
             className="inline-flex min-h-11 items-center justify-center gap-2 px-3 py-2 sm:px-5 sm:py-2.5 rounded-[10px] bg-teal-500 text-white text-[0.85rem] sm:text-[0.9rem] font-semibold no-underline transition-all shadow-[0_4px_14px_rgba(20,184,166,0.3)] hover:bg-teal-600 hover:-translate-y-px"
@@ -150,8 +158,39 @@ export default function AttendancePage() {
       </div>
 
       {/* Modals */}
+      <AddExtraSessionModal
+        isOpen={extraModalOpen}
+        onClose={() => setExtraModalOpen(false)}
+        onSuccess={(session) => {
+          data.addExtraSessionLocally(session);
+          showToast(`تمت إضافة الحصة الإضافية بنجاح (${session.session_date})`, "success");
+        }}
+        groups={data.groups}
+        grades={data.grades}
+        initialGroupId={data.selectedGroupId !== "all" ? data.selectedGroupId : undefined}
+      />
       <QRModal student={qrStudent} onClose={() => setQrStudent(null)} />
-      {reportOpen&&<AttendanceReportModal month={getMonthCairo()} year={getYearCairo()} onClose={()=>setReportOpen(false)} onReport={(month,year)=>exportAttendanceMonth(month,year,{gradeId:data.selectedGradeId,groupId:data.selectedGroupId})}/>}
+      {reportOpen && (
+        <AttendanceReportModal
+          month={data.selectedMonth || getMonthCairo()}
+          year={data.selectedYear || getYearCairo()}
+          grades={data.grades}
+          groups={data.groups}
+          initialGradeId={data.selectedGradeId}
+          initialGroupId={data.selectedGroupId}
+          onClose={() => setReportOpen(false)}
+          onReport={async (month, year, selection) => {
+            const grade = data.grades.find(g => g.id === (selection?.gradeId ?? data.selectedGradeId));
+            const group = data.groups.find(g => g.id === (selection?.groupId ?? data.selectedGroupId));
+            await exportAttendanceMonth(month, year, {
+              gradeId: selection?.gradeId ?? data.selectedGradeId,
+              groupId: selection?.groupId ?? data.selectedGroupId,
+              gradeName: selection?.gradeName ?? grade?.name,
+              groupName: selection?.groupName ?? group?.name,
+            });
+          }}
+        />
+      )}
 
       {actions.pendingDelete && (
         <ConfirmDeleteModal

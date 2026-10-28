@@ -63,6 +63,8 @@ export function ReportFilters({
       await exportAttendanceMonth(selectedMonth, selectedYear, {
         gradeId: selectedGradeId,
         groupId: selectedGroupId,
+        gradeName: grades.find((g) => g.id === selectedGradeId)?.name,
+        groupName: availableGroups.find((g) => g.id === selectedGroupId)?.name,
       });
     } catch (err: any) {
       setPrintError(err?.message || "تعذر تجهيز تقرير الطباعة.");
