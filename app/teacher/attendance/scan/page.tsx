@@ -22,7 +22,7 @@ function QRScanPageInner() {
   });
   const group = s.groups.find((g) => g.id === s.selectedGroupId),
     grade = s.grades.find((g) => g.id === s.selectedGradeId);
-  const past = s.sessionDate < getTodayCairo(),
+  const past = Boolean(s.sessionDate) && s.sessionDate < getTodayCairo(),
     valid = s.validSessionDates.includes(s.sessionDate);
   const ready = !!group && valid && (!past || s.pastDateAcknowledged);
   const pending = AttendanceQueue.getAll().filter(

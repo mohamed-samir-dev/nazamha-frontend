@@ -223,12 +223,15 @@ test("cancelled today is not auto-detected as an old class", async () => {
   expect(h.value.selectedGroupId).toBe("");
   await h.close();
 });
-test("allowed Monday spelling auto-detects correctly", async () => {
+test("page entry keeps inputs unselected and requires explicit group choice", async () => {
   jest.setSystemTime(new Date("2026-10-19T07:05:00Z"));
   (GroupsService.getGroupsByTeacherId as jest.Mock).mockResolvedValue([
     { ...group, day_of_week: "الاثنين" },
   ]);
   const h = await mount();
+  expect(h.value.selectedGroupId).toBe("");
+  expect(h.value.sessionDate).toBe("");
+  await act(async () => h.value.handleGroupChange("g"));
   expect(h.value.selectedGroupId).toBe("g");
   expect(h.value.sessionDate).toBe("2026-10-19");
   await h.close();

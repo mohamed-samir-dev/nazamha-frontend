@@ -57,7 +57,7 @@ export function SessionConfig(p: Props) {
         <div className={styles.settingsHeading}>
           إعدادات الجلسة{" "}
           <span>
-            {p.autoDetected ? "تم اختيار حصة اليوم" : "تعديل المجموعة والتاريخ"}
+            {p.autoDetected ? "تم اختيار حصة اليوم" : p.selectedGroupId ? "تحديد الجلسة" : "اختر المجموعة أولاً"}
           </span>
         </div>
         <div className={styles.fields}>
@@ -96,46 +96,54 @@ export function SessionConfig(p: Props) {
             id="scan-date"
             value={p.sessionDate}
             onChange={(e) => p.onSessionDateChange(e.target.value)}
-            disabled={!datesToDisplay.length || p.busy}
+            disabled={!p.selectedGroupId || !datesToDisplay.length || p.busy}
           >
-            {!datesToDisplay.length && (
-              <option value="">لا توجد جلسة متاحة في هذا الشهر</option>
+            {!p.selectedGroupId ? (
+              <option value="">اختر المجموعة أولاً</option>
+            ) : !datesToDisplay.length ? (
+              <option value="">لا توجد جلسات متاحة في هذا الشهر</option>
+            ) : (
+              <>
+                {(!p.sessionDate || !datesToDisplay.includes(p.sessionDate)) && (
+                  <option value="">اختر تاريخ الجلسة</option>
+                )}
+                {datesToDisplay.map((date) => {
+                  const extraSession = group?.attendance_sessions?.find(
+                    (s) => s.session_date === date && s.is_extra
+                  );
+                  const formattedDate = new Date(date + "T12:00:00Z").toLocaleDateString("ar-EG", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    timeZone: "Africa/Cairo",
+                  });
+
+                  const isToday = date === today;
+                  const isFuture = date > today;
+
+                  let labelPrefix = "";
+                  if (extraSession) {
+                    const titleStr = extraSession.title ? ` (${extraSession.title})` : "";
+                    if (isToday) labelPrefix = `حصة إضافية${titleStr} · اليوم · `;
+                    else labelPrefix = `حصة إضافية قادمة${titleStr} (لم يحن موعدها) · `;
+                  } else {
+                    if (isToday) labelPrefix = "اليوم · ";
+                    else labelPrefix = "حصة قادمة (لم يحن موعدها) · ";
+                  }
+
+                  return (
+                    <option
+                      key={date}
+                      value={date}
+                      style={isFuture ? { color: "#94a3b8" } : undefined}
+                    >
+                      {labelPrefix}{formattedDate}
+                    </option>
+                  );
+                })}
+              </>
             )}
-            {datesToDisplay.map((date) => {
-              const extraSession = group?.attendance_sessions?.find(
-                (s) => s.session_date === date && s.is_extra
-              );
-              const formattedDate = new Date(date + "T12:00:00Z").toLocaleDateString("ar-EG", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-                timeZone: "Africa/Cairo",
-              });
-
-              const isToday = date === today;
-              const isFuture = date > today;
-
-              let labelPrefix = "";
-              if (extraSession) {
-                const titleStr = extraSession.title ? ` (${extraSession.title})` : "";
-                if (isToday) labelPrefix = `حصة إضافية${titleStr} · اليوم · `;
-                else labelPrefix = `حصة إضافية قادمة${titleStr} (لم يحن موعدها) · `;
-              } else {
-                if (isToday) labelPrefix = "اليوم · ";
-                else labelPrefix = "حصة قادمة (لم يحن موعدها) · ";
-              }
-
-              return (
-                <option
-                  key={date}
-                  value={date}
-                  style={isFuture ? { color: "#94a3b8" } : undefined}
-                >
-                  {labelPrefix}{formattedDate}
-                </option>
-              );
-            })}
           </select>
           {p.sessionDateError && (
             <p role="alert" className={styles.warning} style={{ marginTop: "6px", padding: "8px 12px" }}>
@@ -157,7 +165,7 @@ export function SessionConfig(p: Props) {
         <summary>
           تسجيل بكود الطالب <span>بدون كاميرا</span>
         </summary>
-        <form onSubmit={p.onManualSubmit} className={styles.fields}>
+        <form onSubmit={p.onManualSubmit} className={styles.fields} autoComplete="off">
           <label htmlFor="attendance-manual-code">
             كود الطالب الكامل أو QR
           </label>
@@ -169,9 +177,12 @@ export function SessionConfig(p: Props) {
           <div className={styles.manualRow}>
             <input
               id="attendance-manual-code"
+              name="student-manual-code-no-fill"
               aria-describedby="manual-help"
               dir="ltr"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
               spellCheck={false}
               placeholder={p.manualPlaceholder}
               value={p.manualCode}

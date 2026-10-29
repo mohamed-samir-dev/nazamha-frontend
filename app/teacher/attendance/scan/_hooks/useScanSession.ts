@@ -269,7 +269,7 @@ export function useScanSession() {
   const today = getTodayCairo();
   const [selectedGradeId, setSelectedGradeId] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [sessionDate, setSessionDate] = useState(today);
+  const [sessionDate, setSessionDate] = useState("");
   const [validSessionDates, setValidSessionDates] = useState<string[]>([]);
   const [monthSessionDates, setMonthSessionDates] = useState<string[]>([]);
   const [autoDetected, setAutoDetected] = useState(false);
@@ -314,7 +314,7 @@ export function useScanSession() {
     groups: [] as Group[],
     grades: [] as Grade[],
     scannedToday: [] as ScannedEntry[],
-    sessionDate: today,
+    sessionDate: "",
   });
   const resetOperation = useCallback(() => {
     epochRef.current++;
@@ -714,23 +714,18 @@ export function useScanSession() {
     stateRef.current.selectedGroupId = match.id;
     const dates = getValidSessionDates(match);
     const visibleDates = getFutureAndTodaySessionDates(match);
-    const nearest = getNearestValidDate(match);
+    const todayStr = getTodayCairo();
+    const defaultDate = dates.includes(todayStr) ? todayStr : "";
     Promise.resolve().then(() => {
       setSelectedGroupId(match.id);
       if (match.grade_id) setSelectedGradeId(match.grade_id);
       setAutoDetected(false);
       setValidSessionDates(dates);
       setMonthSessionDates(visibleDates);
-      setSessionDate(nearest);
-      stateRef.current.sessionDate = nearest;
+      setSessionDate(defaultDate);
+      stateRef.current.sessionDate = defaultDate;
     });
   }, [loading, groups, urlGroupId]);
-
-  // ── Fire auto-detect once data is ready ──────────────────────
-  useEffect(() => {
-    if (loading || groups.length === 0 || manualOverrideRef.current) return;
-    applyAutoDetectRef.current(groups);
-  }, [loading, groups]);
 
   // ── Auto-start camera when group is set from URL ────────────
   const urlAutoStartedRef = useRef(false);
@@ -756,17 +751,6 @@ export function useScanSession() {
     validSessionDates,
     sessionDate,
   ]);
-
-  // ── Periodic auto-detect every 30s ───────────────────────────
-  useEffect(() => {
-    if (loading) return;
-    const interval = setInterval(() => {
-      if (manualOverrideRef.current) return;
-      const grpData = stateRef.current.groups;
-      if (grpData.length > 0) applyAutoDetectRef.current(grpData);
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [loading]);
 
   // Load confirmed server records and the current device queue for this session.
   useEffect(() => {
@@ -1234,11 +1218,13 @@ export function useScanSession() {
       manualOverrideRef.current = true;
       resetOperation();
       stateRef.current.selectedGroupId = "";
+      stateRef.current.sessionDate = "";
       await stopScanner();
       setValidSessionDates([]);
       setMonthSessionDates([]);
       setSelectedGradeId(v);
       setSelectedGroupId("");
+      setSessionDate("");
       setScannedToday([]);
       scannedIdsRef.current.clear();
     },
@@ -1265,13 +1251,16 @@ export function useScanSession() {
           const visibleDates = getFutureAndTodaySessionDates(grp);
           setValidSessionDates(dates);
           setMonthSessionDates(visibleDates);
-          const nearest = getNearestValidDate(grp);
-          setSessionDate(nearest);
-          stateRef.current.sessionDate = nearest;
+          const todayStr = getTodayCairo();
+          const defaultDate = dates.includes(todayStr) ? todayStr : "";
+          setSessionDate(defaultDate);
+          stateRef.current.sessionDate = defaultDate;
         }
       } else {
         setValidSessionDates([]);
         setMonthSessionDates([]);
+        setSessionDate("");
+        stateRef.current.sessionDate = "";
       }
       if (scanning) {
         await stopScanner();
