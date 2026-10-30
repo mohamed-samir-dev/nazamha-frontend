@@ -45,8 +45,8 @@ export async function generateMetadata(): Promise<Metadata> {
     creator: siteName,
     publisher: siteName,
     robots: {
-      index: false,
-      follow: false,
+      index: true,
+      follow: true,
     },
     icons: {
       icon: iconList,
