@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { LandingFooter } from "@/components/landing/LandingFooter";
-import { Mail, Phone, MapPin, Clock, MessageSquare, Send, CheckCircle2, ArrowRight } from "lucide-react";
+import { Mail, Phone, Clock, MessageSquare, Send, CheckCircle2, ArrowRight } from "lucide-react";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
@@ -69,8 +69,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <span className="text-xs text-slate-400 block mb-0.5">البريد الإلكتروني المعتمد:</span>
-                    <a href="mailto:support@studenttrack.app" className="text-white hover:text-teal-400 font-mono text-sm">
-                      support@studenttrack.app
+                    <a href="mailto:loutfallaasfora@gmail.com" className="text-white hover:text-teal-400 font-mono text-sm">
+                      loutfallaasfora@gmail.com
                     </a>
                   </div>
                 </div>
@@ -81,23 +81,12 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <span className="text-xs text-slate-400 block mb-0.5">الهاتف وخدمة واتساب المباشرة:</span>
-                    <a href="https://wa.me/966500000000" target="_blank" rel="noopener noreferrer" className="text-white hover:text-teal-400 font-mono text-sm" dir="ltr">
-                      +966 50 000 0000
+                    <a href="https://wa.me/201012486445" target="_blank" rel="noopener noreferrer" className="text-white hover:text-teal-400 font-mono text-sm" dir="ltr">
+                      01012486445
                     </a>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 block mb-0.5">مقر الإدارة:</span>
-                    <p className="text-white text-sm">
-                      طريق الملك فهد، الرياض، المملكة العربية السعودية
-                    </p>
-                  </div>
-                </div>
 
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
@@ -106,8 +95,7 @@ export default function ContactPage() {
                   <div>
                     <span className="text-xs text-slate-400 block mb-0.5">أوقات عمل فريق الدعم:</span>
                     <p className="text-white text-sm">
-                      الأحد - الخميس: 9:00 صباحاً - 10:00 مساءً<br />
-                      الجمعة والسبت: الدعم الطارئ للحصص والامتحانات
+                      يومياً: 9:00 صباحاً - 11:00 مساءً
                     </p>
                   </div>
                 </div>
@@ -118,15 +106,15 @@ export default function ContactPage() {
             <div className="p-6 rounded-2xl bg-gradient-to-br from-teal-950/40 to-emerald-950/20 border border-teal-500/25">
               <h3 className="text-base font-bold text-white mb-2">هل تمثل مركزاً أو مجمعاً تعليمياً كبيراً؟</h3>
               <p className="text-xs text-slate-300 leading-relaxed mb-4">
-                نوفر للمراكز الكبرى باقات مخصصة (Custom Plan) تشمل تدريباً كاملاً للمساعدين وربط أجهزة الحضور ودمج بوابات الدفع.
+                نوفر للمراكز الكبرى باقات مخصصة تشمل تدريباً كاملاً للمساعدين وربط أجهزة الحضور ودمج بوابات الدفع.
               </p>
               <a
-                href="https://wa.me/966500000000"
+                href="https://wa.me/201012486445"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-xs font-bold text-teal-300 hover:text-teal-200"
               >
-                <span>تحدث مباشرة مع مستشار الحلول التعليمية</span>
+                <span>تحدث مباشرة عبر واتساب</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </div>

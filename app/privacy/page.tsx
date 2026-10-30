@@ -153,7 +153,7 @@ export default function PrivacyPage() {
               إذا كان لديك أي سؤال أو استفسار حول سياسة الخصوصية وحماية البيانات، يسعدنا تواصلك مع مسؤول الخصوصية عبر البريد الإلكتروني:
             </p>
             <div className="p-3 bg-white/5 rounded-lg border border-white/10 w-fit text-teal-400 font-mono text-xs" dir="ltr">
-              privacy@studenttrack.app
+              loutfallaasfora@gmail.com
             </div>
           </section>
 

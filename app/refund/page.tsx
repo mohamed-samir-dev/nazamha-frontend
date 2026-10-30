@@ -99,7 +99,7 @@ export default function RefundPage() {
             <p>لطلب استرداد الأموال، يمكنك اتباع إحدى الطرق السريعة التالية:</p>
             <ol className="list-decimal list-inside space-y-2 pr-2">
               <li>
-                <strong>عبر البريد الإلكتروني:</strong> إرسال رسالة إلى <span className="text-teal-400 font-mono" dir="ltr">billing@studenttrack.app</span> بعنوان &quot;طلب استرداد اشتراك&quot; مع ذكر رقم الهاتف والبريد المسجل.
+                <strong>عبر البريد الإلكتروني:</strong> إرسال رسالة إلى <a href="mailto:loutfallaasfora@gmail.com" className="text-teal-400 font-mono hover:underline" dir="ltr">loutfallaasfora@gmail.com</a> بعنوان &quot;طلب استرداد اشتراك&quot; مع ذكر رقم الهاتف والبريد المسجل.
               </li>
               <li>
                 <strong>عبر الدعم الفني المباشر (واتساب):</strong> التواصل مع فريق خدمة العملاء على الرقم المعتمد وإرفاق إشعار السداد.
@@ -146,11 +146,11 @@ export default function RefundPage() {
             <div className="flex flex-wrap gap-4 pt-1">
               <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-xs">
                 <span className="text-slate-400 block mb-0.5">البريد المالي:</span>
-                <span className="text-teal-400 font-mono font-bold" dir="ltr">billing@studenttrack.app</span>
+                <a href="mailto:loutfallaasfora@gmail.com" className="text-teal-400 font-mono font-bold hover:underline" dir="ltr">loutfallaasfora@gmail.com</a>
               </div>
               <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-xs">
                 <span className="text-slate-400 block mb-0.5">واتساب الدعم السريع:</span>
-                <span className="text-teal-400 font-mono font-bold" dir="ltr">+966 50 000 0000</span>
+                <a href="https://wa.me/201012486445" target="_blank" rel="noopener noreferrer" className="text-teal-400 font-mono font-bold hover:underline" dir="ltr">01012486445</a>
               </div>
             </div>
           </section>

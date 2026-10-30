@@ -137,7 +137,7 @@ export default function TermsPage() {
               لأي استفسار بخصوص هذه الشروط أو الاتفاقيات المؤسسية للمراكز التعليمية، يمكنكم مراسلتنا على:
             </p>
             <div className="p-3 bg-white/5 rounded-lg border border-white/10 w-fit text-teal-400 font-mono text-xs" dir="ltr">
-              legal@studenttrack.app
+              loutfallaasfora@gmail.com
             </div>
           </section>
 
