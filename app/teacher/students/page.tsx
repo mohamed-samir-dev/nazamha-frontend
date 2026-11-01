@@ -243,7 +243,7 @@ export default function StudentsManagement() {
     }
     loadStudentsPage();
     return () => { cancelled = true; };
-  // filterSubTeacherId مش هنا عمداً — filtering بتاعته client-side بس
+  // filterSubTeacherId مُدار بالخادم مع الترقيم لضمان جلب كل الطلاب المطابقين عبر الصفحات
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, searchQuery, activeFilter, filterGradeId, filterSubTeacherId, userId, refreshKey]);
 
@@ -700,7 +700,7 @@ export default function StudentsManagement() {
     await printInPlace({ html });
   };
 
-  if (!userId && loading) return <Spinner fullScreen />;
+  // Keep page shell rendered to eliminate CLS
 
   return (
     <div style={{ 
@@ -886,7 +886,7 @@ export default function StudentsManagement() {
           </div>
 
           {/* Table */}
-          <div className="flex-1 overflow-x-auto rounded-xl border border-white/[0.07] bg-[rgba(8,12,20,0.4)]" style={{ WebkitOverflowScrolling: "touch" }}>
+          <div className="flex-1 overflow-x-auto rounded-xl border border-white/[0.07] bg-[rgba(8,12,20,0.4)]" style={{ WebkitOverflowScrolling: "touch", minHeight: "520px" }}>
             <table className="students-table" style={{ minWidth: "900px" }}>
               <thead>
                 <tr>
@@ -907,7 +907,7 @@ export default function StudentsManagement() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="text-center p-12"><Spinner /></td></tr>
+                  <tr><td colSpan={9} className="text-center p-12" style={{ height: "450px" }}><Spinner /></td></tr>
                 ) : studentsError ? (
                   <tr><td colSpan={9} className="text-center p-12"><div role="alert" className="flex flex-col items-center gap-3"><p>تعذر تحميل نتائج البحث. حاول مرة أخرى.</p><Button variant="secondary" onClick={() => setRefreshKey(k => k + 1)}>إعادة المحاولة</Button></div></td></tr>
                 ) : filteredStudents.length === 0 ? (

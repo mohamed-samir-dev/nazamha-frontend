@@ -244,6 +244,7 @@ export interface Group {
   cancelled_sessions?: string[];
   start_date?: string | null; // YYYY-MM-DD
   whatsapp_link?: string | null;
+  student_count?: number;
   created_at?: string;
 }
 

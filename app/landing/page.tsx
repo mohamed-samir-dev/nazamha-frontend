@@ -848,7 +848,7 @@ export default function DedicatedLandingPage() {
             <p className="text-xs text-slate-400 font-medium">
               {isAr ? "المدفوعات الإلكترونية آمنة ومعتمدة بالريال السعودي عبر:" : "Secure e-payments accepted in SAR via:"}
             </p>
-            <PaymentBadges />
+            <PaymentBadges lang={lang} />
           </div>
 
         </div>

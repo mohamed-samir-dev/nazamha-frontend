@@ -97,13 +97,18 @@ export function GroupsList({
 
   const studentCountMap = useMemo(() => {
     const map = new Map<string, number>();
+    for (const g of groups) {
+      if (typeof g.student_count === "number") {
+        map.set(g.id, g.student_count);
+      }
+    }
     for (const s of students) {
-      if (s.group_id && !s.is_suspended) {
+      if (s.group_id && !s.is_suspended && !map.has(s.group_id)) {
         map.set(s.group_id, (map.get(s.group_id) || 0) + 1);
       }
     }
     return map;
-  }, [students]);
+  }, [groups, students]);
 
   const totalStudents = filtered.reduce((s, g) => s + (studentCountMap.get(g.id) || 0), 0);
   const totalRevenue = filtered.reduce((s, g) => s + (g.monthly_price ?? 0) * (studentCountMap.get(g.id) || 0), 0);

@@ -174,24 +174,40 @@ function PrintQRContent() {
     }
 
     try {
-      const cardsData = await Promise.all(
-        targetStudents.map(async student => {
-          const qrSvg = await QRCode.toString(getStudentQRValue(student), {
-            type: "svg",
-            width: 90,
-            margin: 4,
-            errorCorrectionLevel: "M",
-            color: { dark: "#000000", light: "#ffffff" },
-          });
-          return {
-            name: student.name,
-            code: student.code || "—",
-            grade: student.grade_id ? grades[student.grade_id] || "—" : "—",
-            group: student.group_id ? groups[student.group_id] || "—" : "—",
-            qrSvg,
-          };
-        })
-      );
+      const cardsData: Array<{
+        name: string;
+        code: string;
+        grade: string;
+        group: string;
+        qrSvg: string;
+      }> = [];
+
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < targetStudents.length; i += CHUNK_SIZE) {
+        const chunk = targetStudents.slice(i, i + CHUNK_SIZE);
+        const chunkResults = await Promise.all(
+          chunk.map(async student => {
+            const qrSvg = await QRCode.toString(getStudentQRValue(student), {
+              type: "svg",
+              width: 90,
+              margin: 4,
+              errorCorrectionLevel: "M",
+              color: { dark: "#000000", light: "#ffffff" },
+            });
+            return {
+              name: student.name,
+              code: student.code || "—",
+              grade: student.grade_id ? grades[student.grade_id] || "—" : "—",
+              group: student.group_id ? groups[student.group_id] || "—" : "—",
+              qrSvg,
+            };
+          })
+        );
+        cardsData.push(...chunkResults);
+        if (i + CHUNK_SIZE < targetStudents.length) {
+          await new Promise(r => setTimeout(r, 10));
+        }
+      }
 
       const buildCardHeader = () => {
         if (qrHeaderType === "image") {

@@ -113,15 +113,11 @@ export default function GroupsPage() {
         const teacher = await AuthService.getUser();
         if (!teacher) return;
 
-        const [gradesData, studentsData] = await Promise.all([
-          GradesService.getGradesByTeacherId(teacher.id),
-          StudentsService.getStudentsByTeacherId("name,code,group_id,grade_id,is_suspended"),
-        ]);
+        const gradesData = await GradesService.getGradesByTeacherId(teacher.id);
 
         setUserId(teacher.id);
         setHasCenterMode(teacher.is_center_mode || false);
         setGrades(gradesData);
-        setStudents(studentsData);
 
         if (teacher.is_center_mode) {
           const subs = await SubTeachersService.getSubTeachersByCenterId(teacher.id);
