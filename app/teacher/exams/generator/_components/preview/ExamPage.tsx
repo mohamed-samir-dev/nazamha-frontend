@@ -2,6 +2,7 @@
 
 import { Question } from "@/lib/types";
 import { ML, fmtDate, formLabel } from "./types";
+import { resolveImageUrl } from "@/lib/utils/resolveImageUrl";
 
 interface ExamPageProps {
   form: { id: number; questions: Question[] };
@@ -19,11 +20,10 @@ interface ExamPageProps {
 }
 
 export function ExamPage({
-  form, formIndex, totalPages,
+  form,
   subject, examTitle, date, teacher, gradeName, groupName, groupCode, totalScore, instructions,
 }: ExamPageProps) {
   const fLabel = formLabel(form.id - 1);
-  const pageNum = formIndex + 1;
 
   return (
     <div
@@ -31,8 +31,8 @@ export function ExamPage({
       style={{
         background: "#fff",
         width: "794px",
-        minHeight: "1123px",
-        padding: "57px 61px 46px",
+        minHeight: "1050px",
+        padding: "45px 50px 35px",
         boxSizing: "border-box",
         margin: "0 auto",
         direction: "rtl",
@@ -127,7 +127,7 @@ export function ExamPage({
           const isLast  = idx === form.questions.length - 1;
 
           return (
-            <div key={q.id} style={{ breakInside: "avoid" }}>
+            <div key={q.id || idx} className="exam-question-item" style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
               {showSec && (
                 <div style={{ border: "1.5px solid #000", borderBottom: "none", padding: "5px 12px", fontWeight: "bold", fontSize: 13, marginTop: idx === 0 ? 0 : 10, display: "flex", justifyContent: "space-between", background: "#f5f5f5" }}>
                   <span>{q.section_name}</span>
@@ -146,7 +146,7 @@ export function ExamPage({
                 </div>
                 {q.image_base64 && (
                   <div style={{ margin: "8px 28px 4px" }}>
-                    <img src={q.image_base64} style={{ maxWidth: "100%", maxHeight: 190, objectFit: "contain", display: "block", border: "1px solid #ccc" }} alt="" />
+                    <img src={resolveImageUrl(q.image_base64)} style={{ maxWidth: "100%", maxHeight: 190, objectFit: "contain", display: "block", border: "1px solid #ccc" }} alt="" />
                   </div>
                 )}
                 {q.question_type === "essay" && (
@@ -165,11 +165,11 @@ export function ExamPage({
         })}
       </div>
 
-      {/* فوتر + رقم الصفحة */}
-      <div style={{ marginTop: 14, borderTop: "1.5px solid #000", paddingTop: 5, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11 }}>
+      {/* فوتر الامتحان */}
+      <div style={{ marginTop: 14, borderTop: "1.5px solid #000", paddingTop: 5, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, breakInside: "avoid" }}>
         <span>نموذج ( {fLabel} ){subject ? ` — ${subject}` : ""}</span>
         <span style={{ fontWeight: "bold", fontSize: 11, textAlign: "center" }}>✦ راجع إجاباتك قبل تسليم ورقة الامتحان، مع تمنياتنا لك بالتوفيق ✦</span>
-        <span className="page-num-display">صفحة {pageNum} من {totalPages}</span>
+        <span>نموذج {fLabel}</span>
       </div>
     </div>
   );
@@ -191,7 +191,7 @@ function OptionsGrid({ options, optionImages }: { options: string[]; optionImage
               {ML[oi % ML.length]}
             </span>
             {img
-              ? <img src={img} style={{ maxHeight: 65, maxWidth: "100%", border: "1px solid #ccc", borderRadius: 2 }} alt="" />
+              ? <img src={resolveImageUrl(img)} style={{ maxHeight: 65, maxWidth: "100%", border: "1px solid #ccc", borderRadius: 2 }} alt="" />
               : <span style={{ lineHeight: 1.4 }}>{opt}</span>
             }
           </div>

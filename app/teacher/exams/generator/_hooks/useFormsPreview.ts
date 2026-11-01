@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Question } from "@/lib/types";
 import { FormSeed, GeneratedForm, seededShuffle } from "../_components/preview/types";
 import { printHtml } from "@/lib/printHtml";
@@ -48,8 +48,6 @@ export function useFormsPreview(
   const [instructions, setInstructions] = useState<string[]>([]);
   const [sectionOrder, setSectionOrder] = useState<SectionType[]>([]);
 
-  const hiddenRef = useRef<HTMLDivElement>(null);
-
   // Detect which section types exist in questions and init order
   useEffect(() => {
     const types = new Set<SectionType>();
@@ -75,7 +73,7 @@ export function useFormsPreview(
     if (!seeds.length || !questions.length || scoreError) return [];
     return seeds.map(seed => {
       const buckets: Record<SectionType, Question[]> = {
-        mcq: questions.filter(q => q.question_type !== "essay" && q.question_type !== "multiple_choice" && q.question_type !== "true_false" && q.options?.length),
+        mcq: questions.filter(q => (q.question_type === "single_choice" || q.question_type === "mcq" || (!q.question_type && q.options?.length))),
         essay: questions.filter(q => q.question_type === "essay"),
         multiple_choice: questions.filter(q => q.question_type === "multiple_choice"),
         true_false: questions.filter(q => q.question_type === "true_false"),
@@ -83,7 +81,9 @@ export function useFormsPreview(
 
       const shuffledBuckets: Record<SectionType, Question[]> = {
         mcq: seededShuffle(buckets.mcq, seed.poolSeed + 3),
-        essay: seededShuffle(buckets.essay, seed.poolSeed),
+        // Keep essay questions order identical across all forms so that
+        // the model answers and teacher notes are 100% aligned with the answer key!
+        essay: buckets.essay,
         multiple_choice: seededShuffle(buckets.multiple_choice, seed.poolSeed + 1),
         true_false: seededShuffle(buckets.true_false, seed.poolSeed + 2),
       };
@@ -91,11 +91,70 @@ export function useFormsPreview(
       const order: SectionType[] = sectionOrder.length > 0 ? sectionOrder : ["mcq", "multiple_choice", "true_false", "essay"];
       const shuffledQs = order.flatMap(t => shuffledBuckets[t]).map((q, qi) => {
         if (!q.options?.length) return q;
+
+        // True/False questions: never shuffle options; keep (A) صح, (B) خطأ
+        if (q.question_type === "true_false") {
+          return {
+            ...q,
+            options: ["صح", "خطأ"],
+            option_images: [null, null],
+          };
+        }
+
+        // Single Choice & Multiple Choice: shuffle options and track correct answers accurately
+        const correctIndices = new Set<number>();
+        const resolveOrigIdx = (val: string | null | undefined): number => {
+          if (!val) return -1;
+          if (val.startsWith("__img__") || val.startsWith("__idx__")) {
+            return parseInt(val.slice(7), 10);
+          }
+          return q.options ? q.options.indexOf(val) : -1;
+        };
+
+        if (q.question_type === "multiple_choice") {
+          (q.correct_answers || []).forEach(ca => {
+            const idx = resolveOrigIdx(ca);
+            if (idx !== -1) correctIndices.add(idx);
+          });
+        } else {
+          const idx = resolveOrigIdx(q.correct_answer);
+          if (idx !== -1) correctIndices.add(idx);
+        }
+
         const optSeed = seed.optionSeeds[qi] ?? seed.poolSeed + qi;
-        const paired = q.options.map((opt, i) => ({ opt, img: q.option_images?.[i] ?? null }));
+        const paired = q.options.map((opt, i) => ({
+          opt,
+          img: q.option_images?.[i] ?? null,
+          isCorrect: correctIndices.has(i),
+        }));
+
         const shuffled = seededShuffle(paired, optSeed);
-        return { ...q, options: shuffled.map(p => p.opt), option_images: shuffled.map(p => p.img) };
+        const newOptions = shuffled.map(p => p.opt);
+        const newImages = shuffled.map(p => p.img);
+
+        let newCorrectAnswer: string | null = null;
+        let newCorrectAnswers: string[] | null = null;
+
+        if (q.question_type === "multiple_choice") {
+          newCorrectAnswers = shuffled
+            .map((p, i) => p.isCorrect ? (p.opt.trim() ? p.opt : `__img__${i}`) : null)
+            .filter((v): v is string => v !== null);
+        } else {
+          const newIdx = shuffled.findIndex(p => p.isCorrect);
+          if (newIdx !== -1) {
+            newCorrectAnswer = shuffled[newIdx].opt.trim() ? shuffled[newIdx].opt : `__img__${newIdx}`;
+          }
+        }
+
+        return {
+          ...q,
+          options: newOptions,
+          option_images: newImages,
+          correct_answer: newCorrectAnswer,
+          correct_answers: newCorrectAnswers,
+        };
       });
+
       return { id: seed.id, questions: shuffledQs };
     });
   }, [seeds, questions, sectionOrder, scoreError]);
@@ -112,16 +171,13 @@ export function useFormsPreview(
   };
 
   const printOne = (elIdx: number, label: string) => {
-    if (!hiddenRef.current || printing !== null || scoreError) return;
-    const allEls = Array.from(hiddenRef.current.querySelectorAll(".exam-form-page")) as HTMLElement[];
-    const el = allEls[elIdx];
+    if (printing !== null || scoreError) return;
+    const isAnswerKey = elIdx >= forms.length;
+    const targetId = isAnswerKey ? "exam-preview-answer-key" : `exam-preview-form-${elIdx}`;
+    const el = document.getElementById(targetId);
     if (!el) return;
 
-    // clone and fix page number to show 1 of 1 when printing single page
     const clone = el.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll(".page-num-display").forEach(span => {
-      (span as HTMLElement).textContent = "صفحة 1 من 1";
-    });
 
     setPrinting(elIdx);
     const title = `امتحان ${examTitle || bankTitle} — ${label}`;
@@ -130,15 +186,15 @@ export function useFormsPreview(
       <title>${title}</title>
       <style>
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+        @page { size: A4 portrait; margin: 10mm 12mm 12mm 12mm; }
         body { margin: 0; padding: 0; background: #fff; font-family: 'Arial','Tahoma',sans-serif; direction: rtl; }
-        @page { size: A4 portrait; margin: 0; }
         .exam-form-page {
-          width: 210mm !important; min-height: 297mm !important;
-          padding: 15mm 16mm 12mm !important; box-sizing: border-box !important;
-          overflow: visible !important; background: #fff !important;
+          width: 100% !important; max-width: 190mm !important; min-height: auto !important;
+          padding: 0 !important; margin: 0 auto !important; background: #fff !important;
           color: #000 !important; font-family: 'Arial','Tahoma',sans-serif !important;
           font-size: 13px !important; line-height: 1.5 !important; direction: rtl !important;
         }
+        .exam-question-item { break-inside: avoid !important; page-break-inside: avoid !important; }
         .mobile-print-btn {
           display: none;
           position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -152,15 +208,15 @@ export function useFormsPreview(
     </head><body>
       ${clone.outerHTML}
       <button class="mobile-print-btn" onclick="window.print()">🖸 طباعة</button>
-      <script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>
+      <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
     </body></html>`;
 
     printHtml(html);
-    setTimeout(() => setPrinting(null), 2000);
+    setTimeout(() => setPrinting(null), 1500);
   };
 
   return {
-    forms, printing, hiddenRef,
+    forms, printing,
     settingsOpen, setSettingsOpen,
     numForms, setNumForms,
     totalScore, scoreError,

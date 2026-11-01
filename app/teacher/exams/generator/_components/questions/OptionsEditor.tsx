@@ -1,9 +1,12 @@
 "use client";
 
-import { ImageIcon, Plus, Trash2, X } from "lucide-react";
-import { Input } from "@/components/ui/Input";
-import { QuestionFormState, QuestionType } from "./types";
+import { useState } from "react";
+import { ImageIcon, Plus, X } from "lucide-react";
+import { QuestionFormState } from "./types";
 import { TRUE_FALSE_OPTIONS } from "./constants";
+import { compressImage } from "@/lib/utils/compressImage";
+import { questionsService } from "@/lib/services/questionsService";
+import { resolveImageUrl } from "@/lib/utils/resolveImageUrl";
 
 interface OptionsEditorProps {
   f: QuestionFormState;
@@ -11,13 +14,15 @@ interface OptionsEditorProps {
   questionIdx: number;
 }
 
-export function OptionsEditor({ f, setF, questionIdx }: OptionsEditorProps) {
+export function OptionsEditor({ f, setF }: OptionsEditorProps) {
   const { questionType, options, optionImages, correctAnswer, correctAnswers } = f;
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
 
   // index-based correct tracking — supports image-only options
-  // correctAnswer stores "__idx__N" when option has image
   const parseCorrectIdx = (val: string) => {
-    if (val.startsWith("__idx__")) return parseInt(val.slice(7), 10);
+    if (val.startsWith("__idx__") || val.startsWith("__img__")) {
+      return parseInt(val.slice(7), 10);
+    }
     const i = options.indexOf(val);
     return i !== -1 ? i : -1;
   };
@@ -34,7 +39,6 @@ export function OptionsEditor({ f, setF, questionIdx }: OptionsEditorProps) {
     setF((p) => {
       const opts = [...p.options];
       opts[i] = val;
-      // keep correctAnswer/correctAnswers in sync by index, not value
       return { ...p, options: opts };
     });
   };
@@ -45,6 +49,21 @@ export function OptionsEditor({ f, setF, questionIdx }: OptionsEditorProps) {
       imgs[i] = img;
       return { ...p, optionImages: imgs };
     });
+  };
+
+  const handleImageUpload = async (i: number, file: File) => {
+    setUploadingIdx(i);
+    try {
+      const compressed = await compressImage(file);
+      const res = await questionsService.uploadImage(compressed);
+      updateOptionImage(i, res.url);
+    } catch {
+      const r = new FileReader();
+      r.onloadend = () => updateOptionImage(i, r.result as string);
+      r.readAsDataURL(file);
+    } finally {
+      setUploadingIdx(null);
+    }
   };
 
   const removeOption = (i: number) => {
@@ -77,7 +96,7 @@ export function OptionsEditor({ f, setF, questionIdx }: OptionsEditorProps) {
       return;
     }
     // use index key when option has image or empty text
-    const optVal = optionImages[i] || !options[i].trim() ? `__idx__${i}` : options[i];
+    const optVal = optionImages[i] || !options[i]?.trim() ? `__idx__${i}` : options[i];
     if (questionType === "single_choice") {
       setF((p) => ({ ...p, correctAnswer: optVal }));
     } else {
@@ -152,21 +171,38 @@ export function OptionsEditor({ f, setF, questionIdx }: OptionsEditorProps) {
 
             {/* option image preview */}
             {img ? (
-              <div style={{ position: "relative", flex: 1 }}>
-                <img src={img} alt="" style={{ maxHeight: 48, maxWidth: "100%", borderRadius: 6, display: "block" }} />
+              <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <img src={resolveImageUrl(img)} alt="" style={{ maxHeight: 48, maxWidth: "100%", borderRadius: 6, display: "block" }} />
+                {!readOnly && (
+                  <input
+                    value={opt}
+                    onChange={(e) => updateOption(i, e.target.value)}
+                    placeholder="نص توضيحي للخيار (اختياري)"
+                    style={{
+                      flex: 1,
+                      padding: "0.3rem 0.5rem",
+                      borderRadius: 6,
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      color: "var(--text-primary)",
+                      fontSize: "0.82rem",
+                      outline: "none",
+                    }}
+                  />
+                )}
                 {!readOnly && (
                   <button
                     type="button"
                     onClick={() => updateOptionImage(i, null)}
-                    style={{ position: "absolute", top: 2, right: 2, background: "rgba(239,68,68,0.8)", border: "none", borderRadius: "50%", padding: 2, cursor: "pointer", display: "flex", color: "#fff" }}
+                    style={{ background: "rgba(239,68,68,0.8)", border: "none", borderRadius: "50%", padding: 3, cursor: "pointer", display: "flex", color: "#fff" }}
                   >
-                    <X size={10} />
+                    <X size={12} />
                   </button>
                 )}
               </div>
             ) : (
               <input
-                value={readOnly ? opt : opt}
+                value={opt}
                 onChange={(e) => !readOnly && updateOption(i, e.target.value)}
                 readOnly={readOnly}
                 placeholder={`خيار ${i + 1}`}
@@ -188,19 +224,17 @@ export function OptionsEditor({ f, setF, questionIdx }: OptionsEditorProps) {
             {!readOnly && !img && (
               <label
                 title="إرفاق صورة للخيار"
-                style={{ cursor: "pointer", color: "var(--text-muted)", display: "flex", padding: "3px", borderRadius: 6, flexShrink: 0 }}
+                style={{ cursor: uploadingIdx === i ? "wait" : "pointer", color: "var(--text-muted)", display: "flex", padding: "3px", borderRadius: 6, flexShrink: 0 }}
               >
                 <ImageIcon size={13} />
                 <input
                   type="file"
                   accept="image/*"
                   style={{ display: "none" }}
+                  disabled={uploadingIdx !== null}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (!file) return;
-                    const r = new FileReader();
-                    r.onloadend = () => updateOptionImage(i, r.result as string);
-                    r.readAsDataURL(file);
+                    if (file) handleImageUpload(i, file);
                   }}
                 />
               </label>

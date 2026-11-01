@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, BookOpen, Save, Hash, RefreshCw } from "lucide-react";
+import { X, BookOpen, Save, Hash, RefreshCw, Calendar, FileText } from "lucide-react";
 import { Book, Grade, Group } from "@/lib/types";
 import { BooksService } from "@/lib/services/booksService";
 import { getErrorMessage } from "@/lib/errors";
@@ -19,58 +19,67 @@ function generateCode(name: string): string {
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map(w => w.replace(/[^a-zA-Z\u0600-\u06FF]/g, "").slice(0, 3).toUpperCase())
+    .map(w => w.replace(/[^a-zA-Z\u0600-\u06FF0-9]/g, "").slice(0, 3).toUpperCase())
+    .filter(Boolean)
     .join("-")
     || "BK";
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `${prefix}-${suffix}`;
 }
 
-export default function BookFormModal({ book, grades, groups, onClose, onSaved }: Props) {
-  const gradeIdsWithGroups = new Set(groups.map((g) => g.grade_id).filter(Boolean));
-  const availableGrades = grades.filter((g) => gradeIdsWithGroups.has(g.id));
+export default function BookFormModal({ book, grades, onClose, onSaved }: Props) {
+  const currentYear = new Date().getFullYear();
+  const defaultAcademicYear = `${currentYear}-${currentYear + 1}`;
+
   const [form, setForm] = useState({
     name: book?.name ?? "",
     grade_id: book?.grade_id ?? "",
     price: book?.price != null ? String(book.price) : "",
     status: book?.status ?? "available",
     code: book?.code ?? "",
+    academic_year: book?.academic_year ?? defaultAcademicYear,
+    description: book?.description ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // جنريت كود تلقائي عند الإضافة
+  // توليد كود تلقائي أولي فقط عند إضافة كتاب جديد إذا كان الحقل فارغاً
   useEffect(() => {
     if (!book && !form.code) {
       setForm(p => ({ ...p, code: generateCode(p.name || "كتاب") }));
     }
-  }, []);
+  }, [book]);
 
-  // إعادة جنريت الكود لما يتغير الاسم (للإضافة فقط)
-  const handleNameChange = (v: string) => {
-    setForm(p => ({
-      ...p,
-      name: v,
-      code: !book ? generateCode(v || "كتاب") : p.code,
-    }));
-  };
+  // إغلاق المودال بـ Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const regenerateCode = () => setForm(p => ({ ...p, code: generateCode(p.name || "كتاب") }));
-
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError("اسم الكتاب مطلوب"); return; }
-    if (!form.price || isNaN(Number(form.price))) { setError("السعر مطلوب"); return; }
+    const numPrice = Number(form.price);
+    if (form.price === "" || isNaN(numPrice) || numPrice < 0) {
+      setError("يرجى إدخال سعر صحيح (0 أو أكبر)");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const data = {
         name: form.name.trim(),
         grade_id: form.grade_id || null,
-        price: Number(form.price),
+        price: numPrice,
         status: form.status as "available" | "unavailable",
         code: form.code.trim() || null,
+        academic_year: form.academic_year.trim() || null,
+        description: form.description.trim() || null,
       };
       if (book) await BooksService.updateBook(book.id, data);
       else await BooksService.createBook(data);
@@ -83,8 +92,15 @@ export default function BookFormModal({ book, grades, groups, onClose, onSaved }
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div className="glass-panel" style={{ width: "100%", maxWidth: "460px", padding: "1.5rem", maxHeight: "90vh", overflowY: "auto" }}>
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-panel"
+        style={{ width: "100%", maxWidth: "480px", padding: "1.5rem", maxHeight: "90vh", overflowY: "auto" }}
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
@@ -96,7 +112,11 @@ export default function BookFormModal({ book, grades, groups, onClose, onSaved }
               {book ? "تعديل الكتاب" : "إضافة كتاب جديد"}
             </h2>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "4px", borderRadius: "6px" }}>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "4px", borderRadius: "6px" }}
+            aria-label="إغلاق"
+          >
             <X size={18} />
           </button>
         </div>
@@ -107,54 +127,68 @@ export default function BookFormModal({ book, grades, groups, onClose, onSaved }
           <Field label="اسم الكتاب *">
             <input
               value={form.name}
-              onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="مثال: كتاب الفيزياء"
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="مثال: مذكرة الفيزياء - الفصل الأول"
               className="form-input"
             />
           </Field>
 
-          {/* Code (auto-generated, read-only for new, editable for existing) */}
-          <Field label="كود الكتاب" icon={<Hash size={12} />}>
+          {/* Code */}
+          <Field label="كود أو باركود الكتاب" icon={<Hash size={12} />}>
             <div style={{ position: "relative" }}>
               <input
                 value={form.code}
                 onChange={(e) => set("code", e.target.value)}
-                placeholder="يتولد تلقائياً"
+                placeholder="أدخل كود مخصص أو اتركه للتوليد التلقائي"
                 className="form-input"
                 style={{ paddingLeft: "2.4rem", fontFamily: "monospace", letterSpacing: "0.05em", color: "var(--color-teal)" }}
-                readOnly={!book}
               />
-              {!book && (
-                <button
-                  type="button"
-                  onClick={regenerateCode}
-                  title="توليد كود جديد"
-                  style={{ position: "absolute", left: "0.5rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px", display: "flex", alignItems: "center" }}
-                >
-                  <RefreshCw size={13} />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={regenerateCode}
+                title="توليد كود تلقائي جديد"
+                style={{ position: "absolute", left: "0.5rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px", display: "flex", alignItems: "center" }}
+              >
+                <RefreshCw size={13} />
+              </button>
             </div>
-            {!book && (
-              <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: "0.25rem 0 0", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                <span style={{ color: "var(--color-teal)", fontSize: "0.65rem" }}>●</span>
-                يتولد تلقائياً · اضغط <RefreshCw size={10} style={{ display: "inline" }} /> لتوليد كود جديد
-              </p>
-            )}
+            <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: "0.25rem 0 0", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+              <span style={{ color: "var(--color-teal)", fontSize: "0.65rem" }}>●</span>
+              يمكنك كتابة كود مخصص/باركود أو الضغط على <RefreshCw size={10} style={{ display: "inline" }} /> للتوليد التلقائي
+            </p>
           </Field>
 
-          {/* Grade */}
-          <Field label="السنة الدراسية">
-            <select value={form.grade_id} onChange={(e) => set("grade_id", e.target.value)} className="form-input">
-              <option value="">-- اختر السنة الدراسية --</option>
-              {availableGrades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </Field>
+          {/* Grade & Academic Year */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem" }}>
+            <Field label="الصف الدراسي">
+              <select value={form.grade_id} onChange={(e) => set("grade_id", e.target.value)} className="form-input">
+                <option value="">-- كل الصفوف / عام --</option>
+                {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </Field>
+
+            <Field label="السنة الدراسية" icon={<Calendar size={12} />}>
+              <input
+                value={form.academic_year}
+                onChange={(e) => set("academic_year", e.target.value)}
+                placeholder="2026-2027"
+                className="form-input"
+              />
+            </Field>
+          </div>
 
           {/* Price + Status */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.75rem" }}>
             <Field label="السعر (جنيه) *">
-              <input type="number" min={0} value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="0" className="form-input" />
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={form.price}
+                onChange={(e) => set("price", e.target.value)}
+                placeholder="0"
+                className="form-input"
+              />
             </Field>
             <Field label="الحالة">
               <select value={form.status} onChange={(e) => set("status", e.target.value)} className="form-input">
@@ -164,6 +198,18 @@ export default function BookFormModal({ book, grades, groups, onClose, onSaved }
             </Field>
           </div>
 
+          {/* Description */}
+          <Field label="وصف الكتاب (اختياري)" icon={<FileText size={12} />}>
+            <textarea
+              value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="ملاحظات أو وصف إضافي للكتاب..."
+              className="form-input"
+              rows={2}
+              style={{ resize: "vertical" }}
+            />
+          </Field>
+
           {error && (
             <div style={{ padding: "0.6rem 0.85rem", borderRadius: "8px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171", fontSize: "0.82rem" }}>
               {error}
@@ -171,10 +217,19 @@ export default function BookFormModal({ book, grades, groups, onClose, onSaved }
           )}
 
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
-            <button onClick={onClose} style={{ flex: 1, padding: "0.65rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "inherit" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ flex: 1, padding: "0.65rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-secondary)", cursor: "pointer", fontFamily: "inherit" }}
+            >
               إلغاء
             </button>
-            <button onClick={handleSubmit} disabled={saving} style={{ flex: 2, padding: "0.65rem", borderRadius: "8px", background: "var(--color-teal)", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", opacity: saving ? 0.7 : 1 }}>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              style={{ flex: 2, padding: "0.65rem", borderRadius: "8px", background: "var(--color-teal)", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", opacity: saving ? 0.7 : 1 }}
+            >
               <Save size={14} /> {saving ? "جاري الحفظ..." : "حفظ"}
             </button>
           </div>

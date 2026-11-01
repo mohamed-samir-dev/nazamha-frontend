@@ -16,9 +16,19 @@ interface QuestionsEditorProps {
   onDeleteQuestion: (id: string) => void;
   onReorder: (questions: Question[]) => void;
   onUpdateTotalScore?: (score: number) => void;
+  onBulkUpdateMarks?: (marks: { id: string; marks: number }[]) => void;
 }
 
-export function QuestionsEditor({ questions, totalScore, onAddQuestion, onUpdateQuestion, onDeleteQuestion, onReorder, onUpdateTotalScore }: QuestionsEditorProps) {
+export function QuestionsEditor({
+  questions,
+  totalScore,
+  onAddQuestion,
+  onUpdateQuestion,
+  onDeleteQuestion,
+  onReorder,
+  onUpdateTotalScore,
+  onBulkUpdateMarks,
+}: QuestionsEditorProps) {
   const [addOpen, setAddOpen] = useState(true);
   const [form, setForm] = useState(emptyForm());
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -93,12 +103,17 @@ export function QuestionsEditor({ questions, totalScore, onAddQuestion, onUpdate
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", paddingRight: "1.6rem" }}>
             <button
               onClick={() => {
-                // scale down all marks proportionally
+                // scale down all marks proportionally in a single bulk operation
                 const ratio = totalScore! / questionsTotal;
-                questions.forEach(q => {
-                  const newMark = Math.max(0.5, Math.round((q.marks ?? 1) * ratio * 2) / 2);
-                  onUpdateQuestion(q.id, { marks: newMark });
-                });
+                const newMarks = questions.map(q => ({
+                  id: q.id,
+                  marks: Math.max(0.5, Math.round((q.marks ?? 1) * ratio * 2) / 2),
+                }));
+                if (onBulkUpdateMarks) {
+                  onBulkUpdateMarks(newMarks);
+                } else {
+                  newMarks.forEach(m => onUpdateQuestion(m.id, { marks: m.marks }));
+                }
                 setScoreWarningDismissed(true);
               }}
               style={{

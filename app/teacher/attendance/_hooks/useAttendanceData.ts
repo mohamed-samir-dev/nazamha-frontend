@@ -140,7 +140,11 @@ export function useAttendanceData(currentMonthOnly = false) {
     if (!userId) return;
     const bc = new BroadcastChannel("attendance");
     let controller: AbortController | null = null;
-    bc.onmessage = () => {
+    bc.onmessage = (event) => {
+      const currentTabId = typeof window !== "undefined" ? (window as any).__attendanceTabId : "";
+      if (currentTabId && (event as MessageEvent)?.data?.senderId === currentTabId) {
+        return; // Ignore updates triggered by this same tab to prevent overwriting optimistic state
+      }
       controller?.abort();
       controller = new AbortController();
       fetchAttendance(userId, weekOffset, controller.signal)

@@ -67,8 +67,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const logEnabled=ENABLE_LOGS&&!/^\/(?:attendance|students)(?:[/?]|$)/.test(path);
   const generation = appCache.generation();
   const method = (options.method || "GET").toUpperCase();
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}),
     ...(MUTATING.has(method) ? { "Idempotency-Key": crypto.randomUUID() } : {}),
     ...(options.headers as Record<string, string>),
   };
@@ -85,7 +86,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const cachePolicy: RequestCache = (MUTATING.has(method) || isAuthMe) ? "no-store" : "default";
 
   if (logEnabled) {
-    console.log(`📡 API ${method} ${path}`, options.body ? JSON.parse(options.body as string) : '');
+    console.log(`📡 API ${method} ${path}`, isFormData ? "[FormData]" : (options.body ? JSON.parse(options.body as string) : ""));
   }
 
   const ensureCurrentAccount = () => { if (generation !== appCache.generation()) throw new Error("تم تغيير الحساب؛ تجاهل الاستجابة القديمة"); };
@@ -255,6 +256,7 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  upload: <T>(path: string, formData: FormData) => request<T>(path, { method: "POST", body: formData }),
   delete: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: "DELETE",

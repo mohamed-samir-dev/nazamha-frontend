@@ -25,7 +25,7 @@ export const inputStyle: React.CSSProperties = {
   boxSizing: "border-box" as const,
 };
 
-export const iconBtnStyle = (danger = false): React.CSSProperties => ({
+export const iconBtnStyle = (_danger = false): React.CSSProperties => ({
   background: "transparent",
   border: "none",
   cursor: "pointer",
@@ -51,9 +51,13 @@ export function questionToForm(q: Question): QuestionFormState {
     (_, i) => (q.option_images?.[i] ?? null)
   );
 
-  // convert correct_answer to __idx__ if the option has an image and no text
+  // convert correct_answer to __idx__ if the option has an image and no text, or was stored as __img__N
   const resolveCorrectAnswer = (val: string | null | undefined): string => {
     if (!val) return "";
+    if (val.startsWith("__idx__") || val.startsWith("__img__")) {
+      const idx = parseInt(val.slice(7), 10);
+      return `__idx__${idx}`;
+    }
     const idx = opts.indexOf(val);
     if (idx !== -1 && images[idx] && !opts[idx].trim()) return `__idx__${idx}`;
     return val;
@@ -89,7 +93,7 @@ export function formToQuestion(f: QuestionFormState) {
 
   const resolveCorrect = (val: string): string => {
     if (!val) return "";
-    if (val.startsWith("__idx__")) {
+    if (val.startsWith("__idx__") || val.startsWith("__img__")) {
       const origIdx = parseInt(val.slice(7), 10);
       const newIdx = filledWithIdx.findIndex((o) => o.origIdx === origIdx);
       return newIdx !== -1 ? filledWithIdx[newIdx].text || `__img__${newIdx}` : "";
@@ -152,7 +156,7 @@ export function validateForm(f: QuestionFormState): string | null {
   return null;
 }
 
-function normalizeType(t?: string | null): QuestionFormState["questionType"] {
+export function normalizeType(t?: string | null): QuestionFormState["questionType"] {
   if (t === "single_choice" || t === "multiple_choice" || t === "true_false" || t === "essay")
     return t;
   if (t === "mcq") return "single_choice";

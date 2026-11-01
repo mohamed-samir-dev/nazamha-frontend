@@ -44,7 +44,7 @@ export function FormsDisplay({ forms, bankTitle, examTitle, subj, date, teacher,
             </span>
           </div>
           <div style={{ background: "var(--bg-secondary)", borderRadius: 10, padding: "0.85rem", overflowX: "auto", border: "1px solid var(--border-color)", WebkitOverflowScrolling: "touch" }}>
-            <div style={{ minWidth: 480 }}>
+            <div style={{ minWidth: 480 }} id={`exam-preview-form-${fi}`}>
               <ExamPage
                 form={form} formIndex={fi} totalPages={forms.length + 1}
                 subject={subj} examTitle={examTitle} date={date} teacher={teacher}
@@ -66,7 +66,7 @@ export function FormsDisplay({ forms, bankTitle, examTitle, subj, date, teacher,
           </span>
         </div>
         <div style={{ background: "var(--bg-secondary)", borderRadius: 10, padding: "0.85rem", overflowX: "auto", border: "1px solid rgba(245,158,11,0.15)", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ minWidth: 480 }}>
+          <div style={{ minWidth: 480 }} id="exam-preview-answer-key">
             <AnswerKey
               forms={forms} examTitle={examTitle} bankTitle={bankTitle}
               subject={subj} teacher={teacher} date={date} totalScore={totalScore}

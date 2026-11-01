@@ -157,6 +157,7 @@ export interface BookSale {
   discount_reason?: string | null;
   final_price: number;
   is_exempt: boolean;
+  paid?: boolean;
   subscription_id?: string | null;
   month: number;
   year: number;
@@ -514,6 +515,7 @@ export interface Question {
   section_name?: string | null;
   image_base64?: string | null;
   marks?: number | null;
+  order?: number;
   teacher_notes?: string | null;
   model_answer?: string | null;
   created_at?: string;

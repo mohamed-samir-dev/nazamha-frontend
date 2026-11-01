@@ -6,7 +6,21 @@ import { appCache } from "@/lib/appCache";
 export type AttendanceSaveResult = { state: "saved"; record: AttendanceRecord } | { state: "queued" };
 export interface AttendanceBulkResult { data: AttendanceRecord[]; suspended_skipped: string[] }
 let syncPromise: Promise<number> | null = null;
-const broadcast = () => { if (typeof BroadcastChannel !== "undefined") { const channel = new BroadcastChannel("attendance"); channel.postMessage("refresh"); channel.close(); } };
+const getTabId = () => {
+  if (typeof window === "undefined") return "";
+  if (!(window as any).__attendanceTabId) {
+    (window as any).__attendanceTabId = Math.random().toString(36).slice(2);
+  }
+  return (window as any).__attendanceTabId;
+};
+
+const broadcast = (source = "general") => {
+  if (typeof BroadcastChannel !== "undefined") {
+    const channel = new BroadcastChannel("attendance");
+    channel.postMessage({ type: "refresh", source, senderId: getTabId() });
+    channel.close();
+  }
+};
 
 export const AttendanceRepository = {
   async revokeSubstitution(id:string,reason:string){await api.post(`/attendance/substitutions/${id}/revoke`,{reason});appCache.invalidate("allTimeAttendanceMap");broadcast();},

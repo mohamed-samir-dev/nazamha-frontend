@@ -37,4 +37,16 @@ export const questionsService = {
   async deleteQuestion(id: string): Promise<void> {
     return questionsRepository.deleteQuestion(id);
   },
+
+  async reorderQuestions(bankId: string, questionIds: string[]): Promise<void> {
+    return questionsRepository.reorderQuestions(bankId, questionIds);
+  },
+
+  async bulkUpdateMarks(bankId: string, marks: { id: string; marks: number }[]): Promise<void> {
+    return questionsRepository.bulkUpdateMarks(bankId, marks);
+  },
+
+  async uploadImage(file: File | Blob): Promise<{ url: string }> {
+    return questionsRepository.uploadImage(file);
+  },
 };

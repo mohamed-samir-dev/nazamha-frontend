@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ShoppingBag, Search, XCircle } from "lucide-react";
+import Link from "next/link";
+import { ShoppingBag, Search, XCircle, ArrowRight } from "lucide-react";
 import { BooksService } from "@/lib/services/booksService";
 import { Spinner } from "@/components/ui/Spinner";
 import { Toast } from "@/components/ui/Toast";
@@ -14,8 +15,11 @@ export default function BookSalesPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const now = new Date();
+  const currentYearNum = now.getFullYear();
+  const availableYears = [currentYearNum - 2, currentYearNum - 1, currentYearNum, currentYearNum + 1];
+
   const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  const [year, setYear] = useState(String(currentYearNum));
 
   const load = async () => {
     setLoading(true);
@@ -32,10 +36,10 @@ export default function BookSalesPage() {
   useEffect(() => { load(); }, [month, year]);
 
   const handleCancel = async (saleId: string) => {
-    if (!confirm("هل تريد إلغاء هذه العملية؟")) return;
+    if (!window.confirm("هل تريد إلغاء عملية البيع هذه بالكامل؟")) return;
     try {
       await BooksService.cancelSale(saleId);
-      setToast({ message: "تم إلغاء البيع", type: "success" });
+      setToast({ message: "تم إلغاء البيع بنجاح", type: "success" });
       load();
     } catch (e: unknown) {
       setToast({ message: getErrorMessage(e, "حدث خطأ أثناء إلغاء البيع."), type: "error" });
@@ -49,7 +53,7 @@ export default function BookSalesPage() {
     return student?.name?.includes(search) || book?.name?.includes(search) || student?.code?.includes(search);
   });
 
-  const totalRevenue = filtered.reduce((sum, s) => sum + s.final_price, 0);
+  const totalRevenue = filtered.reduce((sum, s) => sum + (s.final_price ?? 0), 0);
 
   const MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
@@ -57,6 +61,15 @@ export default function BookSalesPage() {
 
   return (
     <div>
+      {/* Breadcrumb */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+        <Link href="/teacher/books" style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-muted)", textDecoration: "none" }}>
+          <ArrowRight size={14} /> الكتب
+        </Link>
+        <span>/</span>
+        <span style={{ color: "#fff" }}>سجل المبيعات</span>
+      </div>
+
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
         <ShoppingBag size={22} style={{ color: "var(--color-teal)" }} />
         <div>
@@ -72,10 +85,10 @@ export default function BookSalesPage() {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..." style={{ width: "100%", padding: "0.55rem 2rem 0.55rem 0.7rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit", boxSizing: "border-box" }} />
         </div>
         <select value={month} onChange={(e) => setMonth(e.target.value)} style={{ padding: "0.55rem 0.75rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit" }}>
-          {MONTHS.map((m, i) => <option key={i + 1} value={String(i + 1)}>{m}</option>)}
+          {MONTHS.map((m, i) => <option key={i + 1} value={String(i + 1)} style={{ background: "#1e293b" }}>{m}</option>)}
         </select>
         <select value={year} onChange={(e) => setYear(e.target.value)} style={{ padding: "0.55rem 0.75rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit" }}>
-          {[2024, 2025, 2026].map((y) => <option key={y} value={String(y)}>{y}</option>)}
+          {availableYears.map((y) => <option key={y} value={String(y)} style={{ background: "#1e293b" }}>{y}</option>)}
         </select>
       </div>
 
@@ -114,7 +127,7 @@ export default function BookSalesPage() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>لا توجد مبيعات</div>
+            <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>لا توجد مبيعات في هذا الشهر</div>
           )}
         </div>
       </div>

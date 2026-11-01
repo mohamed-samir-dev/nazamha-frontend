@@ -112,7 +112,6 @@ export function useExamsGenerator() {
 
   const addQuestion = async (q: Omit<Question, "id" | "bank_id" | "created_at">) => {
     if (!selectedExamId) return;
-    // optimistic: add immediately with temp id
     const tempId = `temp_${Date.now()}`;
     const tempQ: Question = { ...q, id: tempId, bank_id: selectedExamId };
     setQuestions(prev => [...prev, tempQ]);
@@ -125,19 +124,16 @@ export function useExamsGenerator() {
   };
 
   const updateQuestion = async (id: string, updates: Partial<Question>) => {
-    // optimistic update
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, ...updates } : q));
     try {
       const updated = await questionsService.updateQuestion(id, updates);
       setQuestions(prev => prev.map(q => q.id === id ? updated : q));
     } catch {
-      // revert on error — reload from server
       loadQuestions(selectedExamId!);
     }
   };
 
   const deleteQuestion = async (id: string) => {
-    // optimistic delete
     setQuestions(prev => prev.filter(q => q.id !== id));
     try {
       await questionsService.deleteQuestion(id);
@@ -146,7 +142,28 @@ export function useExamsGenerator() {
     }
   };
 
-  const reorderQuestions = (reordered: Question[]) => setQuestions(reordered);
+  const reorderQuestions = async (reordered: Question[]) => {
+    setQuestions(reordered);
+    if (selectedExamId) {
+      try {
+        await questionsService.reorderQuestions(selectedExamId, reordered.map(q => q.id));
+      } catch (err) {
+        console.error("Failed to persist question order:", err);
+      }
+    }
+  };
+
+  const bulkUpdateMarks = async (marks: { id: string; marks: number }[]) => {
+    if (!selectedExamId) return;
+    const markMap = new Map(marks.map(m => [m.id, m.marks]));
+    setQuestions(prev => prev.map(q => markMap.has(q.id) ? { ...q, marks: markMap.get(q.id)! } : q));
+    try {
+      await questionsService.bulkUpdateMarks(selectedExamId, marks);
+    } catch (err) {
+      console.error("Failed to bulk update marks:", err);
+      loadQuestions(selectedExamId);
+    }
+  };
 
   const selectedExam = exams.find(e => e.id === selectedExamId);
 
@@ -155,6 +172,6 @@ export function useExamsGenerator() {
     grades, groups, loading,
     selectExam, filteredGroups,
     createExam, updateExam, deleteExam, duplicateExam, updateExamTotalScore,
-    addQuestion, updateQuestion, deleteQuestion, reorderQuestions,
+    addQuestion, updateQuestion, deleteQuestion, reorderQuestions, bulkUpdateMarks,
   };
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Award, Search, Gift, Check, RotateCcw, XCircle } from "lucide-react";
+import { Award, Search, Gift, Check, Trash2, XCircle } from "lucide-react";
 import { FINANCIAL_CHANGED } from "@/lib/financialEvents";
 import { BooksService } from "@/lib/services/booksService";
 import { GroupsService } from "@/lib/services/groupsService";
@@ -24,11 +24,14 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
   const [toast, setToast]                   = useState<{ message: string; type: "success" | "error" } | null>(null);
   const detailsRequest = useRef(0);
 
-  // الصفوف الموجودة فعلاً في الكتب فقط
+  // الصفوف الموجودة فعلاً في الكتب
   const activeGradeIds = [...new Set(books.map(b => b.grade_id).filter(Boolean))] as string[];
   const activeGrades = grades.filter(g => activeGradeIds.includes(g.id));
+  const hasGeneralBooks = books.some(b => !b.grade_id);
 
-  const filteredBooks = selectedGradeId
+  const filteredBooks = selectedGradeId === "general"
+    ? books.filter(b => !b.grade_id)
+    : selectedGradeId
     ? books.filter(b => b.grade_id === selectedGradeId)
     : books;
 
@@ -52,38 +55,52 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
     setSearch(""); setFilter("all");
     loadDetails(selectedBookId);
     let timer: ReturnType<typeof setTimeout>;
-    const update = () => { clearTimeout(timer); timer = setTimeout(() => loadDetails(selectedBookId, true), 150); };
-    const visible = () => { if (document.visibilityState === "visible") update(); };
+    const update = () => { clearTimeout(timer); timer = setTimeout(() => loadDetails(selectedBookId, true), 300); };
     window.addEventListener(FINANCIAL_CHANGED, update);
-    document.addEventListener("visibilitychange", visible);
-    return () => { detailsRequest.current++; clearTimeout(timer); window.removeEventListener(FINANCIAL_CHANGED, update); document.removeEventListener("visibilitychange", visible); };
+    return () => { detailsRequest.current++; clearTimeout(timer); window.removeEventListener(FINANCIAL_CHANGED, update); };
   }, [selectedBookId]);
 
-  const withAction = async (key: string, fn: () => Promise<any>) => {
+  const withAction = async (key: string, fn: () => Promise<any>, successMsg = "تم بنجاح") => {
     setLoadingAction(key);
-    try { await fn(); loadDetails(selectedBookId, true); onAction?.(); setToast({ message: "تم بنجاح", type: "success" }); } catch (e: any) {
+    try {
+      await fn();
+      loadDetails(selectedBookId, true);
+      onAction?.();
+      setToast({ message: successMsg, type: "success" });
+    } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "حدث خطأ";
       setToast({ message: msg, type: "error" });
+    } finally {
+      setLoadingAction(null);
     }
-    finally { setLoadingAction(null); }
   };
 
   const selectedBook = details?.book;
 
   const handleManualSell = (studentId: string) => {
     if (selectedBook?.status === "unavailable") return;
-    return withAction(studentId + "_sell", () => BooksService.sellBook({ book_id: selectedBookId, student_id: studentId, force_resell: false }));
+    return withAction(studentId + "_sell", () => BooksService.sellBook({ book_id: selectedBookId, student_id: studentId, force_resell: false }), "تم تسجيل البيع");
   };
 
   const handleMarkPaid = (saleId: string) =>
-    withAction(saleId + "_paid", () => BooksService.markSalePaid(saleId));
+    withAction(saleId + "_paid", () => BooksService.markSalePaid(saleId), "تم تسجيل الدفع");
 
-  const handleUnpay = (saleId: string) =>
-    withAction(saleId + "_unpay", () => BooksService.cancelSale(saleId));
+  const handleMarkUnpaid = (saleId: string) =>
+    withAction(saleId + "_unpaid", () => BooksService.markSaleUnpaid(saleId), "تم إلغاء حالة الدفع");
+
+  const handleCancelSale = (saleId: string) => {
+    if (!window.confirm("هل أنت متأكد من إلغاء عملية الشراء لهذا الطالب بالكامل؟")) return;
+    return withAction(saleId + "_cancel", () => BooksService.cancelSale(saleId), "تم إلغاء البيع");
+  };
 
   const handleExempt = (studentId: string) => {
     if (selectedBook?.status === "unavailable") return;
-    return withAction(studentId + "_exempt", () => BooksService.sellExempt({ book_id: selectedBookId, student_id: studentId }));
+    return withAction(studentId + "_exempt", () => BooksService.sellExempt({ book_id: selectedBookId, student_id: studentId }), "تم تسجيل الإعفاء");
+  };
+
+  const handleCancelExempt = (saleId: string) => {
+    if (!window.confirm("هل تريد إلغاء الإعفاء؟ سيتم حذف الإعفاء لهذا الطالب.")) return;
+    return withAction(saleId + "_cancel", () => BooksService.cancelSale(saleId), "تم إلغاء الإعفاء");
   };
 
   const filtered = details?.students?.filter((s: any) => {
@@ -110,12 +127,6 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const selectStyle: React.CSSProperties = {
-    padding: "0.55rem 0.75rem", borderRadius: "8px",
-    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-    color: "#fff", fontSize: "0.82rem", fontFamily: "inherit",
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
@@ -130,7 +141,7 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                 <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.15rem", display: "flex", gap: "0.5rem" }}>
                   {grade && <span style={{ color: "#818cf8" }}>{grade.name}</span>}
-                  <span>{b.buyers_count ?? 0} مشتري</span>
+                  <span>{b.buyers_count ?? 0} مبيعة</span>
                 </div>
               </div>
             </div>
@@ -145,8 +156,9 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
           onChange={(e) => { setSelectedGradeId(e.target.value); setSelectedBookId(""); setDetails(null); }}
           style={{ padding: "0.6rem 0.9rem", borderRadius: "10px", background: "rgba(255,255,255,0.05)", border: `1px solid ${selectedGradeId ? "rgba(255,255,255,0.1)" : "rgba(245,158,11,0.5)"}`, color: selectedGradeId ? "#fff" : "var(--text-muted)", fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer", width: "100%" }}
         >
-          <option value="">اختر الصف أولاً *</option>
+          <option value="">اختر الصف الدراسي أولاً للتصفية *</option>
           {activeGrades.map(g => <option key={g.id} value={g.id} style={{ background: "#1e293b" }}>{g.name}</option>)}
+          {hasGeneralBooks && <option value="general" style={{ background: "#1e293b" }}>كتب عامة (بدون صف)</option>}
         </select>
         <select
           value={selectedBookId}
@@ -156,30 +168,36 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
         >
           <option value="">{selectedGradeId ? "اختر كتاباً لعرض تفاصيله..." : "اختر الصف أولاً"}</option>
           {filteredBooks.map((b) => (
-            <option key={b.id} value={b.id} style={{ background: "#1e293b" }}>{b.name}</option>
+            <option key={b.id} value={b.id} style={{ background: "#1e293b" }}>{b.name} ({b.price} ج)</option>
           ))}
         </select>
       </div>
-      {!selectedGradeId && (
-        <div style={{ fontSize: "0.8rem", color: "#f59e0b", display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "-0.5rem" }}>
-          ⚠ اختر الصف الدراسي أولاً لتصفية الكتب وعرض طلاب الصف
-        </div>
-      )}
 
       {loadingDetails && <Spinner />}
 
       {details && !loadingDetails && (
         <>
           {/* Summary */}
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            <div className="glass-panel" style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>اشتروا</span>
-              <span style={{ fontWeight: 700, color: "#818cf8" }}>{purchasedCount}</span>
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              <div className="glass-panel" style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>اشتروا</span>
+                <span style={{ fontWeight: 700, color: "#818cf8" }}>{purchasedCount}</span>
+              </div>
+              <div className="glass-panel" style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>إجمالي الإيرادات</span>
+                <span style={{ fontWeight: 700, color: "#f59e0b" }}>{totalRevenue} ج</span>
+              </div>
             </div>
-            <div className="glass-panel" style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>إجمالي الإيرادات</span>
-              <span style={{ fontWeight: 700, color: "#f59e0b" }}>{totalRevenue} ج</span>
-            </div>
+            {selectedBook && (
+              <Link
+                href={`/teacher/books/${selectedBook.id}`}
+                className="btn btn-secondary"
+                style={{ fontSize: "0.8rem", padding: "0.5rem 1rem", textDecoration: "none" }}
+              >
+                عرض صفحة تفاصيل الكتاب الكاملة ←
+              </Link>
+            )}
           </div>
 
           {/* Unavailable warning */}
@@ -193,7 +211,7 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ position: "relative", flex: 1, minWidth: "180px" }}>
               <Search size={13} style={{ position: "absolute", right: "0.7rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..." style={{ width: "100%", padding: "0.55rem 2rem 0.55rem 0.7rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit", boxSizing: "border-box" }} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الكود..." style={{ width: "100%", padding: "0.55rem 2rem 0.55rem 0.7rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.82rem", fontFamily: "inherit", boxSizing: "border-box" }} />
             </div>
             {(["all", "purchased", "not_purchased"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)} style={{ padding: "0.45rem 0.75rem", borderRadius: "8px", border: "1px solid", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", background: filter === f ? "rgba(20,184,166,0.15)" : "rgba(255,255,255,0.03)", borderColor: filter === f ? "rgba(20,184,166,0.4)" : "rgba(255,255,255,0.08)", color: filter === f ? "var(--color-teal)" : "var(--text-muted)", whiteSpace: "nowrap" }}>
@@ -205,7 +223,7 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
           {/* Table */}
           <div className="glass-panel" style={{ overflow: "hidden" }}>
             <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-              <table style={{ width: "100%", minWidth: 780, borderCollapse: "collapse", fontSize: "0.83rem" }}>
+              <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: "0.83rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                     {[
@@ -216,8 +234,8 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                       { label: "الخصم",       w: 90  },
                       { label: "المدفوع",     w: 80  },
                       { label: "التاريخ",     w: 100 },
-                      { label: "دفع يدوي",    w: 70  },
-                      { label: "إلغاء الدفع", w: 90  },
+                      { label: "حالة الدفع",  w: 110 },
+                      { label: "إلغاء البيع", w: 90  },
                       { label: "إعفاء",       w: 90  },
                     ].map(({ label, w }) => (
                       <th key={label} style={{ padding: "0.75rem 0.75rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, whiteSpace: "nowrap", minWidth: w }}>{label}</th>
@@ -228,19 +246,19 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                   {paginated.map((s: any) => {
                     const group = groups.find((g) => g.id === s.group_id);
                     const isLoading = (k: string) => loadingAction === k;
-                    const checkLoading = isLoading(s.student_id + "_sell") || isLoading(s.sale_id + "_paid");
-                    const unpayLoading = isLoading(s.sale_id + "_unpay");
+                    const checkLoading = isLoading(s.student_id + "_sell") || isLoading(s.sale_id + "_paid") || isLoading(s.sale_id + "_unpaid");
+                    const cancelLoading = isLoading(s.sale_id + "_cancel");
 
                     const discountPct: number = s.discount_pct
-                      ?? (s.discount > 0 && s.price > 0 ? Math.round((s.discount / s.price) * 100) : 0);
+                      ?? (s.discount > 0 && s.amount > 0 ? Math.round((s.discount / s.amount) * 100) : 0);
                     const discountLabel = s.is_exempt ? "معفي 100%" : discountPct > 0 ? `خصم ${discountPct}%` : "—";
                     const discountColor = s.is_exempt ? "#818cf8" : discountPct > 0 ? "#f59e0b" : "var(--text-muted)";
                     const finalAmount = s.is_exempt || discountPct === 100 ? 0 : (s.final_price ?? null);
 
                     const isUnavailable = selectedBook?.status === "unavailable";
-                    const checked = s.is_exempt || (s.purchased && s.paid);
+                    const isPaid = s.purchased && s.paid;
+                    const checked = s.is_exempt || isPaid;
                     const checkColor = s.is_exempt ? "purple" : "teal";
-                    const canCheck = !checked && !checkLoading && (s.purchased || !isUnavailable);
 
                     const cell: React.CSSProperties = { padding: "0.65rem 0.75rem", whiteSpace: "nowrap" };
                     const extraSales: any[] = s.extra_sales ?? [];
@@ -262,15 +280,30 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                           {s.purchase_date ? new Date(s.purchase_date).toLocaleDateString("ar-EG") : "—"}
                         </td>
 
-                        {/* دفع يدوي */}
+                        {/* حالة الدفع / دفع يدوي */}
                         <td style={cell}>
                           <div
-                            className={`inline-flex items-center justify-center relative ${!canCheck ? "cursor-default" : "cursor-pointer"}`}
+                            className={`inline-flex items-center gap-1.5 ${checkLoading ? "cursor-wait opacity-60" : "cursor-pointer"}`}
                             onClick={() => {
-                              if (!canCheck) return;
-                              if (s.purchased && s.sale_id) handleMarkPaid(s.sale_id);
-                              else if (!s.purchased) handleManualSell(s.student_id);
+                              if (checkLoading) return;
+                              if (s.is_exempt) return;
+                              if (!s.purchased) {
+                                if (isUnavailable) return;
+                                handleManualSell(s.student_id);
+                              } else if (s.sale_id) {
+                                if (s.paid) handleMarkUnpaid(s.sale_id);
+                                else handleMarkPaid(s.sale_id);
+                              }
                             }}
+                            title={
+                              s.is_exempt
+                                ? "معفي كامل"
+                                : !s.purchased
+                                ? "اضغط لتسجيل البيع"
+                                : s.paid
+                                ? "اضغط للتعيين كغير مدفوع"
+                                : "اضغط للتعيين كمدفوع"
+                            }
                           >
                             <div className={`w-[22px] h-[22px] rounded-[7px] border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
                               checked
@@ -284,22 +317,26 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                               {checkLoading
                                 ? <span className="w-[10px] h-[10px] rounded-full border border-teal-400/30 border-t-teal-400 animate-spin" />
                                 : checked
-                                  ? <span className="animate-[bk-pop_0.2s_cubic-bezier(0.16,1,0.3,1)]"><Check size={13} color="#fff" strokeWidth={3} /></span>
+                                  ? <Check size={13} color="#fff" strokeWidth={3} />
                                   : null}
                             </div>
+                            <span style={{ fontSize: "0.72rem", color: s.is_exempt ? "#818cf8" : isPaid ? "#10b981" : s.purchased ? "#f59e0b" : "var(--text-muted)" }}>
+                              {s.is_exempt ? "معفي" : isPaid ? "مدفوع" : s.purchased ? "غير مدفوع" : "لم يشتر"}
+                            </span>
                           </div>
                         </td>
 
-                        {/* إلغاء الدفع */}
+                        {/* إلغاء البيع */}
                         <td style={cell}>
                           {s.purchased && !s.is_exempt ? (
                             <button
-                              onClick={() => handleUnpay(s.sale_id)}
-                              disabled={unpayLoading}
+                              onClick={() => handleCancelSale(s.sale_id)}
+                              disabled={cancelLoading}
+                              title="إلغاء عملية الشراء بالكامل"
                               style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0.3rem 0.55rem", borderRadius: "6px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "0.75rem", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
                             >
-                              {unpayLoading ? <span className="inline-block w-[10px] h-[10px] rounded-full border border-white/25 border-t-white animate-spin" /> : <RotateCcw size={12} />}
-                              إلغاء
+                              {cancelLoading ? <span className="inline-block w-[10px] h-[10px] rounded-full border border-white/25 border-t-white animate-spin" /> : <Trash2 size={12} />}
+                              إلغاء البيع
                             </button>
                           ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
                         </td>
@@ -310,12 +347,12 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                               <span style={{ color: "#818cf8", display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}><Gift size={14} /> معفي</span>
                               <button
-                                onClick={() => handleUnpay(s.sale_id)}
-                                disabled={isLoading(s.sale_id + "_unpay")}
+                                onClick={() => handleCancelExempt(s.sale_id)}
+                                disabled={isLoading(s.sale_id + "_cancel")}
                                 title="إلغاء الإعفاء"
                                 style={{ display: "flex", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "5px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "0.7rem", cursor: "pointer", fontFamily: "inherit" }}
                               >
-                                {isLoading(s.sale_id + "_unpay") ? <span className="inline-block w-[9px] h-[9px] rounded-full border border-white/25 border-t-white animate-spin" /> : <RotateCcw size={11} />}
+                                {isLoading(s.sale_id + "_cancel") ? <span className="inline-block w-[9px] h-[9px] rounded-full border border-white/25 border-t-white animate-spin" /> : <XCircle size={11} />}
                               </button>
                             </div>
                           ) : (
@@ -332,12 +369,12 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
 
                       {/* Extra sales rows (force_resell) */}
                       {extraSales.map((es, ei) => {
-                        const esUnpayLoading = isLoading(es.sale_id + "_unpay");
+                        const esCancelLoading = isLoading(es.sale_id + "_cancel");
                         return (
                           <tr key={es.sale_id} style={{ borderBottom: ei === extraSales.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", background: "rgba(245,158,11,0.03)" }}>
                             <td style={{ ...cell, paddingRight: "1.5rem" }} colSpan={2}>
                               <span style={{ fontSize: "0.72rem", color: "#f59e0b", display: "flex", alignItems: "center", gap: "4px" }}>
-                                <RotateCcw size={10} /> شراء مكرر #{ei + 2}
+                                شراء مكرر #{ei + 2}
                               </span>
                             </td>
                             <td style={cell} />
@@ -349,14 +386,19 @@ export default function BooksReportsTab({ books, grades, onAction }: Props) {
                             <td style={{ ...cell, color: "var(--text-muted)" }}>
                               {es.purchase_date ? new Date(es.purchase_date).toLocaleDateString("ar-EG") : "—"}
                             </td>
-                            <td style={cell} />
+                            <td style={cell}>
+                              <span style={{ fontSize: "0.72rem", color: es.paid ? "#10b981" : "#f59e0b" }}>
+                                {es.paid ? "مدفوع" : "غير مدفوع"}
+                              </span>
+                            </td>
                             <td style={cell}>
                               <button
-                                onClick={() => handleUnpay(es.sale_id)}
-                                disabled={esUnpayLoading}
+                                onClick={() => handleCancelSale(es.sale_id)}
+                                disabled={esCancelLoading}
+                                title="إلغاء الشراء المكرر"
                                 style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0.3rem 0.55rem", borderRadius: "6px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#f87171", fontSize: "0.75rem", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
                               >
-                                {esUnpayLoading ? <span className="inline-block w-[10px] h-[10px] rounded-full border border-white/25 border-t-white animate-spin" /> : <RotateCcw size={12} />}
+                                {esCancelLoading ? <span className="inline-block w-[10px] h-[10px] rounded-full border border-white/25 border-t-white animate-spin" /> : <Trash2 size={12} />}
                                 إلغاء
                               </button>
                             </td>

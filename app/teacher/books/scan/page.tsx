@@ -2,7 +2,7 @@
 
 import { getStudentScanParams } from "@/lib/utils/qrParser";
 
-import { useState, useRef, useCallback, Suspense } from "react";
+import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, QrCode, CheckCircle, AlertTriangle, User, BookOpen, RefreshCw } from "lucide-react";
@@ -39,6 +39,20 @@ function BookScanInner() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const scannerRef = useRef<{ stop: () => Promise<void> } | null>(null);
   const divId = "book-qr-scanner";
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        try { scannerRef.current.stop(); } catch {}
+      }
+      const videoElem = document.getElementById(divId)?.querySelector("video") as HTMLVideoElement | null;
+      if (videoElem && videoElem.srcObject) {
+        const stream = videoElem.srcObject as MediaStream;
+        stream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
 
   // استخراج الكود أو الـ ID من الرابط لو كان QR يحتوي على URL
 
@@ -180,10 +194,12 @@ function BookScanInner() {
     if (!confirmation) return;
     setSelling(true);
     try {
+      const isDiscount = confirmation.reason === "has_discount";
       const result: SellByCodeResult = await BooksService.sellByCode({
         student_id: confirmation.student.id,
         book_id: bookId,
-        force_resell: true,
+        force_resell: !isDiscount,
+        force_confirm: isDiscount,
       });
       if (result.book && !bookInfo) setBookInfo(result.book);
       if (!result.needs_confirmation) {

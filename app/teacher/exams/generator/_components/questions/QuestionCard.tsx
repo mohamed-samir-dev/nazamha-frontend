@@ -9,6 +9,7 @@ import { Question } from "@/lib/types";
 import { QuestionFormState } from "./types";
 import { QUESTION_TYPE_LABELS, questionToForm, formToQuestion } from "./constants";
 import { QuestionForm } from "./QuestionForm";
+import { resolveImageUrl } from "@/lib/utils/resolveImageUrl";
 
 interface QuestionCardProps {
   question: Question;
@@ -60,7 +61,7 @@ export function QuestionCard({ question, index, total, onUpdate, onDelete, onDup
         background: "rgba(255,255,255,0.02)",
         flexWrap: "wrap",
       }}>
-        {/* drag handle — hidden on touch */}
+        {/* drag handle */}
         <div {...dragHandleProps} className="drag-handle" style={{ cursor: "grab", color: "var(--text-muted)", opacity: 0.4, display: "flex", flexShrink: 0 }}>
           <GripVertical size={14} />
         </div>
@@ -112,9 +113,25 @@ export function QuestionCard({ question, index, total, onUpdate, onDelete, onDup
 function QuestionPreview({ question }: { question: Question }) {
   const qType = question.question_type || "single_choice";
   const isMulti = qType === "multiple_choice";
-  const correctSet = new Set(
-    isMulti ? (question.correct_answers || []) : question.correct_answer ? [question.correct_answer] : []
-  );
+
+  const correctIndices = new Set<number>();
+  const resolveTargetIdx = (val: string | null | undefined): number => {
+    if (!val) return -1;
+    if (val.startsWith("__img__") || val.startsWith("__idx__")) {
+      return parseInt(val.slice(7), 10);
+    }
+    return question.options ? question.options.indexOf(val) : -1;
+  };
+
+  if (isMulti) {
+    (question.correct_answers || []).forEach(ca => {
+      const idx = resolveTargetIdx(ca);
+      if (idx !== -1) correctIndices.add(idx);
+    });
+  } else if (question.correct_answer) {
+    const idx = resolveTargetIdx(question.correct_answer);
+    if (idx !== -1) correctIndices.add(idx);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
@@ -128,7 +145,7 @@ function QuestionPreview({ question }: { question: Question }) {
       </p>
       {question.image_base64 && (
         <div style={{ maxWidth: 180, borderRadius: 7, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <img src={question.image_base64} alt="" style={{ width: "100%", display: "block" }} />
+          <img src={resolveImageUrl(question.image_base64)} alt="" style={{ width: "100%", display: "block" }} />
         </div>
       )}
       {qType === "essay" && (
@@ -140,7 +157,7 @@ function QuestionPreview({ question }: { question: Question }) {
         <div className="options-grid">
           {question.options.map((opt, i) => {
             const img = question.option_images?.[i] ?? null;
-            const correct = correctSet.has(opt);
+            const correct = correctIndices.has(i);
             return (
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: "0.45rem",
@@ -151,7 +168,7 @@ function QuestionPreview({ question }: { question: Question }) {
                 color: correct ? "var(--color-teal)" : "var(--text-secondary)",
               }}>
                 <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", minWidth: 14 }}>{i + 1}.</span>
-                {img ? <img src={img} alt="" style={{ maxHeight: 32, borderRadius: 4 }} /> : <span>{opt}</span>}
+                {img ? <img src={resolveImageUrl(img)} alt="" style={{ maxHeight: 32, borderRadius: 4 }} /> : <span>{opt}</span>}
                 {correct && <Check size={11} style={{ marginRight: "auto", flexShrink: 0 }} />}
               </div>
             );

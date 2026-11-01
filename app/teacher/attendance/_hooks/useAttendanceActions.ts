@@ -81,7 +81,7 @@ export function useAttendanceActions({
 
     if(existing?.resolution){endCell(key);showToast("راجع التعويض أو الإعفاء في سكان الكاميرا قبل تعديل هذه الحصة","error");return;}
     if (existing?.status === "present") {
-      setAttendance(prev => prev.filter(a => a.id !== existing.id));
+      setAttendance(prev => prev.filter(a => a.id !== existing.id && !(a.student_id === student.id && a.session_date === dateStr)));
     try { await deleteRecord(existing); invalidateAllTimeCache(userId); }
       catch {
         setAttendance(prev => [...prev, existing]);
@@ -113,7 +113,12 @@ export function useAttendanceActions({
           year: currentYear,
           status: "present",
         });
-        setAttendance(prev => prev.map(a => a.id === optimisticId ? newRecord : a));
+        setAttendance(prev => {
+          const isTarget = (a: AttendanceRecord) =>
+            a.id === optimisticId ||
+            (a.student_id === student.id && a.session_date === dateStr && (!student.group_id || !a.group_id || a.group_id === student.group_id));
+          return prev.some(isTarget) ? prev.map(a => isTarget(a) ? newRecord : a) : [...prev, newRecord];
+        });
         invalidateAllTimeCache(userId);
       } catch (err) {
         setAttendance(prev => prev.filter(a => a.id !== optimisticId));

@@ -41,6 +41,7 @@ export default function BookScanModal({ books, grades = [], initialBookId, onClo
   const [loading, setLoading] = useState(false);
   const [selling, setSelling] = useState(false);
   const [soldList, setSoldList] = useState<SoldEntry[]>([]);
+  const [mismatchPrompt, setMismatchPrompt] = useState<{ code: string; message: string } | null>(null);
   const [flashMsg, setFlashMsg] = useState<{ text: string; type: "success" | "error" | "warn" } | null>(null);
 
   const scannerRef    = useRef<Html5Qrcode | null>(null);
@@ -59,9 +60,17 @@ export default function BookScanModal({ books, grades = [], initialBookId, onClo
 
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
-      try { await scannerRef.current.stop(); } catch {}
+      try {
+        const qr = scannerRef.current as any;
+        if (qr.isScanning) await qr.stop();
+      } catch {}
       try { scannerRef.current.clear(); } catch {}
       scannerRef.current = null;
+    }
+    const videoElem = document.getElementById(SCANNER_DIV_ID)?.querySelector("video") as HTMLVideoElement | null;
+    if (videoElem && videoElem.srcObject) {
+      const stream = videoElem.srcObject as MediaStream;
+      stream.getTracks().forEach(t => t.stop());
     }
     setScanning(false);
   }, []);
@@ -70,22 +79,21 @@ export default function BookScanModal({ books, grades = [], initialBookId, onClo
   // Calls POST /books/sell-by-code (1 HTTP request).
   // When backend returns needs_confirmation:true, we show the confirmation UI.
   // When backend returns needs_confirmation:false, the sale is already created.
-  const doSell = useCallback(async (code: string, forceResell = false) => {
+  const doSell = useCallback(async (code: string, forceResell = false, allowGradeMismatch = false) => {
     if (!selectedBookId) { flash("اختر كتاباً أولاً", "error"); return; }
     if (books.find(b => b.id === selectedBookId)?.status === "unavailable") {
       flash("الكتاب غير متاح للبيع", "error"); return;
     }
     setLoading(true);
     setConfirmation(null);
+    setMismatchPrompt(null);
     try {
-
-      console.log('🔍 [BookScanModal] Scanning code:', code.trim(), 'for book:', selectedBookId);
       const parsed = getStudentScanParams(code);
-      
       const result: SellByCodeResult = await BooksService.sellByCode({
         ...parsed,
         book_id: selectedBookId,
         force_resell: forceResell,
+        allow_grade_mismatch: allowGradeMismatch,
       });
 
       console.log('✅ [BookScanModal] API Response:', result);
@@ -116,7 +124,11 @@ export default function BookScanModal({ books, grades = [], initialBookId, onClo
       const err = e as { error_code?: string; message?: string };
       const isGradeMismatch = err.error_code === "GRADE_MISMATCH" || err.message?.includes("مخصص لـ");
       const msg = getErrorMessage(e, "حدث خطأ أثناء تسجيل البيع.");
-      flash(msg, isGradeMismatch ? "warn" : "error", isGradeMismatch ? 6000 : 4000);
+      if (isGradeMismatch) {
+        setMismatchPrompt({ code, message: msg });
+      } else {
+        flash(msg, "error", 4000);
+      }
     } finally {
       setLoading(false);
     }
@@ -127,10 +139,12 @@ export default function BookScanModal({ books, grades = [], initialBookId, onClo
     if (!confirmation) return;
     setSelling(true);
     try {
+      const isDiscount = confirmation.reason === "has_discount";
       const result: SellByCodeResult = await BooksService.sellByCode({
         student_id: confirmation.student.id,
         book_id: selectedBookId,
-        force_resell: true,
+        force_resell: !isDiscount,
+        force_confirm: isDiscount,
       });
 
       if (!result.needs_confirmation) {
@@ -311,6 +325,34 @@ export default function BookScanModal({ books, grades = [], initialBookId, onClo
                   {flashMsg.type === "success" ? <CheckCircle2 size={15} /> : flashMsg.type === "warn" ? <AlertTriangle size={15} /> : <AlertCircle size={15} />}
                 </span>
                 <span className="break-words leading-relaxed">{flashMsg.text}</span>
+              </div>
+            )}
+
+            {/* Grade mismatch confirmation override */}
+            {mismatchPrompt && !loading && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col gap-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={15} className="shrink-0 mt-0.5 text-amber-400" />
+                  <span className="leading-relaxed font-semibold">{mismatchPrompt.message}</span>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setMismatchPrompt(null)}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-xs hover:bg-white/10"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    onClick={() => {
+                      const codeToSell = mismatchPrompt.code;
+                      setMismatchPrompt(null);
+                      doSell(codeToSell, false, true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-900 font-bold text-xs hover:bg-amber-400"
+                  >
+                    تأكيد البيع استثنائياً
+                  </button>
+                </div>
               </div>
             )}
 

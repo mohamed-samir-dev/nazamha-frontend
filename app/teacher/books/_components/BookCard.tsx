@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, Edit2, QrCode, Trash2, Users, TrendingUp, Hash, Calendar, ToggleLeft, ToggleRight } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Edit2, QrCode, Trash2, Users, TrendingUp, Hash, Calendar, ToggleLeft, ToggleRight, ExternalLink } from "lucide-react";
 import { Book, Grade } from "@/lib/types";
 
 interface Props {
@@ -46,8 +47,8 @@ export default function BookCard({ book, grades, onEdit, onDelete, onScan, onTog
       onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${accent.border}`; }}
       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 24px rgba(0,0,0,0.3)"; }}
     >
-      {/* ── Top accent bar ── */}
-      <div style={{ height: "3px", background: `linear-gradient(90deg, ${accent.text}, transparent)` }} />
+      {/* ── Top accent bar (RTL 270deg: strong on right, fading to left) ── */}
+      <div style={{ height: "3px", background: `linear-gradient(270deg, ${accent.text}, transparent)` }} />
 
       {/* ── Body ── */}
       <div style={{ padding: "1.1rem 1.1rem 0.85rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.85rem" }}>
@@ -55,13 +56,18 @@ export default function BookCard({ book, grades, onEdit, onDelete, onScan, onTog
         {/* Icon + Name + Badges */}
         <div style={{ display: "flex", gap: "0.85rem", alignItems: "flex-start" }}>
           {/* Book icon box */}
-          <div style={{
-            width: 48, height: 48, borderRadius: "12px", flexShrink: 0,
-            background: accent.bg, border: `1px solid ${accent.border}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
+          <Link
+            href={`/teacher/books/${book.id}`}
+            title="عرض تفاصيل الكتاب"
+            style={{
+              width: 48, height: 48, borderRadius: "12px", flexShrink: 0,
+              background: accent.bg, border: `1px solid ${accent.border}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              textDecoration: "none", transition: "opacity 0.2s",
+            }}
+          >
             <BookOpen size={22} style={{ color: accent.text }} />
-          </div>
+          </Link>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Badges row */}
@@ -82,10 +88,16 @@ export default function BookCard({ book, grades, onEdit, onDelete, onScan, onTog
               )}
             </div>
 
-            {/* Name */}
-            <h3 style={{ fontSize: "0.98rem", fontWeight: 700, color: "#f1f5f9", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
-              {book.name}
-            </h3>
+            {/* Name with Link and Tooltip */}
+            <Link
+              href={`/teacher/books/${book.id}`}
+              title={book.name}
+              style={{ textDecoration: "none" }}
+            >
+              <h3 style={{ fontSize: "0.98rem", fontWeight: 700, color: "#f1f5f9", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 }}>
+                {book.name}
+              </h3>
+            </Link>
 
             {/* Price */}
             <div style={{ fontSize: "1.15rem", fontWeight: 800, color: accent.text, marginTop: "0.2rem", letterSpacing: "-0.01em" }}>
@@ -118,14 +130,14 @@ export default function BookCard({ book, grades, onEdit, onDelete, onScan, onTog
             <Users size={14} style={{ color: "#818cf8", flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: "1rem", fontWeight: 700, color: "#818cf8", lineHeight: 1 }}>{book.buyers_count ?? 0}</div>
-              <div style={{ fontSize: "0.62rem", color: "var(--text-muted)", marginTop: "1px" }}>مشتري</div>
+              <div style={{ fontSize: "0.62rem", color: "var(--text-muted)", marginTop: "1px" }}>عملية بيع</div>
             </div>
           </div>
           <div style={{ padding: "0.55rem 0.75rem", borderRadius: "10px", background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.15)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <TrendingUp size={14} style={{ color: "#f59e0b", flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: "1rem", fontWeight: 700, color: "#f59e0b", lineHeight: 1 }}>{(book.total_revenue ?? 0).toLocaleString("ar-EG")}</div>
-              <div style={{ fontSize: "0.62rem", color: "var(--text-muted)", marginTop: "1px" }}>إيرادات</div>
+              <div style={{ fontSize: "0.62rem", color: "var(--text-muted)", marginTop: "1px" }}>إيرادات (ج)</div>
             </div>
           </div>
         </div>
@@ -155,6 +167,12 @@ export default function BookCard({ book, grades, onEdit, onDelete, onScan, onTog
 
       {/* ── Actions footer ── */}
       <div style={{ padding: "0.65rem 1.1rem", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", gap: "0.4rem", background: "rgba(0,0,0,0.15)", flexWrap: "wrap" }}>
+        <Link
+          href={`/teacher/books/${book.id}`}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "0.45rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none", transition: "background 0.15s" }}
+        >
+          <ExternalLink size={13} /> تفاصيل
+        </Link>
         <button onClick={onEdit} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "4px", padding: "0.45rem", borderRadius: "8px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.18)", color: "#f59e0b", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "background 0.15s" }}>
           <Edit2 size={13} /> تعديل
         </button>

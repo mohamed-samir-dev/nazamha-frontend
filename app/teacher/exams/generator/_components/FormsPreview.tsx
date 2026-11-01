@@ -4,8 +4,6 @@ import { FormsPreviewProps } from "./preview/types";
 import { PreviewSettings } from "./preview/PreviewSettings";
 import { PreviewStats } from "./preview/PreviewStats";
 import { FormsDisplay } from "./preview/FormsDisplay";
-import { ExamPage } from "./preview/ExamPage";
-import { AnswerKey } from "./preview/AnswerKey";
 import { useFormsPreview } from "../_hooks/useFormsPreview";
 
 export function FormsPreview({
@@ -13,7 +11,7 @@ export function FormsPreview({
   gradeId, groupId, examTotalScore, grades, groups,
 }: FormsPreviewProps) {
   const {
-    forms, printing, hiddenRef,
+    forms, printing,
     settingsOpen, setSettingsOpen,
     numForms, setNumForms,
     totalScore, scoreError,
@@ -79,27 +77,6 @@ export function FormsPreview({
         totalScore={totalScore}
         instructions={instructions}
       />
-
-      {/* Hidden print container */}
-      <div
-        ref={hiddenRef}
-        aria-hidden="true"
-        style={{ position: "fixed", top: 0, left: "-9999px", width: "794px", overflow: "visible", pointerEvents: "none", background: "#fff", opacity: 0 }}
-      >
-        {forms.map((form, fi) => (
-          <ExamPage
-            key={form.id} form={form} formIndex={fi} totalPages={forms.length + 1}
-            subject={subj} examTitle={examTitle} date={date} teacher={teacher}
-            gradeName={gradeName} groupName={groupName} groupCode={groupCode}
-            totalScore={totalScore} instructions={instructions}
-          />
-        ))}
-        <AnswerKey
-          forms={forms} examTitle={examTitle} bankTitle={bankTitle}
-          subject={subj} teacher={teacher} date={date} totalScore={totalScore}
-          pageNum={forms.length + 1} totalPages={forms.length + 1}
-        />
-      </div>
     </div>
   );
 }

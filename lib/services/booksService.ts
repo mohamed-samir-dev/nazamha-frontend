@@ -75,6 +75,7 @@ export interface BookDetailsRow {
     final_price: number | null;
     discount: number | null;
     is_exempt: boolean;
+    paid: boolean;
   }>;
 }
 
@@ -130,7 +131,7 @@ export const BooksService = {
     api.get<LookupStudentResult>(
       `/books/lookup-student?student_code=${encodeURIComponent(studentCode)}&book_id=${bookId}`
     ),
-  sellBook: async (data: { book_id: string; student_id: string; force_resell?: boolean }) => {
+  sellBook: async (data: { book_id: string; student_id: string; force_resell?: boolean; allow_grade_mismatch?: boolean }) => {
     const result = await api.post<BookSale>("/books/sell", data);
     notifyFinancialChange();
     return result;
@@ -146,6 +147,8 @@ export const BooksService = {
     student_id?: string;
     book_id: string;
     force_resell?: boolean;
+    force_confirm?: boolean;
+    allow_grade_mismatch?: boolean;
   }): Promise<SellByCodeResult> => {
     const result = await api.post<SellByCodeResult>("/books/sell-by-code", data);
     if (result && !result.needs_confirmation) notifyFinancialChange();

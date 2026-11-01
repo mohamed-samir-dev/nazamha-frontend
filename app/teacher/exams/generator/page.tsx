@@ -16,7 +16,7 @@ export default function GeneratorPage() {
     grades, groups, loading,
     selectExam, filteredGroups,
     createExam, updateExam, deleteExam, duplicateExam, updateExamTotalScore,
-    addQuestion, updateQuestion, deleteQuestion, reorderQuestions,
+    addQuestion, updateQuestion, deleteQuestion, reorderQuestions, bulkUpdateMarks,
   } = useExamsGenerator();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -204,6 +204,7 @@ export default function GeneratorPage() {
                 onDeleteQuestion={deleteQuestion}
                 onReorder={reorderQuestions}
                 onUpdateTotalScore={updateExamTotalScore}
+                onBulkUpdateMarks={bulkUpdateMarks}
               />
             )}
             {tab === "preview" && (

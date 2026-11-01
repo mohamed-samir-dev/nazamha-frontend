@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Calendar, RefreshCw, AlertTriangle, Info, Wrench } from "lucide-react";
+import { useState } from "react";
+import { Calendar, RefreshCw, AlertTriangle, Check, Wrench } from "lucide-react";
 import { SubscriptionsService } from "@/lib/services/subscriptionsService";
 
-const MONTH_NAMES = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const MONTH_NAMES = [
+  "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+  "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
+];
 
-export interface MonthYear { month: number; year: number; }
+export interface MonthYear {
+  month: number;
+  year: number;
+}
 
 // السنة الأكاديمية الحالية: تبدأ من يوليو
-// لو الشهر الحالي >= 7 → السنة الأكاديمية هي currentYear/currentYear+1
-// لو الشهر الحالي < 7  → السنة الأكاديمية هي currentYear-1/currentYear
+// لو الشهر الحالي >= 7 → السنة الأكاديمية هي currentYear / currentYear+1
+// لو الشهر الحالي < 7  → السنة الأكاديمية هي currentYear-1 / currentYear
 function getCurrentAcademicYear(): { startYear: number; endYear: number } {
   const now = new Date();
   const m = now.getMonth() + 1;
@@ -34,40 +40,6 @@ function isActive(list: MonthYear[], m: number, y: number): boolean {
   return list.some((x) => x.month === m && x.year === y);
 }
 
-// ─── Toast داخلي ─────────────────────────────────────────────────────────────
-interface ToastItem { id: number; msg: string; type: "success" | "error" | "warning" | "info"; }
-
-function InlineToast({ items, onClose }: { items: ToastItem[]; onClose: (id: number) => void }) {
-  if (items.length === 0) return null;
-  const colors: Record<string, { bg: string; border: string; color: string }> = {
-    success: { bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.4)",  color: "#10b981" },
-    error:   { bg: "rgba(239,68,68,0.1)",   border: "rgba(239,68,68,0.4)",   color: "#ef4444" },
-    warning: { bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.4)",  color: "#f59e0b" },
-    info:    { bg: "rgba(99,102,241,0.1)",  border: "rgba(99,102,241,0.4)",  color: "#818cf8" },
-  };
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem" }}>
-      {items.map((t) => {
-        const c = colors[t.type];
-        return (
-          <div key={t.id} style={{
-            display: "flex", alignItems: "flex-start", gap: "0.6rem",
-            padding: "0.65rem 0.9rem", borderRadius: "10px",
-            background: c.bg, border: `1px solid ${c.border}`,
-            fontSize: "0.83rem", color: c.color, lineHeight: 1.5,
-          }}>
-            {t.type === "warning" && <AlertTriangle size={15} style={{ marginTop: "1px", flexShrink: 0 }} />}
-            {t.type === "info"    && <Info size={15} style={{ marginTop: "1px", flexShrink: 0 }} />}
-            <span style={{ flex: 1 }}>{t.msg}</span>
-            <button onClick={() => onClose(t.id)} style={{ background: "none", border: "none", cursor: "pointer", color: c.color, fontSize: "1rem", lineHeight: 1, padding: 0, opacity: 0.7 }}>×</button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   activeMonths: number[];
   activeMonthYears: MonthYear[];
@@ -76,26 +48,12 @@ interface Props {
   onToast: (msg: string, type: "success" | "error") => void;
 }
 
-// Bug 5 fix: activeMonths was silently dropped from destructuring. It is now
-// included so callers receive the correct value back through onChange and the
-// prop contract matches the interface declaration.
-export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYears, onChange, onSave, onToast = () => {} }: Props) {
+export function AcademicYearSection({ activeMonthYears, onChange, onSave, onToast }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fixing, setFixing] = useState(false);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [showConfirmFix, setShowConfirmFix] = useState(false);
   const [pendingSync, setPendingSync] = useState(false);
-  const toastId = useRef(0);
-
-  const addToast = (msg: string, type: ToastItem["type"]) => {
-    const id = ++toastId.current;
-    setToasts((prev) => [...prev, { id, msg, type }]);
-    if (type === "success" || type === "error") {
-      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
-    }
-  };
-
-  const removeToast = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   const available = getAvailableMonths();
   const { startYear, endYear } = getCurrentAcademicYear();
@@ -108,81 +66,63 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
 
     onChange(newList.map((x) => x.month), newList);
     setPendingSync(true);
-    setToasts((prev) => prev.filter((t) => t.type !== "warning" && t.type !== "info"));
-
-    if (wasActive) {
-      addToast(
-        `تم إلغاء تحديد ${MONTH_NAMES[m - 1]} ${y} من الشهور النشطة. الاشتراكات والمديونيات المسجلة ستبقى محفوظة؛ تغيير التقويم لا يلغي دين الطالب.`,
-        "warning"
-      );
-    } else {
-      addToast(
-        `تم إضافة ${MONTH_NAMES[m - 1]} ${y}. سيتم إنشاء اشتراكات لكل الطلاب عند الضغط على "مزامنة الطلاب".`,
-        "info"
-      );
-    }
-  };
-
-  const handleSyncAll = async () => {
-    setSyncing(true);
-    try {
-      const result = await SubscriptionsService.syncAllStudents();
-      setPendingSync(false);
-      setToasts((prev) => prev.filter((t) => t.type !== "warning" && t.type !== "info"));
-      addToast(`✓ تمت مزامنة اشتراكات ${result.synced} طالب بنجاح`, "success");
-      onToast(`✓ تمت مزامنة اشتراكات ${result.synced} طالب بنجاح`, "success");
-    } catch {
-      addToast("فشلت المزامنة، حاول مرة أخرى", "error");
-      onToast("فشلت المزامنة", "error");
-      // Bug 6 fix: reset pendingSync on error so the button stops being
-      // permanently highlighted after a failed sync attempt.
-      setPendingSync(false);
-    } finally {
-      setSyncing(false);
-    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await onSave(activeMonthYears.map((x) => x.month), activeMonthYears);
-      addToast("✓ تم حفظ إعدادات السنة الدراسية", "success");
-      onToast("✓ تم حفظ إعدادات السنة الدراسية", "success");
+      setPendingSync(false);
+      onToast("✓ تم حفظ إعدادات السنة الدراسية وتحديث اشتراكات الطلاب بنجاح", "success");
     } catch {
-      addToast("فشل الحفظ، حاول مرة أخرى", "error");
       onToast("فشل الحفظ، حاول مرة أخرى", "error");
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSyncAll = async () => {
+    if (pendingSync) {
+      await handleSave();
+      return;
+    }
+    setSyncing(true);
+    try {
+      const result = await SubscriptionsService.syncAllStudents();
+      setPendingSync(false);
+      onToast(`✓ تمت مزامنة اشتراكات ${result.synced} طالب بنجاح`, "success");
+    } catch {
+      onToast("فشلت المزامنة، حاول مرة أخرى", "error");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleFixRollover = async () => {
-    if (!confirm("سيتم تصحيح الشهور النشطة للسنة الدراسية الحالية مع الاحتفاظ بكل الاشتراكات والمديونيات السابقة. هل تريد المتابعة؟")) return;
     setFixing(true);
     try {
       const result = await SubscriptionsService.fixRolloverData();
-      if (result.removedYears.length === 0) {
-        addToast("لا توجد بيانات خاطئة للإصلاح", "info");
+      setShowConfirmFix(false);
+      if (!result.removedYears || result.removedYears.length === 0) {
+        onToast("لا توجد بيانات خاطئة للإصلاح", "success");
       } else {
-        addToast(`✓ تم تصحيح الشهور النشطة للسنوات ${result.removedYears.join(", ")} مع الاحتفاظ بالاشتراكات والمديونيات`, "success");
-        onToast(`✓ تم إصلاح البيانات بنجاح`, "success");
-        // تحديث الـ UI بالشهور الصحيحة
-        const { startYear, endYear } = getCurrentAcademicYear();
+        onToast(`✓ تم تصحيح الشهور النشطة للسنوات ${result.removedYears.join(", ")} بنجاح`, "success");
+        const { startYear: sY, endYear: eY } = getCurrentAcademicYear();
         const corrected = activeMonthYears.filter((x) =>
-          (x.year === startYear && x.month >= 7) || (x.year === endYear && x.month <= 6)
+          (x.year === sY && x.month >= 7) || (x.year === eY && x.month <= 6)
         );
         onChange(corrected.map((x) => x.month), corrected);
       }
     } catch {
-      addToast("فشل الإصلاح، حاول مرة أخرى", "error");
+      onToast("فشل الإصلاح، حاول مرة أخرى", "error");
     } finally {
       setFixing(false);
     }
   };
 
   // تقسيم الشهور لمجموعتين: النصف الأول (يوليو-ديسمبر) والنصف الثاني (يناير-يونيو)
-  const firstHalf = available.filter((x) => x.year === startYear);  // يوليو-ديسمبر
-  const secondHalf = available.filter((x) => x.year === endYear);   // يناير-يونيو
+  const firstHalf = available.filter((x) => x.year === startYear);
+  const secondHalf = available.filter((x) => x.year === endYear);
 
   return (
     <div>
@@ -190,7 +130,7 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
         <Calendar size={18} /> إعدادات السنة الدراسية
       </h3>
       <p className="settings-description" style={{ marginBottom: "0.5rem" }}>
-        اختر الأشهر التي يعمل بها المعلم. سيتم إنشاء اشتراكات الطلاب بناءً على هذه الأشهر فقط.
+        اختر الأشهر التي يعمل بها المعلم. سيتم إنشاء اشتراكات الطلاب ومطالبتهم بالدفع بناءً على هذه الأشهر فقط.
       </p>
       <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
         السنة الدراسية الحالية: {startYear} / {endYear}
@@ -198,7 +138,7 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
 
       {/* النصف الأول: يوليو → ديسمبر */}
       <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.4rem", fontWeight: 600 }}>
-        {startYear}
+        {startYear} (الفصل الأول)
       </p>
       <div className="settings-months-grid" style={{ marginBottom: "1rem" }}>
         {firstHalf.map(({ month, year }) => {
@@ -226,9 +166,9 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
 
       {/* النصف الثاني: يناير → يونيو */}
       <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.4rem", fontWeight: 600 }}>
-        {endYear}
+        {endYear} (الفصل الثاني)
       </p>
-      <div className="settings-months-grid" style={{ marginBottom: "0.5rem" }}>
+      <div className="settings-months-grid" style={{ marginBottom: "0.75rem" }}>
         {secondHalf.map(({ month, year }) => {
           const active = isActive(activeMonthYears, month, year);
           return (
@@ -252,57 +192,114 @@ export function AcademicYearSection({ activeMonths: _activeMonths, activeMonthYe
         })}
       </div>
 
-      {/* Toasts */}
-      <InlineToast items={toasts} onClose={removeToast} />
+      {/* تنبيه التغييرات غير المحفوظة */}
+      {pendingSync && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: "0.5rem",
+          padding: "0.6rem 0.85rem", borderRadius: "8px",
+          background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
+          color: "#f59e0b", fontSize: "0.82rem", margin: "0.75rem 0"
+        }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+          <span>لديك تعديلات غير محفوظة في الشهور النشطة. اضغط على &quot;حفظ وتطبيق الشهور&quot; لتحديث اشتراكات الطلاب.</span>
+        </div>
+      )}
+
+      {/* تأكيد إصلاح البيانات */}
+      {showConfirmFix && (
+        <div style={{
+          padding: "0.85rem", borderRadius: "8px",
+          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
+          color: "#ef4444", fontSize: "0.83rem", margin: "0.75rem 0"
+        }}>
+          <p style={{ margin: "0 0 0.5rem 0", fontWeight: 600 }}>
+            تأكيد الإصلاح: سيتم تصحيح الشهور النشطة للسنة الحالية مع الاحتفاظ التام بكافة الاشتراكات والمديونيات السابقة. هل تريد المتابعة؟
+          </p>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={handleFixRollover}
+              disabled={fixing}
+              style={{
+                padding: "0.35rem 0.75rem", borderRadius: "6px",
+                background: "#ef4444", color: "white", border: "none",
+                fontSize: "0.8rem", fontWeight: 600, cursor: fixing ? "not-allowed" : "pointer"
+              }}
+            >
+              {fixing ? "جاري الإصلاح..." : "نعم، إصلاح الآن"}
+            </button>
+            <button
+              onClick={() => setShowConfirmFix(false)}
+              disabled={fixing}
+              style={{
+                padding: "0.35rem 0.75rem", borderRadius: "6px",
+                background: "transparent", color: "var(--text-secondary)",
+                border: "1px solid var(--border-color)", fontSize: "0.8rem", cursor: "pointer"
+              }}
+            >
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="settings-sync-row" style={{ marginTop: "1rem" }}>
         <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0 }}>
           الأشهر المحددة: {activeMonthYears.length} شهر
         </p>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          {activeMonthYears.some((x) => x.year > endYear) && (
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+          {activeMonthYears.some((x) => x.year > endYear) && !showConfirmFix && (
             <button
-              onClick={handleFixRollover}
+              onClick={() => setShowConfirmFix(true)}
               disabled={fixing}
               style={{
                 display: "flex", alignItems: "center", gap: "0.4rem",
-                padding: "0.4rem 0.9rem", borderRadius: "8px", cursor: fixing ? "not-allowed" : "pointer",
+                padding: "0.45rem 0.9rem", borderRadius: "8px", cursor: fixing ? "not-allowed" : "pointer",
                 background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)",
                 color: "#ef4444", fontSize: "0.82rem", fontWeight: 600, opacity: fixing ? 0.7 : 1,
               }}
             >
               <Wrench size={14} />
-              {fixing ? "جاري الإصلاح..." : "إصلاح بيانات خاطئة"}
+              إصلاح بيانات خاطئة
             </button>
           )}
+
           <button
             onClick={handleSave}
             disabled={saving || syncing}
             style={{
               display: "flex", alignItems: "center", gap: "0.4rem",
-              padding: "0.4rem 0.9rem", borderRadius: "8px", cursor: (saving || syncing) ? "not-allowed" : "pointer",
-              background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.35)",
-              color: "#818cf8", fontSize: "0.82rem", fontWeight: 600, opacity: (saving || syncing) ? 0.7 : 1,
+              padding: "0.45rem 1rem", borderRadius: "8px", cursor: (saving || syncing) ? "not-allowed" : "pointer",
+              background: pendingSync ? "#14b8a6" : "rgba(99,102,241,0.15)",
+              border: `1px solid ${pendingSync ? "#14b8a6" : "rgba(99,102,241,0.35)"}`,
+              color: pendingSync ? "#ffffff" : "#818cf8",
+              fontSize: "0.85rem", fontWeight: 600, opacity: (saving || syncing) ? 0.7 : 1,
               transition: "all 0.2s",
+              boxShadow: pendingSync ? "0 2px 10px rgba(20,184,166,0.3)" : "none",
             }}
           >
-            {saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
+            {saving ? (
+              <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} />
+            ) : (
+              <Check size={14} />
+            )}
+            {saving ? "جاري الحفظ والمزامنة..." : pendingSync ? "حفظ وتطبيق الشهور" : "حفظ الإعدادات"}
           </button>
+
           <button
             onClick={handleSyncAll}
             disabled={syncing || saving}
+            title="إعادة مزامنة اشتراكات الطلاب مع الشهور النشطة"
             style={{
               display: "flex", alignItems: "center", gap: "0.4rem",
-              padding: "0.4rem 0.9rem", borderRadius: "8px", cursor: (syncing || saving) ? "not-allowed" : "pointer",
-              background: pendingSync ? "rgba(20,184,166,0.25)" : "rgba(20,184,166,0.12)",
-              border: `1px solid ${pendingSync ? "rgba(20,184,166,0.7)" : "rgba(20,184,166,0.35)"}`,
-              color: "#14b8a6", fontSize: "0.82rem", fontWeight: 600, opacity: (syncing || saving) ? 0.7 : 1,
-              boxShadow: pendingSync ? "0 0 0 2px rgba(20,184,166,0.2)" : "none",
+              padding: "0.45rem 0.9rem", borderRadius: "8px", cursor: (syncing || saving) ? "not-allowed" : "pointer",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-secondary)", fontSize: "0.82rem", fontWeight: 500, opacity: (syncing || saving) ? 0.7 : 1,
               transition: "all 0.2s",
             }}
           >
             <RefreshCw size={14} style={{ animation: syncing ? "spin 1s linear infinite" : "none" }} />
-            {syncing ? "جاري المزامنة..." : pendingSync ? "⚡ مزامنة الطلاب (مطلوب)" : "مزامنة اشتراكات كل الطلاب"}
+            {syncing ? "جاري المزامنة..." : "إعادة مزامنة الطلاب"}
           </button>
         </div>
       </div>

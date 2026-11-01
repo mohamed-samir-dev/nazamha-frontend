@@ -37,4 +37,18 @@ export const questionsRepository = {
   async deleteQuestion(id: string): Promise<void> {
     await api.delete(`/questions/${id}`);
   },
+
+  async reorderQuestions(bankId: string, questionIds: string[]): Promise<void> {
+    await api.put(`/question-banks/${bankId}/questions/reorder`, { questionIds });
+  },
+
+  async bulkUpdateMarks(bankId: string, marks: { id: string; marks: number }[]): Promise<void> {
+    await api.put(`/question-banks/${bankId}/questions/marks`, { marks });
+  },
+
+  async uploadImage(file: File | Blob): Promise<{ url: string }> {
+    const formData = new FormData();
+    formData.append("image", file);
+    return api.upload<{ url: string }>("/question-banks/upload-image", formData);
+  },
 };

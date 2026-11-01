@@ -90,7 +90,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (pathname.startsWith("/teacher/attendance") && teacherData.has_attendance_feature === false) { router.replace("/teacher"); return; }
       if (pathname === "/teacher/teachers" && !teacherData.is_center_mode) { router.replace("/teacher"); return; }
       const assistantFlag = !!(teacherData.effective_teacher_id);
-      if (assistantFlag && (pathname === "/teacher/reports" || pathname === "/teacher/bills" || pathname === "/teacher/salaries")) {
+      if (assistantFlag && (pathname === "/teacher/reports" || pathname === "/teacher/bills" || pathname === "/teacher/salaries" || pathname.startsWith("/teacher/settings"))) {
         router.replace("/teacher"); return;
       }
     }

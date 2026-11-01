@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/Input";
 import { QuestionFormState, QuestionType } from "./types";
 import { QUESTION_TYPE_LABELS, inputStyle, validateForm } from "./constants";
 import { OptionsEditor } from "./OptionsEditor";
+import { compressImage } from "@/lib/utils/compressImage";
+import { questionsService } from "@/lib/services/questionsService";
+import { resolveImageUrl } from "@/lib/utils/resolveImageUrl";
 
 interface QuestionFormProps {
   f: QuestionFormState;
@@ -42,6 +45,7 @@ const sel: React.CSSProperties = {
 
 export function QuestionForm({ f, setF, questionIdx, onSubmit, onCancel, submitLabel }: QuestionFormProps) {
   const [error, setError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const isPreset = SECTION_OPTIONS.some(o => o.label !== "أخرى..." && o.label === f.sectionName);
   const [selectVal, setSelectVal] = useState<string>(
     f.sectionName === "" ? "" : isPreset ? f.sectionName : "أخرى..."
@@ -78,10 +82,20 @@ export function QuestionForm({ f, setF, questionIdx, onSubmit, onCancel, submitL
     onSubmit();
   };
 
-  const uploadImage = (file: File) => {
-    const r = new FileReader();
-    r.onloadend = () => upd("imageBase64", r.result as string);
-    r.readAsDataURL(file);
+  const uploadImage = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const compressed = await compressImage(file);
+      const res = await questionsService.uploadImage(compressed);
+      upd("imageBase64", res.url);
+    } catch {
+      // fallback to FileReader if backend upload fails
+      const r = new FileReader();
+      r.onloadend = () => upd("imageBase64", r.result as string);
+      r.readAsDataURL(file);
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   return (
@@ -137,17 +151,17 @@ export function QuestionForm({ f, setF, questionIdx, onSubmit, onCancel, submitL
           border: "1px dashed rgba(255,255,255,0.12)",
           background: f.imageBase64 ? "rgba(20,184,166,0.08)" : "rgba(255,255,255,0.02)",
           color: f.imageBase64 ? "var(--color-teal)" : "var(--text-muted)",
-          cursor: "pointer", fontSize: "0.8rem", transition: "all 0.15s",
+          cursor: uploadingImage ? "wait" : "pointer", fontSize: "0.8rem", transition: "all 0.15s",
         }}>
           <Upload size={13} />
-          {f.imageBase64 ? "صورة السؤال ✓" : "إرفاق صورة"}
-          <input type="file" accept="image/*" style={{ display: "none" }}
+          {uploadingImage ? "جاري الرفع..." : f.imageBase64 ? "صورة السؤال ✓" : "إرفاق صورة"}
+          <input type="file" accept="image/*" style={{ display: "none" }} disabled={uploadingImage}
             onChange={e => { const file = e.target.files?.[0]; if (file) uploadImage(file); }} />
         </label>
         {f.imageBase64 && (
           <>
             <div style={{ maxWidth: 110, borderRadius: 7, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <img src={f.imageBase64} alt="" style={{ width: "100%", display: "block" }} />
+              <img src={resolveImageUrl(f.imageBase64)} alt="" style={{ width: "100%", display: "block" }} />
             </div>
             <button type="button" onClick={() => upd("imageBase64", null)}
               style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 7, color: "var(--color-danger)", cursor: "pointer", padding: "0.4rem 0.6rem", display: "flex" }}>

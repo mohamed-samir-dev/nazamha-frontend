@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
-  BookOpen, Plus, QrCode, BarChart3, Users, TrendingUp, Tag, Gift, XCircle,
+  BookOpen, Plus, QrCode, BarChart3, Users, TrendingUp, Tag, Gift, XCircle, ShoppingBag,
 } from "lucide-react";
 import { BooksService } from "@/lib/services/booksService";
 import { GradesService } from "@/lib/services/gradesService";
@@ -18,12 +19,14 @@ import BookScanModal from "./_components/BookScanModal";
 import BooksFilters from "./_components/BooksFilters";
 import BooksList from "./_components/BooksList";
 import BooksReportsTab from "./_components/BooksReportsTab";
+import BooksSalesTab from "./_components/BooksSalesTab";
 
-type Tab = "books" | "reports";
+type Tab = "books" | "reports" | "sales";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "books",   label: "الكتب",    icon: <BookOpen size={15} /> },
-  { id: "reports", label: "التقارير", icon: <BarChart3 size={15} /> },
+  { id: "books",   label: "الكتب",        icon: <BookOpen size={15} /> },
+  { id: "reports", label: "التقارير",     icon: <BarChart3 size={15} /> },
+  { id: "sales",   label: "سجل المبيعات", icon: <ShoppingBag size={15} /> },
 ];
 
 export default function BooksPage() {
@@ -43,15 +46,17 @@ export default function BooksPage() {
   const [report, setReport] = useState<any>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
+  const isAssistant = Boolean((dashData?.teacher as any)?.is_assistant || (dashData as any)?.is_assistant);
+  const canViewRevenue = !isAssistant;
+
   const showToast = (message: string, type: "success" | "error" = "success") =>
     setToast({ message, type });
 
   const load = async (skipGrades = false) => {
     try {
-      const teacherId = (dashData?.teacher?.id as string | undefined);
       const [booksData, gradesData, groupsData, reportData] = await Promise.all([
         BooksService.getBooks(),
-        (!skipGrades && teacherId) ? GradesService.getGradesByTeacherId(teacherId) : Promise.resolve(null),
+        !skipGrades ? GradesService.getAllGrades() : Promise.resolve(null),
         GroupsService.getGroupsByTeacherId(),
         BooksService.getReport(),
       ]);
@@ -63,14 +68,13 @@ export default function BooksPage() {
       }
       setReport(reportData);
     } catch {
-      showToast("فشل تحميل الكتب", "error");
+      showToast("فشل تحميل بيانات الكتب", "error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // لو الـ grades موجودة في الـ cache نبعت skipGrades=true عشان نوفر request
     const hasGradesCache = OfflineCache.loadGrades().length > 0;
     load(hasGradesCache);
   }, []);
@@ -90,10 +94,10 @@ export default function BooksPage() {
   };
 
   const handleDelete = async (book: Book) => {
-    if (!confirm(`هل تريد حذف "${book.name}"؟`)) return;
+    if (!window.confirm(`هل أنت متأكد من حذف كتاب "${book.name}"؟`)) return;
     try {
       await BooksService.deleteBook(book.id);
-      showToast("تم حذف الكتاب");
+      showToast("تم حذف الكتاب بنجاح");
       load(true);
     } catch (e: unknown) {
       showToast(getErrorMessage(e, "حدث خطأ أثناء حذف الكتاب."), "error");
@@ -121,11 +125,20 @@ export default function BooksPage() {
             <BookOpen size={20} style={{ color: "var(--color-teal)" }} />
           </div>
           <div>
-            <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#fff", margin: 0 }}>إدارة الكتب</h1>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0 }}>{books.length} كتاب</p>
+            <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#fff", margin: 0 }}>إدارة الكتب والمبيعات</h1>
+            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0 }}>
+              {books.length} كتاب مسجل · {books.filter(b => b.status === "available").length} متاح للبيع
+            </p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <Link
+            href="/teacher/books/reports"
+            className="btn btn-secondary"
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", textDecoration: "none" }}
+          >
+            <BarChart3 size={15} /> تقرير عام
+          </Link>
           <button
             onClick={() => setShowScanModal(true)}
             className="btn btn-secondary"
@@ -147,13 +160,13 @@ export default function BooksPage() {
       {report && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
           {[
-            { label: "إجمالي الكتب",      value: report.total_books,           icon: <BookOpen size={20} />,   color: "#14b8a6" },
-            { label: "إجمالي المبيعات",   value: report.total_sales,           icon: <Users size={20} />,     color: "#818cf8" },
-            { label: "إجمالي الإيرادات",  value: `${report.total_revenue} ج`,  icon: <TrendingUp size={20} />, color: "#f59e0b" },
-            { label: "إجمالي الخصومات",   value: `${report.total_discount} ج`, icon: <Tag size={20} />,       color: "#f87171" },
-            { label: "إجمالي الإعفاءات",  value: report.total_exempt,          icon: <Gift size={20} />,      color: "#a78bfa" },
-            { label: "لم يشتروا أي كتاب", value: report.not_bought_count,      icon: <XCircle size={20} />,   color: "#6b7280" },
-          ].map((s) => (
+            { label: "إجمالي الكتب",      value: report.total_books ?? books.length, icon: <BookOpen size={20} />,   color: "#14b8a6", show: true },
+            { label: "إجمالي المبيعات",   value: report.total_sales,                 icon: <Users size={20} />,     color: "#818cf8", show: true },
+            { label: "إجمالي الإيرادات",  value: `${report.total_revenue} ج`,        icon: <TrendingUp size={20} />, color: "#f59e0b", show: canViewRevenue },
+            { label: "إجمالي الخصومات",   value: `${report.total_discount} ج`,       icon: <Tag size={20} />,       color: "#f87171", show: canViewRevenue },
+            { label: "إجمالي الإعفاءات",  value: report.total_exempt,                icon: <Gift size={20} />,      color: "#a78bfa", show: true },
+            { label: "لم يشتروا أي كتاب", value: report.not_bought_count,            icon: <XCircle size={20} />,   color: "#6b7280", show: true },
+          ].filter(s => s.show).map((s) => (
             <div key={s.label} className="glass-panel" style={{ padding: "0.85rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
               <div style={{ color: s.color, flexShrink: 0 }}>{s.icon}</div>
               <div>
@@ -208,6 +221,8 @@ export default function BooksPage() {
 
       {tab === "reports" && <BooksReportsTab books={books} grades={grades} onAction={() => load(true)} />}
 
+      {tab === "sales" && <BooksSalesTab />}
+
       {/* ── Modals ── */}
       {showFormModal && (
         <BookFormModal
@@ -218,7 +233,7 @@ export default function BooksPage() {
           onSaved={() => {
             setShowFormModal(false);
             load(true);
-            showToast(editBook ? "تم تعديل الكتاب" : "تم إضافة الكتاب");
+            showToast(editBook ? "تم تعديل الكتاب بنجاح" : "تم إضافة الكتاب بنجاح");
           }}
         />
       )}
