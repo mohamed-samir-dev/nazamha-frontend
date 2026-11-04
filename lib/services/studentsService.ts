@@ -22,8 +22,8 @@ export const StudentsService = {
   async getStudentByQR(raw: string): Promise<Student> {
     return StudentsRepository.getStudentByQR(raw);
   },
-  async getStudentsByTeacherId(fields?: string): Promise<Student[]> {
-    return StudentsRepository.getStudentsByTeacherId(fields);
+  async getStudentsByTeacherId(fields?: string, groupId?: string): Promise<Student[]> {
+    return StudentsRepository.getStudentsByTeacherId(fields, groupId);
   },
 
   async getStudentsPaginated(params: Parameters<typeof StudentsRepository.getStudentsPaginated>[0]): Promise<StudentsPage> {

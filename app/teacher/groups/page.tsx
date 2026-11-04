@@ -314,7 +314,7 @@ export default function GroupsPage() {
             hasCenterMode={hasCenterMode}
             subTeachers={subTeachers}
             onUpdated={(updated) => {
-              cacheUpdate(updated);
+              cacheUpdate(editingGroup ? { ...editingGroup, ...updated } : updated);
               showToast("تم تعديل المجموعة بنجاح.");
             }}
             onGradeAdded={(grade) => setGrades((prev) => [...prev, grade])}
@@ -323,7 +323,7 @@ export default function GroupsPage() {
 
           <DeleteGroupDialog
             group={deletingGroup}
-            studentCount={students.filter((s) => s.group_id === deletingGroup?.id).length}
+            studentCount={deletingGroup ? (deletingGroup.student_count ?? 0) : 0}
             onConfirm={handleConfirmDelete}
             onClose={() => setDeletingGroup(null)}
           />

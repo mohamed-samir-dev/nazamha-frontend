@@ -23,6 +23,14 @@ function decodeToken(token: string): JwtPayload | null {
   }
 }
 
+function redirectAndClearCookie(url: URL, req: NextRequest): NextResponse {
+  const res = NextResponse.redirect(url);
+  if (req.cookies.has("token")) {
+    res.cookies.delete("token");
+  }
+  return res;
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = getTokenFromRequest(req);
@@ -43,7 +51,7 @@ export function middleware(req: NextRequest) {
 
   // /admin/* → must be admin
   if (pathname.startsWith("/admin")) {
-    if (!isAuthenticated) return NextResponse.redirect(new URL("/admin/login", req.url));
+    if (!isAuthenticated) return redirectAndClearCookie(new URL("/admin/login", req.url), req);
     if (!isAdmin) return NextResponse.redirect(new URL("/admin/login", req.url));
     return NextResponse.next();
   }
@@ -56,7 +64,7 @@ export function middleware(req: NextRequest) {
 
   // /teacher/* → must be teacher (or staff acting as teacher)
   if (pathname.startsWith("/teacher")) {
-    if (!isAuthenticated) return NextResponse.redirect(new URL("/teacher/login", req.url));
+    if (!isAuthenticated) return redirectAndClearCookie(new URL("/teacher/login", req.url), req);
     if (!isTeacher) return NextResponse.redirect(new URL("/teacher/login", req.url));
     return NextResponse.next();
   }
@@ -69,7 +77,7 @@ export function middleware(req: NextRequest) {
 
   // /center/* → must be center or staff
   if (pathname.startsWith("/center")) {
-    if (!isAuthenticated) return NextResponse.redirect(new URL("/center/login", req.url));
+    if (!isAuthenticated) return redirectAndClearCookie(new URL("/center/login", req.url), req);
     if (!isCenter) return NextResponse.redirect(new URL("/center/login", req.url));
     return NextResponse.next();
   }

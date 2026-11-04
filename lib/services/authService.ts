@@ -1,5 +1,5 @@
 import { mutate } from "swr";
-import { api, resetAuthFailureGuard } from "@/lib/apiClient";
+import { api, resetAuthFailureGuard, resetCsrfToken } from "@/lib/apiClient";
 import { Teacher } from "@/lib/types";
 import { appCache } from "@/lib/appCache";
 import {AttendanceQueue} from "@/lib/offlineQueue";
@@ -67,8 +67,9 @@ export const AuthService = {
       });
     }
 
-    // Reset 401 dedup guard so next login works cleanly
+    // Reset 401 dedup guard and CSRF token so next login works cleanly
     resetAuthFailureGuard();
+    resetCsrfToken();
   },
 
   cacheAdminUser(admin: { id: string; name: string; email: string; is_admin: boolean; is_super_admin: boolean }) {
@@ -113,10 +114,12 @@ export const AuthService = {
   },
 
   async signOut(): Promise<void> {
-    // Fire-and-forget the server logout — don't let it block cleanup
-    await api.post("/auth/logout", {}).catch(() => {});
+    try {
+      await api.post("/auth/logout", {});
+    } catch {
+      // Ignore network errors on logout to allow offline cleanup
+    }
     AuthService.clearAllUserData();
-    // Clear the client-side cookie set during login
     if (typeof window !== "undefined") {
       document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
     }

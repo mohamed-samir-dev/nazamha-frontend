@@ -53,7 +53,7 @@ export default function CenterLayout({ children }: { children: React.ReactNode }
 
   const handleLogout = async () => {
     await AuthService.signOut();
-    router.replace("/center/login");
+    window.location.href = "/center/login";
   };
 
   if (pathname === "/center/login") return <>{children}</>;

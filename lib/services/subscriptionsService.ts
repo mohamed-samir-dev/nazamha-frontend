@@ -57,8 +57,12 @@ export const SubscriptionsService = {
     return apiClient.get(`/subscriptions/batch?studentIds=${studentIds.join(",")}${allPeriods ? "&allPeriods=1" : ""}`);
   },
 
-  async getAllTeacherSubscriptions(year?: number): Promise<MonthlySubscription[]> {
-    if(year) return apiClient.get<MonthlySubscription[]>(`/subscriptions?year=${year}`);
+  async getAllTeacherSubscriptions(year?: number, month?: number): Promise<MonthlySubscription[]> {
+    const params = new URLSearchParams();
+    if (year) params.set("year", String(year));
+    if (month) params.set("month", String(month));
+    const qs = params.toString();
+    if (qs) return apiClient.get<MonthlySubscription[]>(`/subscriptions?${qs}`);
     const cached = appCache.get<MonthlySubscription[]>(SUBS_ALL_KEY);
     if (cached) return cached;
     const data = await apiClient.get<MonthlySubscription[]>(`/subscriptions`);

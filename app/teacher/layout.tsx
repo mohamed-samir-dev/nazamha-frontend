@@ -18,6 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isPrintPage = typeof window !== "undefined" && /\/print(\/|$)/.test(window.location.pathname);
   const [loading, setLoading] = useState(!isPrintPage);
   const [teacherName, setTeacherName] = useState("");
+  const [teacherCode, setTeacherCode] = useState("");
   const [hasBills, setHasBills] = useState(true);
   const [hasAttendance, setHasAttendance] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -66,6 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     function applyTeacherData(teacherData: any) {
       setTeacherName(teacherData.name || "المعلم");
+      setTeacherCode(teacherData.teacherCode || "");
       setHasCenterMode(teacherData.is_center_mode === true);
       setHasBills(teacherData.has_bills_feature !== false);
       setHasAttendance(teacherData.has_attendance_feature !== false);
@@ -169,7 +171,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         if (isAuthError) {
           AuthService.clearAllUserData();
-          router.replace("/teacher/login");
+          window.location.href = "/teacher/login";
           return;
         }
 
@@ -177,7 +179,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         // can keep working without losing their session context
         const cached = OfflineCache.loadTeacher();
         if (!cached) {
-          router.replace("/teacher/login");
+          window.location.href = "/teacher/login";
           return;
         }
         applyTeacherData(cached as any);
@@ -207,7 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleLogout = async () => {
     await AuthService.signOut();
-    router.replace("/teacher/login");
+    window.location.href = "/teacher/login";
   };
 
   if (pathname === "/teacher/login" || /\/print(\/|$)/.test(pathname ?? "")) return <>{children}</>;
@@ -227,6 +229,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="dashboard-layout">
       <Sidebar
         teacherName={teacherName}
+        teacherCode={teacherCode}
         hasAttendance={hasAttendance}
         isAdmin={isAdmin}
         isSuperAdmin={isSuperAdmin}

@@ -61,7 +61,7 @@ export default function AdminSidebar({ isSuperAdmin, hasCentersPermission, siteN
 
   const handleLogout = async () => {
     await AuthService.signOut();
-    router.replace("/admin/login");
+    window.location.href = "/admin/login";
   };
 
   const navGroups: NavGroup[] = [

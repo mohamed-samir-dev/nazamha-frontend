@@ -13,66 +13,71 @@ import { GradesService } from "@/lib/services/gradesService";
 import { SubTeachersService } from "@/lib/services/subTeachersService";
 import { SubscriptionsService } from "@/lib/services/subscriptionsService";
 import { BooksService } from "@/lib/services/booksService";
-import type { Grade, Group, SubTeacher, MonthlySubscription, BookSale, Bill, Salary, TeacherExpense, Student } from "@/lib/types";
+import type {
+  Grade,
+  Group,
+  SubTeacher,
+  MonthlySubscription,
+  BookSale,
+  Bill,
+  Salary,
+  TeacherExpense,
+  Student,
+  Teacher,
+} from "@/lib/types";
 import { DEFAULT_ERROR } from "@/lib/errors";
+import {
+  ARABIC_MONTHS,
+  getCairoNow,
+  s,
+  netSubscriptionAmount,
+  resolveAcademicYears,
+  calculateDateRangeBounds,
+  calculateKPIs,
+  calculateDailyRevenue,
+  calculateMonthlySummary,
+  calculateStageRevenue,
+  calculateGroupRevenue,
+  calculatePaymentTransactions,
+  calculateOutstandingStudents,
+  calculateTopGradeAnnual,
+  calculateTopBook,
+  type StudentRef,
+} from "../_utils/financialCalculations";
+import type {
+  FinancialFilters,
+  PeriodType,
+  FinancialKPIs,
+  DailyRevenuePoint,
+  MonthlySummaryRow,
+  StageRevenueRow,
+  GroupRevenueRow,
+  PaymentTransactionRow,
+  OutstandingStudentRow,
+  GradeStat,
+  BookStat,
+} from "../_types/financialTypes";
+import {
+  exportFinancialReportToExcel,
+  printFinancialStatement,
+} from "../_utils/exportFinancialReports";
 
-export const ARABIC_MONTHS = [
-  "يناير","فبراير","مارس","أبريل","مايو","يونيو",
-  "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",
-];
-
-export interface StudentRow {
-  id: string;
-  name: string;
-  code?: string;
-  group_id: string | null;
-  grade_id?: string | null;
-}
-
-export interface GradeStat {
-  id: string;
-  name: string;
-  paidThisMonth: number;
-  earnings: number;
-}
-
-export interface BookStat {
-  id: string;
-  name: string;
-  price: number;
-  count: number;
-  earnings: number;
-}
-
-export interface MonthReport {
-  name: string;
-  paidCount: number;
-  subscriptionEarnings: number;
-  bookEarnings: number;
-  monthExpenses: number;
-  netProfit: number;
-  percentage: number;
-  isCurrentMonth: boolean;
-}
-
-// normalize أي قيمة لـ string (ObjectId أو string)
-const s = (v: unknown): string => (v == null ? "" : typeof v === "string" ? v : String(v));
-
-// الطالب المعفي لا يُحسب في الإيرادات — صفر دايماً
-const netAmount = (sub: MonthlySubscription): number =>
-  sub.status === "exempt"
-    ? 0
-    : Math.max(0, Number(sub.amount ?? 0) - Number(sub.discount ?? 0));
+export { ARABIC_MONTHS };
 
 export function useFinancialReports() {
-  const now = useMemo(() => new Date(), []);
-  const CURRENT_YEAR = now.getFullYear();
-  const CURRENT_MONTH = now.getMonth(); // 0-based index
+  // 1. Timezone-anchored Current Date (Africa/Cairo)
+  const [teacherProfile, setTeacherProfile] = useState<Teacher | null>(null);
+  const timezone = teacherProfile?.settings?.timezone || "Africa/Cairo";
+  const currentNow = useMemo(() => getCairoNow(timezone), [timezone]);
+  const CURRENT_YEAR = currentNow.year;
+  const CURRENT_MONTH = currentNow.month; // 0-based index
 
+  // 2. Loading & Error States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [students, setStudents] = useState<StudentRow[]>([]);
+  // 3. Raw Data
+  const [students, setStudents] = useState<StudentRef[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [subTeachers, setSubTeachers] = useState<SubTeacher[]>([]);
@@ -83,98 +88,169 @@ export function useFinancialReports() {
   const [teacherExpenses, setTeacherExpenses] = useState<TeacherExpense[]>([]);
   const [hasCenterMode, setHasCenterMode] = useState(false);
 
-  const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
-  const [selectedTeacherId, setSelectedTeacherId] = useState("all");
+  // 4. Academic Year Options
+  const { currentAcademicYearKey, options: academicYearOptions } = useMemo(
+    () => resolveAcademicYears(teacherProfile, CURRENT_YEAR, CURRENT_MONTH),
+    [teacherProfile, CURRENT_YEAR, CURRENT_MONTH]
+  );
+
+  // 5. Filters State (PRIMARY OBJECTIVE: CURRENT MONTH FIRST)
+  const [periodType, setPeriodType] = useState<PeriodType>("current_month");
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>(currentAcademicYearKey);
+  const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
+  const [selectedMonth, setSelectedMonth] = useState<number>(CURRENT_MONTH + 1); // 1-based
+  const [selectedGradeId, setSelectedGradeId] = useState<string>("all");
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>("all");
+
+  // Keep selectedAcademicYear synchronized if options load
+  useEffect(() => {
+    if (currentAcademicYearKey && (!selectedAcademicYear || selectedAcademicYear === "")) {
+      setSelectedAcademicYear(currentAcademicYearKey);
+    }
+  }, [currentAcademicYearKey, selectedAcademicYear]);
+
+  // Modals & Inspection States
   const [showUnpaid, setShowUnpaid] = useState(false);
   const [showAllGrades, setShowAllGrades] = useState(false);
   const [showAllBooks, setShowAllBooks] = useState(false);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [inspectedGradeId, setInspectedGradeId] = useState<string | null>(null);
 
+  // 6. Data Fetching
   const loadVersion = useRef(0);
-  const load = useCallback(async (silent = false) => {
-    const version = ++loadVersion.current;
-    if (!silent) setLoading(true);
-    setError(null);
-    try {
-      const user = await AuthService.getUser();
-      if (!user || version !== loadVersion.current) return;
+  const load = useCallback(
+    async (silent = false) => {
+      const version = ++loadVersion.current;
+      if (!silent) setLoading(true);
+      setError(null);
+      try {
+        const user = await AuthService.getUser();
+        if (!user || version !== loadVersion.current) return;
 
-      const comparisonYear = CURRENT_MONTH === 0 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
-      const years = [...new Set([selectedYear, comparisonYear])];
-      const forYears = async <T,>(fetchYear: (year: number) => Promise<T[]>): Promise<T[]> => (await Promise.all(years.map(fetchYear))).flat();
-      const [teacher, studentsData, grps, grds, subsData, salesData, billsData, salariesData, expensesData] = await Promise.all([
-        TeachersService.getTeacherProfile(user.id),
-        StudentsService.getStudentsByTeacherId("id,name,code,group_id,grade_id"),
-        GroupsService.getGroupsByTeacherId(),
-        GradesService.getGradesByTeacherId(user.id),
-        forYears(year => SubscriptionsService.getAllTeacherSubscriptions(year)),
-        forYears(year => BooksService.getSales({ year: String(year) })),
-        forYears(year => BillsService.getBillsByTeacherId(user.id, year)),
-        forYears(year => SalariesService.getAll(year)),
-        forYears(year => TeacherExpensesService.getAll({year})),
-      ]);
+        // Fetch calendar years needed to cover current and comparison academic periods
+        const selectedStartYear = Number(selectedAcademicYear.split("/")[0]) || CURRENT_YEAR;
+        const yearsToFetch = [
+          ...new Set([
+            CURRENT_YEAR - 1,
+            CURRENT_YEAR,
+            CURRENT_YEAR + 1,
+            selectedYear,
+            selectedStartYear,
+            selectedStartYear + 1,
+          ]),
+        ];
 
-      if (version !== loadVersion.current) return;
+        const forYears = async <T,>(fetchYear: (year: number) => Promise<T[]>): Promise<T[]> =>
+          (await Promise.all(yearsToFetch.map(fetchYear))).flat();
 
-      const centerMode = teacher?.is_center_mode || false;
-      setHasCenterMode(centerMode);
-      if (centerMode) {
-        const subs = await SubTeachersService.getSubTeachersByCenterId(user.id);
+        const [
+          teacher,
+          studentsData,
+          grps,
+          grds,
+          subsData,
+          salesData,
+          billsData,
+          salariesData,
+          expensesData,
+        ] = await Promise.all([
+          TeachersService.getTeacherProfile(user.id),
+          StudentsService.getStudentsByTeacherId(
+            "id,name,code,group_id,grade_id,subscription_start_month,subscription_start_year,is_suspended"
+          ),
+          GroupsService.getGroupsByTeacherId(),
+          GradesService.getGradesByTeacherId(user.id),
+          forYears((year) => SubscriptionsService.getAllTeacherSubscriptions(year)),
+          forYears((year) => BooksService.getSales({ year: String(year) })),
+          forYears((year) => BillsService.getBillsByTeacherId(user.id, year)),
+          forYears((year) => SalariesService.getAll(year)),
+          forYears((year) => TeacherExpensesService.getAll({ year })),
+        ]);
+
         if (version !== loadVersion.current) return;
-        setSubTeachers(subs || []);
+
+        setTeacherProfile(teacher);
+        const centerMode = teacher?.is_center_mode || false;
+        setHasCenterMode(centerMode);
+        if (centerMode) {
+          const subs = await SubTeachersService.getSubTeachersByCenterId(user.id);
+          if (version !== loadVersion.current) return;
+          setSubTeachers(subs || []);
+        }
+
+        setGroups(grps || []);
+        setGrades(grds || []);
+
+        const normalizedStudents: StudentRef[] = (studentsData || []).map(
+          (st: Student & { _id?: string }) => ({
+            id: s(st.id || st._id),
+            name: st.name || "",
+            code: st.code,
+            group_id: s(st.group_id) || null,
+            grade_id: s(st.grade_id) || null,
+            subscription_start_month: (st as any).subscription_start_month,
+            subscription_start_year: (st as any).subscription_start_year,
+            is_suspended: (st as any).is_suspended,
+          })
+        );
+        setStudents(normalizedStudents);
+
+        const normalizedSubs: MonthlySubscription[] = (subsData || []).map(
+          (sub: MonthlySubscription) => ({
+            ...sub,
+            id: s(sub.id || sub._id),
+            student_id: s(sub.student_id),
+            teacher_id: s(sub.teacher_id),
+            month: Number(sub.month),
+            year: Number(sub.year),
+            amount: Number(sub.amount ?? 0),
+            discount: Number(sub.discount ?? 0),
+            paid_at: sub.paid_at,
+            receipt_number: sub.receipt_number,
+            notes: sub.notes,
+            created_at: sub.created_at,
+          })
+        );
+        setAllSubs(normalizedSubs);
+
+        const activeSales = (salesData || []).filter((sale: BookSale) => sale.status === "active");
+        setAllSales(activeSales);
+        setBills(billsData || []);
+        setSalaries(salariesData || []);
+        setTeacherExpenses(expensesData || []);
+      } catch {
+        if (version === loadVersion.current) setError(DEFAULT_ERROR);
+      } finally {
+        if (version === loadVersion.current) setLoading(false);
       }
+    },
+    [CURRENT_MONTH, CURRENT_YEAR, selectedAcademicYear, selectedYear]
+  );
 
-      setGroups(grps || []);
-      setGrades(grds || []);
-
-      const normalizedStudents: StudentRow[] = (studentsData || []).map((st: Student & { _id?: string }) => ({
-        id: s(st.id || st._id),
-        name: st.name || "",
-        code: st.code,
-        group_id: s(st.group_id) || null,
-        grade_id: s(st.grade_id) || null,
-      }));
-      setStudents(normalizedStudents);
-
-      const normalizedSubs: MonthlySubscription[] = (subsData || []).map((sub: MonthlySubscription) => ({
-        ...sub,
-        id: s(sub.id || sub._id),
-        student_id: s(sub.student_id),
-        teacher_id: s(sub.teacher_id),
-        month: Number(sub.month),
-        year: Number(sub.year),
-        amount: Number(sub.amount ?? 0),
-        discount: Number(sub.discount ?? 0),
-      }));
-      setAllSubs(normalizedSubs);
-
-      const activeSales = (salesData || []).filter((sale: BookSale) => sale.status === "active");
-      setAllSales(activeSales);
-      setBills(billsData || []);
-      setSalaries(salariesData || []);
-      setTeacherExpenses(expensesData || []);
-    } catch {
-      if (version === loadVersion.current) setError(DEFAULT_ERROR);
-    } finally {
-      if (version === loadVersion.current) setLoading(false);
-    }
-
-  }, [selectedYear, CURRENT_MONTH, CURRENT_YEAR]);
-
-  // initial load
+  // Initial load
   const lastLoadRef = useRef(0);
   useEffect(() => {
     void (async () => {
       await load();
       lastLoadRef.current = Date.now();
     })();
-    return () => { loadVersion.current++; };
+    return () => {
+      loadVersion.current++;
+    };
   }, [load]);
 
-  // re-fetch on financial change event or tab visibility
+  // Re-fetch on financial change event or tab visibility
   useEffect(() => {
     const THROTTLE_MS = 5 * 60 * 1000;
     let mutationTimer: ReturnType<typeof setTimeout>;
-    const onEvent = () => { clearTimeout(mutationTimer); mutationTimer=setTimeout(()=>{lastLoadRef.current=Date.now();void load(true);},150); };
+    const onEvent = () => {
+      clearTimeout(mutationTimer);
+      mutationTimer = setTimeout(() => {
+        lastLoadRef.current = Date.now();
+        void load(true);
+      }, 150);
+    };
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastLoadRef.current < THROTTLE_MS) return;
@@ -190,250 +266,466 @@ export function useFinancialReports() {
     };
   }, [load]);
 
-  // ── computed ──────────────────────────────────────────────────────────────
-  const filteredStudents = useMemo(() =>
-    selectedTeacherId === "all"
-      ? students
-      : students.filter(st => {
-          const grp = groups.find(g => g.id === st.group_id);
-          return grp?.sub_teacher_id === selectedTeacherId;
-        }),
-    [students, groups, selectedTeacherId]
-  );
+  // 7. Filtered Students
+  const filteredStudents = useMemo(() => {
+    return students.filter((st) => {
+      // Teacher filter (Center mode)
+      if (selectedTeacherId !== "all") {
+        const grp = groups.find((g) => g.id === st.group_id);
+        if (grp?.sub_teacher_id !== selectedTeacherId) return false;
+      }
+      // Grade filter
+      const effectiveGradeId =
+        (st.grade_id && st.grade_id !== "null" ? st.grade_id : null) ||
+        groups.find((g) => g.id === st.group_id)?.grade_id ||
+        null;
+      if (selectedGradeId !== "all" && effectiveGradeId !== selectedGradeId) return false;
+      // Group filter
+      if (selectedGroupId !== "all" && st.group_id !== selectedGroupId) return false;
+
+      return true;
+    });
+  }, [students, groups, selectedTeacherId, selectedGradeId, selectedGroupId]);
 
   const studentIdSet = useMemo(
-    () => new Set(filteredStudents.map(st => st.id)),
+    () => new Set(filteredStudents.map((st) => st.id)),
     [filteredStudents]
   );
 
-  const getEffectiveGradeId = (st: StudentRow): string | null =>
-    (st.grade_id && st.grade_id !== "null" ? st.grade_id : null)
-    || groups.find(g => g.id === st.group_id)?.grade_id
-    || null;
+  // 8. Active Academic Year Option
+  const activeAcademicYearOpt = useMemo(() => {
+    const found = academicYearOptions.find((o) => o.key === selectedAcademicYear);
+    return found || academicYearOptions.find((o) => o.isCurrent) || academicYearOptions[0];
+  }, [academicYearOptions, selectedAcademicYear]);
 
-  // اشتراكات السنة المختارة، مدفوعة أو معفاة، للطلاب المفلترين فقط
-  const yearSubs = useMemo(() =>
-    allSubs.filter(sub =>
-      sub.year === selectedYear &&
-      (sub.status === "paid" || sub.status === "exempt") &&
-      studentIdSet.has(s(sub.student_id))
-    ),
-    [allSubs, selectedYear, studentIdSet]
-  );
-
-  // مبيعات الكتب للطلاب المفلترين
-  const filteredSales = useMemo(() =>
-    allSales.filter(sale => {
-      const sid = sale.student_id && typeof sale.student_id === "object"
-        ? s((sale.student_id as { id?: string; _id?: string }).id || (sale.student_id as { id?: string; _id?: string })._id)
-        : s(sale.student_id);
-      return studentIdSet.has(sid);
+  // 9. Filters object
+  const currentFilters: FinancialFilters = useMemo(
+    () => ({
+      periodType,
+      selectedAcademicYear,
+      selectedYear,
+      selectedMonth,
+      selectedGradeId,
+      selectedGroupId,
+      selectedTeacherId,
+      selectedPaymentMethod: "all",
     }),
-    [allSales, studentIdSet]
+    [
+      periodType,
+      selectedAcademicYear,
+      selectedYear,
+      selectedMonth,
+      selectedGradeId,
+      selectedGroupId,
+      selectedTeacherId,
+    ]
   );
 
-  // مبيعات الكتب للسنة المختارة فقط
-  const yearFilteredSales = useMemo(() =>
-    filteredSales.filter(sale => Number(sale.year) === selectedYear),
-    [filteredSales, selectedYear]
+  // 10. Date Bounds for Selected Period
+  const dateBounds = useMemo(
+    () => calculateDateRangeBounds(currentFilters, activeAcademicYearOpt, currentNow),
+    [currentFilters, activeAcademicYearOpt, currentNow]
   );
 
-  const yearBills = useMemo(
-    () => bills.filter(b => Number(b.billing_year) === selectedYear),
-    [bills, selectedYear]
+  // 11. KPIs for Selected Period
+  const kpis: FinancialKPIs = useMemo(
+    () =>
+      calculateKPIs({
+        filters: currentFilters,
+        bounds: dateBounds,
+        academicYearOpt: activeAcademicYearOpt,
+        students: filteredStudents,
+        studentIdSet,
+        allSubs,
+        allSales,
+        bills,
+        salaries,
+        teacherExpenses,
+        currentNow,
+      }),
+    [
+      currentFilters,
+      dateBounds,
+      activeAcademicYearOpt,
+      filteredStudents,
+      studentIdSet,
+      allSubs,
+      allSales,
+      bills,
+      salaries,
+      teacherExpenses,
+      currentNow,
+    ]
   );
 
-  const yearSalaries = useMemo(
-    () => salaries.filter(s => Number(s.year) === selectedYear),
-    [salaries, selectedYear]
-  );
-
-  const yearTeacherExpenses = useMemo(
-    () => teacherExpenses.filter(e => Number(e.year) === selectedYear),
-    [teacherExpenses, selectedYear]
-  );
-
-  // ── KPIs ──────────────────────────────────────────────────────────────────
-  const totalSubscriptionEarnings = yearSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-  const totalBookEarnings = yearFilteredSales.reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
-  const totalExpenses = yearBills.reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
-    + yearSalaries.reduce((sum, s) => sum + Number(s.amount ?? 0), 0)
-    + yearTeacherExpenses.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-  const totalGrossEarnings = totalSubscriptionEarnings + totalBookEarnings;
-  const totalNetProfit = totalGrossEarnings - totalExpenses;
-
-  const currentMonthNum = CURRENT_MONTH + 1; // 1-based
-  const paidThisMonthCount = new Set(
-    yearSubs.filter(sub => sub.month === currentMonthNum && sub.status === "paid").map(sub => s(sub.student_id))
-  ).size;
-
-  // ── الشهر الحالي (المختار/الحالي) للشارات ────────────────────────────────────
-  const curMonthSubs = yearSubs.filter(sub => sub.month === currentMonthNum);
-  const currentMonthSubEarnings = curMonthSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-  const currentMonthBookEarnings = yearFilteredSales
-    .filter(sale => sale.month === currentMonthNum)
-    .reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
-  const currentMonthExpenses = yearBills
-    .filter(b => Number(b.billing_month) === currentMonthNum)
-    .reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
-    + yearSalaries
-    .filter(s => Number(s.month) === currentMonthNum)
-    .reduce((sum, s) => sum + Number(s.amount ?? 0), 0)
-    + yearTeacherExpenses
-    .filter(e => Number(e.month) === currentMonthNum)
-    .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-  const currentMonthGrossEarnings = currentMonthSubEarnings + currentMonthBookEarnings;
-  const currentMonthNetProfit = currentMonthGrossEarnings - currentMonthExpenses;
-
-  // ── الشهر السابق ──────────────────────────────────────────────────────────
+  // 12. Month-over-Month Comparison KPIs (Preserved from existing page)
   const prevMonthNum = CURRENT_MONTH === 0 ? 12 : CURRENT_MONTH; // 1-based
   const prevMonthYear = CURRENT_MONTH === 0 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
 
-  const prevSubs = allSubs.filter(sub =>
-    sub.month === prevMonthNum && sub.year === prevMonthYear &&
-    (sub.status === "paid" || sub.status === "exempt") &&
-    studentIdSet.has(s(sub.student_id))
+  const prevSubs = useMemo(
+    () =>
+      allSubs.filter(
+        (sub) =>
+          sub.month === prevMonthNum &&
+          sub.year === prevMonthYear &&
+          (sub.status === "paid" || sub.status === "exempt") &&
+          studentIdSet.has(s(sub.student_id))
+      ),
+    [allSubs, prevMonthNum, prevMonthYear, studentIdSet]
   );
-  const prevMonthSubEarnings = prevSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-  const prevMonthBookEarnings = filteredSales
-    .filter(sale => sale.month === prevMonthNum && Number(sale.year) === prevMonthYear)
-    .reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
-  const prevMonthExpenses = bills
-    .filter(b => Number(b.billing_month) === prevMonthNum && Number(b.billing_year) === prevMonthYear)
-    .reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
-    + salaries
-    .filter(s => Number(s.month) === prevMonthNum && Number(s.year) === prevMonthYear)
-    .reduce((sum, s) => sum + Number(s.amount ?? 0), 0)
-    + teacherExpenses
-    .filter(e => Number(e.month) === prevMonthNum && Number(e.year) === prevMonthYear)
-    .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+
+  const prevMonthSubEarnings = useMemo(
+    () => prevSubs.reduce((sum, sub) => sum + netSubscriptionAmount(sub), 0),
+    [prevSubs]
+  );
+
+  const prevMonthBookEarnings = useMemo(
+    () =>
+      allSales
+        .filter((sale) => {
+          const sid =
+            typeof sale.student_id === "object"
+              ? s((sale.student_id as { id?: string; _id?: string }).id || (sale.student_id as { id?: string; _id?: string })._id)
+              : s(sale.student_id);
+          return (
+            studentIdSet.has(sid) &&
+            sale.month === prevMonthNum &&
+            Number(sale.year) === prevMonthYear
+          );
+        })
+        .reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0),
+    [allSales, prevMonthNum, prevMonthYear, studentIdSet]
+  );
+
+  const prevMonthExpenses = useMemo(
+    () =>
+      bills
+        .filter((b) => Number(b.billing_month) === prevMonthNum && Number(b.billing_year) === prevMonthYear)
+        .reduce((sum, b) => sum + Number(b.amount ?? 0), 0) +
+      salaries
+        .filter((s) => Number(s.month) === prevMonthNum && Number(s.year) === prevMonthYear)
+        .reduce((sum, s) => sum + Number(s.amount ?? 0), 0) +
+      teacherExpenses
+        .filter((e) => Number(e.month) === prevMonthNum && Number(e.year) === prevMonthYear)
+        .reduce((sum, e) => sum + Number(e.amount ?? 0), 0),
+    [bills, salaries, teacherExpenses, prevMonthNum, prevMonthYear]
+  );
+
   const prevMonthGrossEarnings = prevMonthSubEarnings + prevMonthBookEarnings;
   const prevMonthNetProfit = prevMonthGrossEarnings - prevMonthExpenses;
 
-  // ── grades stats ──────────────────────────────────────────────────────────
-  const gradesStats: GradeStat[] = useMemo(() => {
-    const gradeIdsWithGroups = new Set(groups.map(g => g.grade_id).filter(Boolean));
-    const result: GradeStat[] = grades.filter(grade => gradeIdsWithGroups.has(grade.id)).map(grade => {
-      const gradeStudentIds = new Set(
-        filteredStudents.filter(st => getEffectiveGradeId(st) === grade.id).map(st => st.id)
-      );
-      const gradeSubs = yearSubs.filter(sub => gradeStudentIds.has(s(sub.student_id)));
-      const paidThisMonth = new Set(
-        gradeSubs.filter(sub => sub.month === currentMonthNum && sub.status === "paid").map(sub => s(sub.student_id))
-      ).size;
-      const earnings = gradeSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-      return { id: grade.id, name: grade.name, paidThisMonth, earnings };
+  // 13. Daily Revenue Points (for Chart)
+  const dailyRevenuePoints: DailyRevenuePoint[] = useMemo(() => {
+    const targetMonth = dateBounds.targetMonth || CURRENT_MONTH + 1;
+    const targetYear = dateBounds.targetYear || CURRENT_YEAR;
+    return calculateDailyRevenue({
+      year: targetYear,
+      month: targetMonth,
+      allSubs,
+      allSales,
+      studentIdSet,
+      paymentMethodFilter: "all",
     });
+  }, [
+    dateBounds.targetMonth,
+    dateBounds.targetYear,
+    CURRENT_MONTH,
+    CURRENT_YEAR,
+    allSubs,
+    allSales,
+    studentIdSet,
+  ]);
 
-    const generalIds = new Set(
-      filteredStudents.filter(st => !getEffectiveGradeId(st)).map(st => st.id)
-    );
-    const generalSubs = yearSubs.filter(sub => generalIds.has(s(sub.student_id)));
-    const generalPaid = new Set(
-      generalSubs.filter(sub => sub.month === currentMonthNum && sub.status === "paid").map(sub => s(sub.student_id))
-    ).size;
-    const generalEarnings = generalSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-    if (generalEarnings > 0 || generalPaid > 0) {
-      result.push({ id: "general", name: "طلاب بدون سنة دراسية", paidThisMonth: generalPaid, earnings: generalEarnings });
-    }
+  // 14. Table A: Monthly Financial Summary
+  const monthlySummary: MonthlySummaryRow[] = useMemo(
+    () =>
+      calculateMonthlySummary({
+        academicYearOpt: activeAcademicYearOpt,
+        students: filteredStudents,
+        studentIdSet,
+        allSubs,
+        allSales,
+        bills,
+        salaries,
+        teacherExpenses,
+        currentNow,
+      }),
+    [
+      activeAcademicYearOpt,
+      filteredStudents,
+      studentIdSet,
+      allSubs,
+      allSales,
+      bills,
+      salaries,
+      teacherExpenses,
+      currentNow,
+    ]
+  );
 
-    return result.sort((a, b) => b.earnings - a.earnings);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grades, filteredStudents, yearSubs, currentMonthNum, groups]);
+  // 15. Table B: Revenue by Educational Stage
+  const stageRevenue: StageRevenueRow[] = useMemo(
+    () =>
+      calculateStageRevenue({
+        grades,
+        groups,
+        students: filteredStudents,
+        studentIdSet,
+        allSubs,
+        bounds: dateBounds,
+        academicYearOpt: activeAcademicYearOpt,
+      }),
+    [grades, groups, filteredStudents, studentIdSet, allSubs, dateBounds, activeAcademicYearOpt]
+  );
 
-  // ── books stats ───────────────────────────────────────────────────────────
+  // 16. Table C: Revenue by Group
+  const groupRevenue: GroupRevenueRow[] = useMemo(
+    () =>
+      calculateGroupRevenue({
+        groups,
+        grades,
+        students: filteredStudents,
+        studentIdSet,
+        allSubs,
+        bounds: dateBounds,
+        academicYearOpt: activeAcademicYearOpt,
+      }),
+    [groups, grades, filteredStudents, studentIdSet, allSubs, dateBounds, activeAcademicYearOpt]
+  );
+
+  // 17. Table D: Payment Transactions
+  const paymentTransactions: PaymentTransactionRow[] = useMemo(
+    () =>
+      calculatePaymentTransactions({
+        allSubs,
+        students: filteredStudents,
+        groups,
+        grades,
+        studentIdSet,
+        bounds: dateBounds,
+        academicYearOpt: activeAcademicYearOpt,
+        paymentMethodFilter: "all",
+      }),
+    [allSubs, filteredStudents, groups, grades, studentIdSet, dateBounds, activeAcademicYearOpt]
+  );
+
+  // 18. Table E: Outstanding Students
+  const outstandingStudents: OutstandingStudentRow[] = useMemo(
+    () =>
+      calculateOutstandingStudents({
+        allSubs,
+        students: filteredStudents,
+        groups,
+        grades,
+        studentIdSet,
+        academicYearOpt: activeAcademicYearOpt,
+        currentNow,
+        specificMonth:
+          dateBounds.isSingleMonth && dateBounds.targetMonth && dateBounds.targetYear
+            ? { month: dateBounds.targetMonth, year: dateBounds.targetYear }
+            : null,
+      }),
+    [allSubs, filteredStudents, groups, grades, studentIdSet, activeAcademicYearOpt, currentNow, dateBounds]
+  );
+
+  // 19. Preserved Feature: Top Grade (Annual)
+  const topGrade = useMemo(
+    () =>
+      calculateTopGradeAnnual({
+        grades,
+        groups,
+        students: filteredStudents,
+        studentIdSet,
+        allSubs,
+        academicYearOpt: activeAcademicYearOpt,
+      }),
+    [grades, groups, filteredStudents, studentIdSet, allSubs, activeAcademicYearOpt]
+  );
+
+  // 20. Preserved Feature: Best-Selling Book
+  const topBook = useMemo(
+    () =>
+      calculateTopBook({
+        allSales,
+        studentIdSet,
+        bounds: dateBounds,
+        academicYearOpt: activeAcademicYearOpt,
+      }),
+    [allSales, studentIdSet, dateBounds, activeAcademicYearOpt]
+  );
+
+  // 21. Preserved Feature: Unpaid Students List for Selected Month
+  const unpaidStudents = useMemo(() => {
+    return outstandingStudents.map((st) => ({
+      id: st.studentId,
+      name: st.studentName,
+      code: st.studentCode,
+      gradeName: st.gradeName,
+      groupName: st.groupName,
+      amount: st.remainingBalance,
+    }));
+  }, [outstandingStudents]);
+
+  // 22. Preserved Feature: Grades Stats List
+  const gradesStats: GradeStat[] = useMemo(() => {
+    return stageRevenue.map((sr) => ({
+      id: sr.id,
+      name: sr.name,
+      paidThisMonth: sr.paidStudents,
+      earnings: sr.totalCollected,
+    }));
+  }, [stageRevenue]);
+
+  // 23. Preserved Feature: Books Stats List
   const booksStats: BookStat[] = useMemo(() => {
     const map = new Map<string, BookStat>();
-    for (const sale of yearFilteredSales) {
-      const bookObj = typeof sale.book_id === "object" ? sale.book_id as { id?: string; _id?: string; name?: string; price?: number } : null;
+    for (const sale of allSales) {
+      if (sale.status === "cancelled") continue;
+      const sid =
+        typeof sale.student_id === "object"
+          ? s((sale.student_id as { id?: string; _id?: string }).id || (sale.student_id as { id?: string; _id?: string })._id)
+          : s(sale.student_id);
+      if (!studentIdSet.has(sid)) continue;
+
+      const bookObj =
+        typeof sale.book_id === "object"
+          ? (sale.book_id as { id?: string; _id?: string; name?: string; price?: number })
+          : null;
       const bookId = bookObj ? s(bookObj.id || bookObj._id) : s(sale.book_id);
-      const bookName = bookObj ? (bookObj.name || bookId) : bookId;
-      const bookPrice = bookObj ? Number(bookObj.price ?? 0) : 0;
+      const bookName = bookObj?.name || bookId;
+      const bookPrice = bookObj ? Number(bookObj.price ?? 0) : Number(sale.price ?? 0);
+      const earnings = Number(sale.final_price ?? 0);
+
       const existing = map.get(bookId);
       if (existing) {
         existing.count += 1;
-        existing.earnings += Number(sale.final_price ?? 0);
+        existing.earnings += earnings;
       } else {
-        map.set(bookId, { id: bookId, name: bookName, price: bookPrice, count: 1, earnings: Number(sale.final_price ?? 0) });
+        map.set(bookId, { id: bookId, name: bookName, price: bookPrice, count: 1, earnings });
       }
     }
     return Array.from(map.values()).sort((a, b) => b.earnings - a.earnings);
-  }, [yearFilteredSales]);
+  }, [allSales, studentIdSet]);
 
-  // ── unpaid students ───────────────────────────────────────────────────────
-  const unpaidStudents = useMemo(() => {
-    const dueIds = new Set(
-      allSubs
-        .filter(sub =>
-          sub.month === currentMonthNum && sub.year === selectedYear &&
-          sub.status === "due" && studentIdSet.has(s(sub.student_id))
-        )
-        .map(sub => s(sub.student_id))
-    );
-    return filteredStudents
-      .filter(st => dueIds.has(st.id))
-      .map(st => ({
-        id: st.id, name: st.name, code: st.code,
-        gradeName: grades.find(g => g.id === getEffectiveGradeId(st))?.name,
-        groupName: groups.find(g => g.id === st.group_id)?.name,
-      }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSubs, currentMonthNum, selectedYear, studentIdSet, filteredStudents, grades, groups]);
+  // 24. Export Actions
+  const handleExportExcel = useCallback(async () => {
+    await exportFinancialReportToExcel({
+      kpis,
+      periodLabel: dateBounds.label,
+      monthlySummary,
+      stageRevenue,
+      groupRevenue,
+      transactions: paymentTransactions,
+      outstandingStudents,
+    });
+  }, [kpis, dateBounds.label, monthlySummary, stageRevenue, groupRevenue, paymentTransactions, outstandingStudents]);
 
-  // ── monthly breakdown ─────────────────────────────────────────────────────
-  const monthsReport: MonthReport[] = useMemo(() =>
-    ARABIC_MONTHS.map((name, index) => {
-      const monthNum = index + 1;
-      const monthSubs = yearSubs.filter(sub => sub.month === monthNum);
-      const paidCount = new Set(monthSubs.filter(sub => sub.status === "paid").map(sub => s(sub.student_id))).size;
-      const subscriptionEarnings = monthSubs.reduce((sum, sub) => sum + netAmount(sub), 0);
-      const bookEarnings = yearFilteredSales
-        .filter(sale => sale.month === monthNum)
-        .reduce((sum, sale) => sum + Number(sale.final_price ?? 0), 0);
-      const monthExpenses = yearBills
-        .filter(b => Number(b.billing_month) === monthNum)
-        .reduce((sum, b) => sum + Number(b.amount ?? 0), 0)
-        + yearSalaries
-        .filter(s => Number(s.month) === monthNum)
-        .reduce((sum, s) => sum + Number(s.amount ?? 0), 0)
-        + yearTeacherExpenses
-        .filter(e => Number(e.month) === monthNum)
-        .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-      const netProfit = subscriptionEarnings + bookEarnings - monthExpenses;
-      const percentage = filteredStudents.length > 0
-        ? Math.round((paidCount / filteredStudents.length) * 100)
-        : 0;
-      return {
-        name, paidCount, subscriptionEarnings, bookEarnings,
-        monthExpenses, netProfit, percentage,
-        isCurrentMonth: index === CURRENT_MONTH && selectedYear === CURRENT_YEAR,
-      };
-    }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [yearSubs, yearFilteredSales, yearBills, yearSalaries, yearTeacherExpenses, filteredStudents, selectedYear, CURRENT_MONTH, CURRENT_YEAR]
-  );
+  // Open the in-page Print Preview modal (does not navigate away or open a new window)
+  const handlePrintStatement = useCallback(() => {
+    setShowPrintPreview(true);
+  }, []);
+
+  // Reset Filters Helper
+  const resetFilters = useCallback(() => {
+    setPeriodType("current_month");
+    setSelectedAcademicYear(currentAcademicYearKey);
+    setSelectedYear(CURRENT_YEAR);
+    setSelectedMonth(CURRENT_MONTH + 1);
+    setSelectedGradeId("all");
+    setSelectedGroupId("all");
+    setSelectedTeacherId("all");
+  }, [currentAcademicYearKey, CURRENT_YEAR, CURRENT_MONTH]);
 
   return {
-    loading, error,
-    grades, groups, subTeachers,
+    loading,
+    error,
+    // Context data
+    teacherProfile,
+    grades,
+    groups,
+    subTeachers,
     filteredStudents,
-    selectedYear, setSelectedYear,
-    selectedTeacherId, setSelectedTeacherId,
     hasCenterMode,
-    CURRENT_YEAR, CURRENT_MONTH,
-    // Annual KPIs
-    totalSubscriptionEarnings, totalBookEarnings,
-    totalExpenses, totalGrossEarnings, totalNetProfit,
-    paidThisMonthCount,
-    // Month-over-Month KPIs
-    currentMonthNetProfit, currentMonthGrossEarnings, currentMonthExpenses, currentMonthBookEarnings,
-    prevMonthSubEarnings, prevMonthBookEarnings,
-    prevMonthExpenses, prevMonthGrossEarnings, prevMonthNetProfit,
-    // breakdowns
-    gradesStats, booksStats, unpaidStudents, monthsReport,
-    // modals
-    showUnpaid, setShowUnpaid,
-    showAllGrades, setShowAllGrades,
-    showAllBooks, setShowAllBooks,
+    CURRENT_YEAR,
+    CURRENT_MONTH,
+    // Filter states & setters
+    periodType,
+    setPeriodType,
+    selectedAcademicYear,
+    setSelectedAcademicYear,
+    academicYearOptions,
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    selectedGradeId,
+    setSelectedGradeId,
+    selectedGroupId,
+    setSelectedGroupId,
+    selectedTeacherId,
+    setSelectedTeacherId,
+    resetFilters,
+    // Computed period data
+    dateBounds,
+    kpis,
+    // Daily revenue points for chart
+    dailyRevenuePoints,
+    // The 5 Numerical Tables
+    monthlySummary,
+    stageRevenue,
+    groupRevenue,
+    paymentTransactions,
+    outstandingStudents,
+    // Existing Preserved Features
+    topGrade,
+    topBook,
+    unpaidStudents,
+    gradesStats,
+    booksStats,
+    // Backward compatibility aliases
+    customStartDate: "",
+    setCustomStartDate: () => {},
+    customEndDate: "",
+    setCustomEndDate: () => {},
+    selectedPaymentMethod: "all",
+    setSelectedPaymentMethod: () => {},
+    totalSubscriptionEarnings: kpis.subscriptionCollected,
+    totalBookEarnings: kpis.bookCollected,
+    totalExpenses: kpis.totalExpenses,
+    totalGrossEarnings: kpis.totalCollected,
+    totalNetProfit: kpis.netProfit,
+    currentMonthNetProfit: kpis.netProfit,
+    currentMonthGrossEarnings: kpis.totalCollected,
+    currentMonthExpenses: kpis.totalExpenses,
+    currentMonthBookEarnings: kpis.bookCollected,
+    prevMonthSubEarnings,
+    prevMonthBookEarnings,
+    prevMonthExpenses,
+    prevMonthGrossEarnings,
+    prevMonthNetProfit,
+    monthsReport: monthlySummary.map((m) => ({
+      name: m.name,
+      paidCount: m.payingCount,
+      subscriptionEarnings: m.due - m.remaining,
+      bookEarnings: m.collected - (m.due - m.remaining),
+      monthExpenses: m.expenses,
+      netProfit: m.netProfit,
+      percentage: m.collectionRate,
+      isCurrentMonth: m.isCurrentMonth,
+    })),
+    // Modals & inspection
+    showUnpaid,
+    setShowUnpaid,
+    showAllGrades,
+    setShowAllGrades,
+    showAllBooks,
+    setShowAllBooks,
+    showPrintPreview,
+    setShowPrintPreview,
+    inspectedGradeId,
+    setInspectedGradeId,
+    // Export actions
+    handleExportExcel,
+    handlePrintStatement,
   };
 }

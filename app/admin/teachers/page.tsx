@@ -8,6 +8,7 @@ import {
   Users, UserPlus, Shield, ArrowRight, Check, AlertCircle,
   X, Eye, EyeOff, Trash2, ToggleLeft, ToggleRight, Edit3,
   Calendar, BookOpen, ClipboardCheck, Settings, DollarSign,
+  Copy, Search,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -36,6 +37,8 @@ function OnlineStatus({ lastSeenAt }: { lastSeenAt?: string }) {
 
 interface TeacherRow {
   id: string;
+  teacherCode?: string;
+
   name: string;
   email: string;
   phone?: string;
@@ -97,6 +100,17 @@ export default function TeachersManagementPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyCode = (id: string, code: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      setCopiedId(id);
+      showToast('✓ تم نسخ كود المعلم: ' + code);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -293,6 +307,17 @@ export default function TeachersManagementPage() {
     );
   }
 
+  const filteredTeachers = teachers.filter(t => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.trim().toLowerCase();
+    return (
+      (t.teacherCode || '').toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q) ||
+      (t.email || '').toLowerCase().includes(q) ||
+      (t.phone || '').includes(q)
+    );
+  });
+
   const activeCount = teachers.filter(t => t.is_active && !isExpired(t)).length;
   const expiredCount = teachers.filter(isExpired).length;
 
@@ -361,7 +386,7 @@ export default function TeachersManagementPage() {
           <span>قائمة المدرسين</span>
         </h2>
 
-        {teachers.length === 0 ? (
+        {filteredTeachers.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <Users size={48} className="mx-auto mb-3 opacity-20" />
             <p>لا يوجد مدرسون بعد. أضف أول مدرس الآن.</p>
@@ -382,7 +407,7 @@ export default function TeachersManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {teachers.map(teacher => {
+                {filteredTeachers.map(teacher => {
                   const expired = isExpired(teacher);
                   const isUpdating = updatingId === teacher.id;
                   return (
@@ -390,6 +415,21 @@ export default function TeachersManagementPage() {
                       <td>
                         <div className="font-bold text-white">{teacher.name}</div>
                         <div className="text-xs text-slate-400 monospace mt-0.5">{teacher.email}</div>
+                        {teacher.teacherCode && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30 font-bold tracking-wide select-all" dir="ltr">
+                              {teacher.teacherCode}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyCode(teacher.id, teacher.teacherCode!)}
+                              className="text-slate-400 hover:text-teal-300 transition-colors p-0.5"
+                              title={copiedId === teacher.id ? 'تم النسخ' : 'نسخ كود المعلم'}
+                            >
+                              {copiedId === teacher.id ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                            </button>
+                          </div>
+                        )}
                         {teacher.phone && <div className="text-xs text-slate-500 mt-0.5">{teacher.phone}</div>}
                       </td>
                       <td>
@@ -513,6 +553,25 @@ export default function TeachersManagementPage() {
               </button>
             </div>
 
+            {editingTeacher && editingTeacher.teacherCode && (
+              <div className="p-3 mb-4 rounded-xl bg-slate-900/60 border border-teal-500/20 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-400 block mb-0.5">كود المعلم (دائم وثابت):</span>
+                  <span className="font-mono text-base font-bold text-teal-300 tracking-wider" dir="ltr">
+                    {editingTeacher.teacherCode}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                  onClick={() => copyCode('modal', editingTeacher.teacherCode!)}
+                >
+                  {copiedId === 'modal' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                  <span style={{ marginRight: 4 }}>{copiedId === 'modal' ? 'تم النسخ' : 'نسخ الكود'}</span>
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSave}>
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4 mb-4">

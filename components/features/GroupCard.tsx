@@ -25,7 +25,9 @@ export function GroupCard({
 }: GroupCardProps) {
   const groupStudentCount = studentCount !== undefined
     ? studentCount
-    : students.filter((s) => s.group_id === group.id && !s.is_suspended).length;
+    : (group.student_count !== undefined
+      ? group.student_count
+      : (students || []).filter((s) => s.group_id === group.id && !s.is_suspended).length);
   const isEmpty = groupStudentCount < 5;
 
   const cardBorder = selected

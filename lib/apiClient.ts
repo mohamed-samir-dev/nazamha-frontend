@@ -3,9 +3,21 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 const ENABLE_LOGS = process.env.NEXT_PUBLIC_ENABLE_API_LOGS === 'true';
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const CSRF_EXEMPT_PATHS = new Set([
+  "/auth/login",
+  "/auth/admin-login",
+  "/auth/center-login",
+  "/auth/staff-login",
+  "/auth/logout",
+]);
 
 let csrfToken: string | null = null;
 let pendingCsrf: Promise<string> | null = null;
+
+export function resetCsrfToken(): void {
+  csrfToken = null;
+  pendingCsrf = null;
+}
 async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
   try { return await fetch(url, options); }
   catch (error) {
@@ -58,9 +70,10 @@ function handleAuthFailure(currentPath: string): void {
   }, 50);
 }
 
-/** Call this after a successful login to reset the guard */
+/** Call this after a successful login to reset the guard and clear old CSRF token */
 export function resetAuthFailureGuard(): void {
   isHandlingAuthFailure = false;
+  resetCsrfToken();
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -74,7 +87,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...(options.headers as Record<string, string>),
   };
 
-  if (MUTATING.has(method)) {
+  if (MUTATING.has(method) && !CSRF_EXEMPT_PATHS.has(path)) {
     try {
       headers["x-csrf-token"] = await getCsrfToken();
     } catch {

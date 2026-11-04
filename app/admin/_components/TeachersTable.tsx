@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Settings, Calendar, ToggleLeft, ToggleRight,
   Trash2, Phone, Eye, EyeOff, Users,
-  Search, RefreshCw, DollarSign, Check
+  Search, RefreshCw, DollarSign, Check, Copy
 } from "lucide-react";
 import { Teacher } from "@/lib/types";
 
@@ -35,6 +35,15 @@ export default function TeachersTable({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterTab>("all");
   const [editingPrice, setEditingPrice] = useState<{ id: string; val: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyCode = (id: string, code: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
 
   const now = new Date();
 
@@ -93,7 +102,7 @@ export default function TeachersTable({
           <input
             type="text"
             className="search-input"
-            placeholder="بحث بالاسم أو الإيميل..."
+            placeholder="بحث بالاسم أو الإيميل أو كود المعلم (NZM-XXXXXX)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -169,6 +178,22 @@ export default function TeachersTable({
                         )}
                       </div>
                       <span className="text-xs text-slate-500 monospace">{teacher.email || "—"}</span>
+                      {teacher.teacherCode && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/25 font-bold tracking-wide select-all" dir="ltr">
+                            {teacher.teacherCode}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyCode(teacher.id, teacher.teacherCode!)}
+                            className="text-slate-400 hover:text-teal-300 transition-colors p-0.5"
+                            title={copiedId === teacher.id ? "تم النسخ" : "نسخ كود المعلم"}
+                            style={{ background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center" }}
+                          >
+                            {copiedId === teacher.id ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
 

@@ -181,6 +181,7 @@ export interface StudentBookRow {
 
 export interface Teacher {
   id: string;
+  teacherCode?: string;
   name: string;
   email?: string;
   phone?: string;
@@ -203,6 +204,13 @@ export interface Teacher {
   subscription_expires_at?: string | null;
   created_at: string;
   academic_year?: { active_months: number[]; active_month_years?: { month: number; year: number }[] };
+  settings?: {
+    timezone?: string;
+    language?: string;
+    currency?: string;
+    allow_online_payment?: boolean;
+    payment_grace_period_days?: number;
+  };
   banner?: {
     enabled: boolean;
     message: string;
@@ -359,38 +367,104 @@ export interface BillTemplate {
   created_at?: string;
 }
 
+export type SalaryType =
+  | "monthly"
+  | "daily"
+  | "hourly"
+  | "per_lesson"
+  | "percentage"
+  | "fixed_plus_bonus";
+
 export interface Employee {
   id: string;
   name: string;
-  role: string;
-  amount: number;
+  phone?: string;
+  job_title?: string;
+  role?: string;
+  employment_start_date?: string;
+  employment_end_date?: string | null;
+  salary_type: SalaryType;
+  base_salary: number;
+  amount?: number;
+  payment_day?: number;
   notes?: string;
+  is_active?: boolean;
+  is_recurring?: boolean;
   teacher_id?: string;
+  created_at?: string;
+}
+
+export interface PayrollAdjustment {
+  _id?: string;
+  amount: number;
+  reason: string;
+  created_at?: string;
+}
+
+export interface PayrollPayment {
+  _id?: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  notes?: string;
+  receipt_attachment?: string;
+  recorded_by?: string;
   created_at?: string;
 }
 
 export interface Salary {
   id: string;
+  employee_id?: string | null;
   employee_name: string;
+  teacher_name?: string;
   role: string;
+  job_title?: string;
   amount: number;
+  basic_salary?: number;
+  bonuses?: number;
+  additional_payments?: number;
+  absence_deductions?: number;
+  other_deductions?: number;
+  adjustments?: PayrollAdjustment[];
+  net_salary?: number;
+  paid_amount?: number;
+  remaining_amount?: number;
   month: number;
   year: number;
   is_recurring: boolean;
   is_virtual_instance?: boolean;
+  status?: "draft" | "approved" | "partially_paid" | "paid" | "overdue" | "cancelled";
   payment_status?: "paid" | "pending";
+  payment_method?: string;
+  payments?: PayrollPayment[];
   start_month: number;
   start_year: number;
   end_month?: number | null;
   end_year?: number | null;
+  recurring_config_id?: string | null;
+  due_date?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
   notes?: string;
   teacher_id?: string;
   created_at?: string;
+  _virtual?: boolean;
 }
 
 export type ExpenseType = "rent" | "utilities" | "maintenance" | "supplies" | "transport" | "food" | "other";
-export type PaymentMethod = "cash" | "bank_transfer" | "card" | "other";
-export type PaymentStatus = "paid" | "pending" | "overdue";
+export type PaymentMethod = "cash" | "bank_transfer" | "wallet" | "card" | "other";
+export type PaymentStatus = "unpaid" | "paid" | "pending" | "partially_paid" | "overdue" | "cancelled";
+
+export interface ExpensePayment {
+  _id?: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  notes?: string;
+  receipt_attachment?: string;
+  recorded_by?: string;
+  created_at?: string;
+}
 
 export interface TeacherExpense {
   id: string;
@@ -398,6 +472,8 @@ export interface TeacherExpense {
   expense_type: ExpenseType;
   category?: string;
   amount: number;
+  paid_amount?: number;
+  remaining_amount?: number;
   month: number;
   year: number;
   is_recurring: boolean;
@@ -407,14 +483,74 @@ export interface TeacherExpense {
   end_year?: number | null;
   payment_method?: PaymentMethod;
   payment_status: PaymentStatus;
+  status?: PaymentStatus;
+  expense_date?: string;
   paid_date?: string | null;
+  recipient?: string;
   notes?: string;
   attachments?: string[];
+  payments?: ExpensePayment[];
+  recurring_config_id?: string | null;
   teacher_id?: string;
   created_at?: string;
   updated_at?: string;
   _virtual?: boolean;
   is_virtual_instance?: boolean;
+}
+
+export interface RecurringTransaction {
+  id: string;
+  title: string;
+  type: "salary" | "expense";
+  employee_id?: string | null;
+  category?: string;
+  amount: number;
+  frequency: "monthly" | "weekly" | "quarterly" | "semi_annual" | "yearly";
+  start_date: string;
+  end_date?: string | null;
+  due_day: number;
+  payment_method_preference?: string;
+  notes?: string;
+  status: "active" | "paused" | "stopped";
+  next_due_date?: string;
+  created_at?: string;
+}
+
+export interface FinancialOverviewData {
+  bounds: {
+    type: string;
+    month?: number;
+    year?: number;
+    startDate: string;
+    endDate: string;
+  };
+  payroll: {
+    total_salaries_due: number;
+    total_salaries_paid: number;
+    total_salaries_remaining: number;
+    employee_count: number;
+  };
+  expenses: {
+    total_expenses_paid: number;
+    total_expenses_outstanding: number;
+    recurring_expenses_total: number;
+    one_time_expenses_total: number;
+  };
+  cash_flow: {
+    cash_inflows: number;
+    subscription_inflows: number;
+    book_inflows: number;
+    cash_outflows: number;
+    salaries_outflow: number;
+    expenses_outflow: number;
+    net_cash_flow: number;
+    comparison: {
+      prev_cash_inflows: number;
+      prev_cash_outflows: number;
+      prev_net_cash_flow: number;
+      change_percentage: number;
+    };
+  };
 }
 
 export interface ExpenseStatistics {

@@ -46,20 +46,13 @@ export default function TeacherLoginPage() {
     setLoading(true);
     setErrorMsg("");
     try {
-      // Try teacher login first, then staff (assistant) login
-      let token: string | undefined;
-      try {
-        const res = await AuthService.login(email, password);
-        token = (res as any).token;
-      } catch {
-        const res = await AuthService.staffLogin(email, password);
-        token = (res as any).token;
-      }
+      const res = await AuthService.login(email, password);
+      const token = (res as any).token;
       // Set token as client-accessible cookie so Next.js middleware can read it
       if (token) {
         document.cookie = `token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       }
-      router.replace("/teacher");
+      window.location.href = "/teacher";
     } catch (err) {
       setErrorMsg(getLoginErrorMessage(err));
     } finally {

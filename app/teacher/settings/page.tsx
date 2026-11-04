@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const [userId, setUserId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
+  const [teacherCode, setTeacherCode] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [activeMonths, setActiveMonths] = useState<number[]>([9, 10, 11, 12, 1, 2, 3, 4, 5]);
@@ -37,6 +38,7 @@ export default function SettingsPage() {
     if (cached) {
       if (cached.id) setUserId(cached.id);
       if (cached.name) setName(cached.name);
+      if (cached.teacherCode) setTeacherCode(cached.teacherCode);
       if (cached.phone) setPhone(cached.phone);
       if (cached.email) setEmail(cached.email);
       if (cached.academic_year?.active_months?.length) {
@@ -58,11 +60,14 @@ export default function SettingsPage() {
         setUserId(currentUser.id);
         setEmail(currentUser.email || "");
 
+        if (currentUser.teacherCode) setTeacherCode(currentUser.teacherCode);
+
         const teacherProfile = await TeachersService.getTeacherProfile(currentUser.id);
         if (cancelled) return;
 
         if (teacherProfile) {
           setName(teacherProfile.name || "");
+          if (teacherProfile.teacherCode) setTeacherCode(teacherProfile.teacherCode);
           setPhone(teacherProfile.phone || "");
           if (teacherProfile.academic_year?.active_months?.length) {
             setActiveMonths(teacherProfile.academic_year.active_months);
@@ -167,6 +172,7 @@ export default function SettingsPage() {
             </h2>
             <ProfileSection
               name={name}
+              teacherCode={teacherCode}
               phone={phone}
               email={email}
               saving={profileSaveLoading}

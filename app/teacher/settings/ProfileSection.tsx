@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, Mail, Phone, Save, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Mail, Phone, Save, Lock, Eye, EyeOff, Copy, Check } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/apiClient";
@@ -9,6 +9,7 @@ import { getErrorMessage } from "@/lib/errors";
 
 interface Props {
   name: string;
+  teacherCode?: string;
   phone: string;
   email: string;
   saving: boolean;
@@ -24,11 +25,12 @@ export function normalizeArabicDigits(value: string): string {
     .replace(/[\s\-_]/g, "");
 }
 
-export function ProfileSection({ name, phone, email, saving, onNameChange, onPhoneChange, onSave, onToast }: Props) {
+export function ProfileSection({ name, teacherCode, phone, email, saving, onNameChange, onPhoneChange, onSave, onToast }: Props) {
   // Egyptian mobile numbers strictly start with 010, 011, 012, or 015 and have 11 digits
   const normalizedPhone = normalizeArabicDigits(phone);
   const phoneError = normalizedPhone.length > 0 && !/^01[0125]\d{8}$/.test(normalizedPhone);
 
+  const [codeCopied, setCodeCopied] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -36,6 +38,14 @@ export function ProfileSection({ name, phone, email, saving, onNameChange, onPho
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
+
+  const handleCopyTeacherCode = () => {
+    if (!teacherCode) return;
+    navigator.clipboard.writeText(teacherCode);
+    setCodeCopied(true);
+    onToast("✓ تم نسخ كود المعلم بنجاح");
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
 
   const handlePhoneInputChange = (val: string) => {
     onPhoneChange(normalizeArabicDigits(val));
@@ -123,6 +133,44 @@ export function ProfileSection({ name, phone, email, saving, onNameChange, onPho
               البريد الإلكتروني مرتبط بحسابك ولا يمكن تعديله من هنا.
             </p>
           </div>
+          {teacherCode && (
+            <div className="form-group" style={{ flex: "1 1 200px" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>
+                كود المعلم الخاص بك
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{
+                  fontFamily: "monospace",
+                  fontSize: "0.95rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.05em",
+                  padding: "0.55rem 0.9rem",
+                  borderRadius: "8px",
+                  background: "rgba(20, 184, 166, 0.1)",
+                  border: "1px solid rgba(20, 184, 166, 0.3)",
+                  color: "#5eead4",
+                  direction: "ltr",
+                  userSelect: "all",
+                  flex: 1,
+                  textAlign: "center",
+                }}>
+                  {teacherCode}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCopyTeacherCode}
+                  leftIcon={codeCopied ? <Check size={16} style={{ color: "#34d399" }} /> : <Copy size={16} />}
+                  style={{ whiteSpace: "nowrap", height: "42px" }}
+                >
+                  {codeCopied ? "تم النسخ" : "نسخ"}
+                </Button>
+              </div>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                كود دائم وخاص بحسابك لمشاركته مع الدعم الفني عند الحاجة.
+              </p>
+            </div>
+          )}
           <div style={{ flex: "1 1 100%", display: "flex", justifyContent: "flex-end" }}>
             <Button
               type="submit"

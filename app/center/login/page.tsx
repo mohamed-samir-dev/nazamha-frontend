@@ -37,7 +37,7 @@ export default function CenterLoginPage() {
       if ((res as any).token) {
         document.cookie = `token=${(res as any).token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       }
-      router.replace("/center");
+      window.location.href = "/center";
     } catch (err) {
       setErrorMsg(getLoginErrorMessage(err));
     } finally {

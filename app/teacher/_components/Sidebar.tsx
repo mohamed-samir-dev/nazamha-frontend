@@ -1,15 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SystemSettings } from "@/lib/services/systemSettingsService";
 import {
   LayoutDashboard, Users, TrendingUp, Settings, LogOut,
   Shield, Menu, X, ClipboardCheck, FileText, Award, FileQuestion, FolderOpen, BookOpen, Wallet, QrCode, Sparkles, BarChart3,
+  Copy, Check,
 } from "lucide-react";
 
 interface SidebarProps {
   teacherName: string;
+  teacherCode?: string;
   hasAttendance: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -24,10 +27,19 @@ interface SidebarProps {
 }
 
 export default function Sidebar({
-  teacherName, hasAttendance, isAdmin, isSuperAdmin, financialPermissions,
+  teacherName, teacherCode, hasAttendance, isAdmin, isSuperAdmin, financialPermissions,
   hasCenterMode, hasCentersFeature, isAssistant, mobileMenuOpen, sysSettings, onToggleMobile, onLogout,
 }: SidebarProps) {
   const pathname = usePathname();
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  const handleCopyCode = (code: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
 
   // Assistants cannot see financial pages
   const canViewRevenue = !isAssistant && (!isAdmin || isSuperAdmin || financialPermissions.includes("financial.viewRevenue"));
@@ -44,7 +56,6 @@ export default function Sidebar({
     ...(hasAttendance ? [{ name: "تقارير الحضور", path: "/teacher/attendance/reports", icon: BarChart3 }] : []),
     { name: "تقارير الطلاب", path: "/teacher/reports/students", icon: FileText },
     ...(canViewRevenue ? [{ name: "التقارير المالية", path: "/teacher/reports", icon: TrendingUp }] : []),
-    ...(canViewRevenue ? [{ name: "الرواتب والمصروفات", path: "/teacher/salaries", icon: Wallet }] : []),
     { name: "نماذج الامتحانات", path: "/teacher/exams/generator", icon: FileQuestion },
     { name: "درجات الامتحانات", path: "/teacher/exams", icon: Award },
     { name: "الكتب والمبيعات", path: "/teacher/books", icon: BookOpen },
@@ -69,6 +80,21 @@ export default function Sidebar({
           <p style={{ fontWeight: 700, fontSize: "1.05rem", color: "#ffffff", marginTop: "4px" }}>
             {`أ. ${teacherName}`}
           </p>
+          {teacherCode && !isAssistant && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "6px", background: "rgba(20, 184, 166, 0.12)", border: "1px solid rgba(20, 184, 166, 0.25)", borderRadius: "6px", padding: "2px 8px" }}>
+              <span style={{ fontFamily: "monospace", fontSize: "0.78rem", fontWeight: 700, color: "#5eead4", letterSpacing: "0.05em", direction: "ltr" }}>
+                {teacherCode}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopyCode(teacherCode)}
+                title={copiedCode ? "تم النسخ" : "نسخ كود المعلم"}
+                style={{ background: "none", border: "none", padding: "2px", cursor: "pointer", display: "flex", alignItems: "center", color: copiedCode ? "#34d399" : "#94a3b8" }}
+              >
+                {copiedCode ? <Check size={12} /> : <Copy size={12} />}
+              </button>
+            </div>
+          )}
           {isAssistant && (
             <p style={{ fontSize: "0.72rem", color: "#f59e0b", marginTop: "2px", fontWeight: 600 }}>مساعد</p>
           )}

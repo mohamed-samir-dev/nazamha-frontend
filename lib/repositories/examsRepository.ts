@@ -46,8 +46,7 @@ export const examsRepository = {
     return api.get<ExamGrade[]>(`/exams/${examId}/grades`);
   },
 
-  async upsertGrades(grades: Omit<ExamGrade, "id" | "created_at">[]): Promise<void> {
-    if (grades.length === 0) return;
-    await api.post(`/exams/${grades[0].exam_id}/grades`, { grades });
+  async upsertGrades(examId: string, grades: Omit<ExamGrade, "id" | "created_at">[]): Promise<void> {
+    await api.post(`/exams/${examId}/grades`, { grades });
   },
 };

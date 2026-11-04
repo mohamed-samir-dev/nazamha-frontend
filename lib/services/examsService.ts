@@ -44,8 +44,8 @@ export const examsService = {
     if (teacherId) examsRepository.invalidateAllGradesCache(teacherId);
   },
 
-  async upsertGrades(grades: Omit<ExamGrade, "id" | "created_at">[], teacherId?: string): Promise<void> {
-    await examsRepository.upsertGrades(grades);
+  async upsertGrades(examId: string, grades: Omit<ExamGrade, "id" | "created_at">[], teacherId?: string): Promise<void> {
+    await examsRepository.upsertGrades(examId, grades);
     if (teacherId) examsRepository.invalidateAllGradesCache(teacherId);
   },
 };
