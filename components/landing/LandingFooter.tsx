@@ -115,8 +115,8 @@ export function LandingFooter({ lang = "ar" }: LandingFooterProps) {
                 <Mail className="w-4 h-4 text-teal-400 mt-0.5 shrink-0" />
                 <div>
                   <span className="text-[11px] text-slate-500 block mb-0.5">{isAr ? "البريد الإلكتروني:" : "Email:"}</span>
-                  <a href="mailto:loutfallaasfora@gmail.com" dir="ltr" className="hover:text-white transition-colors font-mono">
-                    loutfallaasfora@gmail.com
+                  <a href="mailto:no-reply@alshariyaa.com" dir="ltr" className="hover:text-white transition-colors font-mono">
+                    no-reply@alshariyaa.com
                   </a>
                 </div>
               </li>

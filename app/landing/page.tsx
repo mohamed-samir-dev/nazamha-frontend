@@ -933,8 +933,8 @@ export default function DedicatedLandingPage() {
                   <Mail className="w-4 h-4 text-teal-400 shrink-0" />
                   <div>
                     <span className="text-[10px] text-slate-500 block mb-0.5">{isAr ? "البريد الإلكتروني المباشر:" : "Direct Email:"}</span>
-                    <a href="mailto:loutfallaasfora@gmail.com" dir="ltr" className="hover:text-white transition font-mono font-bold">
-                      loutfallaasfora@gmail.com
+                    <a href="mailto:no-reply@alshariyaa.com" dir="ltr" className="hover:text-white transition font-mono font-bold">
+                      no-reply@alshariyaa.com
                     </a>
                   </div>
                 </div>

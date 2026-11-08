@@ -9,6 +9,8 @@ const CSRF_EXEMPT_PATHS = new Set([
   "/auth/center-login",
   "/auth/staff-login",
   "/auth/logout",
+  "/polar/activate",
+  "/polar/link",
 ]);
 
 let csrfToken: string | null = null;

@@ -9,6 +9,7 @@ import {
   UserCog,
   Building2,
   Settings,
+  CreditCard,
   LogOut,
   Shield,
   Menu,
@@ -82,6 +83,12 @@ export default function AdminSidebar({ isSuperAdmin, hasCentersPermission, siteN
           href: "/admin/teachers",
           label: "المدرسون",
           icon: <Users size={17} />,
+          superAdminOnly: true,
+        },
+        {
+          href: "/admin/subscriptions",
+          label: "اشتراكات Polar",
+          icon: <CreditCard size={17} />,
           superAdminOnly: true,
         },
         {

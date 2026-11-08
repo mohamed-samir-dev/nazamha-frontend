@@ -7,7 +7,7 @@ import { api } from "@/lib/apiClient";
 import {
   Shield, UserPlus, Users, Check, AlertCircle, X,
   ToggleLeft, ToggleRight, Trash2, Clock, ChevronDown, ChevronUp,
-  Eye, EyeOff, ArrowRight
+  Eye, EyeOff, ArrowRight, Activity, Filter, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 
@@ -20,6 +20,20 @@ const FINANCIAL_PERMISSIONS = [
   { key: "financial.editBookPrice", label: "تعديل أسعار الكتب" },
   { key: "centers.view", label: "إدارة السناتر" },
 ];
+
+interface AuditLogItem {
+  _id: string;
+  admin_id: string;
+  admin_name?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  details?: string;
+  old_data?: Record<string, any>;
+  new_data?: Record<string, any>;
+  ip_address?: string;
+  created_at: string;
+}
 
 interface AdminUser {
   id: string;
@@ -71,6 +85,16 @@ export default function AdminsManagementPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [expandedAdmin, setExpandedAdmin] = useState<string | null>(null);
 
+  // Audit Logs State
+  const [activeTab, setActiveTab] = useState<"admins" | "audit">("admins");
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [filterAdminId, setFilterAdminId] = useState("");
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
@@ -95,6 +119,23 @@ export default function AdminsManagementPage() {
       setLoading(false);
     }
   }, [router]);
+
+  const loadAuditLogs = useCallback(async (pageToLoad = 1, adminId = "") => {
+    setAuditLoading(true);
+    try {
+      const q = new URLSearchParams({ page: String(pageToLoad), limit: "20" });
+      if (adminId) q.set("admin_id", adminId);
+      const data = await api.get<{ logs: AuditLogItem[]; total: number; page: number; totalPages: number }>(`/admins/audit-logs?${q.toString()}`);
+      setAuditLogs(data.logs || []);
+      setAuditTotal(data.total || 0);
+      setAuditPage(data.page || 1);
+      setAuditTotalPages(data.totalPages || 1);
+    } catch {
+      showToast("فشل تحميل سجل العمليات", "error");
+    } finally {
+      setAuditLoading(false);
+    }
+  }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -201,6 +242,21 @@ export default function AdminsManagementPage() {
     );
   }
 
+  const getActionBadge = (action: string) => {
+    switch (action) {
+      case "admin.create":
+        return <span className="private-badge" style={{ background: "rgba(16,185,129,0.15)", color: "#34d399", border: "1px solid rgba(16,185,129,0.3)" }}>إنشاء مسؤول</span>;
+      case "admin.update":
+        return <span className="private-badge" style={{ background: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)" }}>تعديل بيانات</span>;
+      case "admin.deactivate":
+        return <span className="private-badge" style={{ background: "rgba(239,68,68,0.15)", color: "#f87171", border: "1px solid rgba(239,68,68,0.3)" }}>تعطيل حساب</span>;
+      case "admin.login":
+        return <span className="private-badge" style={{ background: "rgba(168,85,247,0.15)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.3)" }}>تسجيل دخول</span>;
+      default:
+        return <span className="private-badge" style={{ background: "rgba(148,163,184,0.15)", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.3)" }}>{action}</span>;
+    }
+  };
+
   return (
     <div className="p-8 min-h-screen bg-[var(--bg-primary)]">
       {/* Header */}
@@ -258,154 +314,353 @@ export default function AdminsManagementPage() {
         </div>
       </div>
 
-      {/* Admins Table */}
-      <div className="glass-panel panel-content">
-        <h2 className="panel-title mb-4">
-          <Shield size={17} style={{ color: "#a78bfa" }} />
-          <span>قائمة المسؤولين</span>
-        </h2>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-white/[0.08] mb-6">
+        <button
+          onClick={() => setActiveTab("admins")}
+          className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 -mb-px ${
+            activeTab === "admins"
+              ? "border-violet-500 text-violet-400"
+              : "border-transparent text-slate-400 hover:text-white"
+          }`}
+        >
+          <Users size={16} />
+          <span>قائمة المسؤولين ({admins.length})</span>
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("audit");
+            loadAuditLogs(1, filterAdminId);
+          }}
+          className={`flex items-center gap-2 pb-3 px-4 font-semibold text-sm transition-all border-b-2 -mb-px ${
+            activeTab === "audit"
+              ? "border-violet-500 text-violet-400"
+              : "border-transparent text-slate-400 hover:text-white"
+          }`}
+        >
+          <Activity size={16} />
+          <span>سجل الرقابة والعمليات (Audit Logs)</span>
+        </button>
+      </div>
 
-        {admins.length === 0 ? (
-          <div className="text-center py-16 text-slate-500">
-            <Shield size={48} className="mx-auto mb-3 opacity-20" />
-            <p>لا يوجد مسؤولون بعد. أضف أول أدمن الآن.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-[rgba(8,12,20,0.4)]">
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th>الاسم والبريد</th>
-                  <th>الحالة</th>
-                  <th>المدرسون المسؤول عنهم</th>
-                  <th>الصلاحيات المالية</th>
-                  <th>آخر دخول</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {admins.map(admin => (
-                  <React.Fragment key={admin.id}>
-                    <tr style={{ opacity: admin.is_active ? 1 : 0.55 }}>
-                      <td>
-                        <div className="font-bold text-white">{admin.name}</div>
-                        <div className="text-xs text-slate-400 monospace mt-0.5">{admin.email}</div>
-                      </td>
-                      <td>
-                        <button
-                          className="toggle-button"
-                          onClick={() => handleToggleActive(admin)}
-                          style={{ color: admin.is_active ? "#10b981" : "#ef4444" }}
-                        >
-                          {admin.is_active ? <ToggleRight size={34} /> : <ToggleLeft size={34} />}
-                          <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-                            {admin.is_active ? "نشط" : "معطل"}
-                          </span>
-                        </button>
-                      </td>
-                      <td>
-                        <span className="font-mono text-teal-400 font-bold">{admin.teachers_count}</span>
-                        <span className="text-slate-500 text-xs mr-1">مدرس</span>
-                      </td>
-                      <td>
-                        <div className="flex flex-wrap gap-1">
-                          {admin.financial_permissions.length === 0 ? (
-                            <span className="text-xs text-slate-500">لا توجد صلاحيات مالية</span>
-                          ) : (
-                            admin.financial_permissions.slice(0, 2).map(p => (
-                              <span key={p} className="private-badge" style={{ fontSize: "0.65rem", padding: "2px 6px", background: "rgba(20,184,166,0.1)", color: "#5eead4", border: "1px solid rgba(20,184,166,0.2)" }}>
-                                {FINANCIAL_PERMISSIONS.find(fp => fp.key === p)?.label.split(" ")[0] || p}
-                              </span>
-                            ))
-                          )}
-                          {admin.financial_permissions.length > 2 && (
-                            <span className="text-xs text-slate-500">+{admin.financial_permissions.length - 2}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        {admin.last_login_at ? (
-                          <div className="flex items-center gap-1 text-xs text-slate-400">
-                            <Clock size={12} />
-                            {new Date(admin.last_login_at).toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" })}
+      {activeTab === "admins" ? (
+        /* Admins Table */
+        <div className="glass-panel panel-content">
+          <h2 className="panel-title mb-4">
+            <Shield size={17} style={{ color: "#a78bfa" }} />
+            <span>قائمة المسؤولين</span>
+          </h2>
+
+          {admins.length === 0 ? (
+            <div className="text-center py-16 text-slate-500">
+              <Shield size={48} className="mx-auto mb-3 opacity-20" />
+              <p>لا يوجد مسؤولون بعد. أضف أول أدمن الآن.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-[rgba(8,12,20,0.4)]">
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th>الاسم والبريد</th>
+                    <th>الحالة</th>
+                    <th>المدرسون المسؤول عنهم</th>
+                    <th>الصلاحيات المالية</th>
+                    <th>آخر دخول</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {admins.map(admin => (
+                    <React.Fragment key={admin.id}>
+                      <tr style={{ opacity: admin.is_active ? 1 : 0.55 }}>
+                        <td>
+                          <div className="font-bold text-white">{admin.name}</div>
+                          <div className="text-xs text-slate-400 monospace mt-0.5">{admin.email}</div>
+                        </td>
+                        <td>
+                          <button
+                            className="toggle-button"
+                            onClick={() => handleToggleActive(admin)}
+                            style={{ color: admin.is_active ? "#10b981" : "#ef4444" }}
+                          >
+                            {admin.is_active ? <ToggleRight size={34} /> : <ToggleLeft size={34} />}
+                            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                              {admin.is_active ? "نشط" : "معطل"}
+                            </span>
+                          </button>
+                        </td>
+                        <td>
+                          <span className="font-mono text-teal-400 font-bold">{admin.teachers_count}</span>
+                          <span className="text-slate-500 text-xs mr-1">مدرس</span>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1">
+                            {admin.financial_permissions.length === 0 ? (
+                              <span className="text-xs text-slate-500">لا توجد صلاحيات مالية</span>
+                            ) : (
+                              admin.financial_permissions.slice(0, 2).map(p => (
+                                <span key={p} className="private-badge" style={{ fontSize: "0.65rem", padding: "2px 6px", background: "rgba(20,184,166,0.1)", color: "#5eead4", border: "1px solid rgba(20,184,166,0.2)" }}>
+                                  {FINANCIAL_PERMISSIONS.find(fp => fp.key === p)?.label.split(" ")[0] || p}
+                                </span>
+                              ))
+                            )}
+                            {admin.financial_permissions.length > 2 && (
+                              <span className="text-xs text-slate-500">+{admin.financial_permissions.length - 2}</span>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-xs text-slate-600">لم يدخل بعد</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <button
-                            className="btn btn-secondary"
-                            style={{ fontSize: "0.78rem", padding: "0.3rem 0.7rem" }}
-                            onClick={() => openEdit(admin)}
-                          >
-                            تعديل
-                          </button>
-                          <button
-                            className="btn-icon"
-                            onClick={() => setExpandedAdmin(expandedAdmin === admin.id ? null : admin.id)}
-                            title="عرض التفاصيل"
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
-                          >
-                            {expandedAdmin === admin.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          </button>
-                          <button
-                            className="btn-icon"
-                            onClick={() => handleDeactivate(admin)}
-                            title="تعطيل الحساب"
-                            style={{ background: "none", border: "none", cursor: "pointer" }}
-                          >
-                            <Trash2 size={15} className="color-danger" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {expandedAdmin === admin.id && (
-                      <tr key={`${admin.id}-expanded`}>
-                        <td colSpan={6} style={{ background: "rgba(255,255,255,0.02)", padding: "1rem 1.5rem" }}>
-                          <div className="grid grid-cols-2 gap-6">
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-2">الصلاحيات المالية الكاملة:</p>
-                              <div className="flex flex-col gap-1">
-                                {FINANCIAL_PERMISSIONS.map(fp => (
-                                  <div key={fp.key} className="flex items-center gap-2 text-sm">
-                                    {admin.financial_permissions.includes(fp.key) ? (
-                                      <Check size={14} className="text-emerald-400" />
-                                    ) : (
-                                      <X size={14} className="text-slate-600" />
-                                    )}
-                                    <span style={{ color: admin.financial_permissions.includes(fp.key) ? "#e2e8f0" : "#475569" }}>
-                                      {fp.label}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+                        </td>
+                        <td>
+                          {admin.last_login_at ? (
+                            <div className="flex items-center gap-1 text-xs text-slate-400">
+                              <Clock size={12} />
+                              {new Date(admin.last_login_at).toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" })}
                             </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-2">المدرسون المسموح بهم ({admin.teachers_count}):</p>
-                              <div className="flex flex-wrap gap-1">
-                                {teachers
-                                  .filter(t => admin.allowed_teacher_ids?.includes(t.id))
-                                  .map(t => (
-                                    <span key={t.id} className="private-badge" style={{ fontSize: "0.72rem", padding: "2px 8px", background: "rgba(99,102,241,0.1)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.2)" }}>
-                                      {t.name}
-                                    </span>
-                                  ))}
-                                {admin.teachers_count === 0 && <span className="text-xs text-slate-600">لا يوجد مدرسون مخصصون</span>}
-                              </div>
-                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-600">لم يدخل بعد</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="btn btn-secondary"
+                              style={{ fontSize: "0.78rem", padding: "0.3rem 0.7rem" }}
+                              onClick={() => openEdit(admin)}
+                            >
+                              تعديل
+                            </button>
+                            <button
+                              className="btn-icon"
+                              onClick={() => setExpandedAdmin(expandedAdmin === admin.id ? null : admin.id)}
+                              title="عرض التفاصيل"
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+                            >
+                              {expandedAdmin === admin.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </button>
+                            <button
+                              className="btn-icon"
+                              onClick={() => handleDeactivate(admin)}
+                              title="تعطيل الحساب"
+                              style={{ background: "none", border: "none", cursor: "pointer" }}
+                            >
+                              <Trash2 size={15} className="color-danger" />
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                      {expandedAdmin === admin.id && (
+                        <tr key={`${admin.id}-expanded`}>
+                          <td colSpan={6} style={{ background: "rgba(255,255,255,0.02)", padding: "1rem 1.5rem" }}>
+                            <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                <p className="text-xs font-semibold text-slate-400 mb-2">الصلاحيات المالية الكاملة:</p>
+                                <div className="flex flex-col gap-1">
+                                  {FINANCIAL_PERMISSIONS.map(fp => (
+                                    <div key={fp.key} className="flex items-center gap-2 text-sm">
+                                      {admin.financial_permissions.includes(fp.key) ? (
+                                        <Check size={14} className="text-emerald-400" />
+                                      ) : (
+                                        <X size={14} className="text-slate-600" />
+                                      )}
+                                      <span style={{ color: admin.financial_permissions.includes(fp.key) ? "#e2e8f0" : "#475569" }}>
+                                        {fp.label}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-slate-400 mb-2">المدرسون المسموح بهم ({admin.teachers_count}):</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {teachers
+                                    .filter(t => admin.allowed_teacher_ids?.includes(t.id))
+                                    .map(t => (
+                                      <span key={t.id} className="private-badge" style={{ fontSize: "0.72rem", padding: "2px 8px", background: "rgba(99,102,241,0.1)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.2)" }}>
+                                        {t.name}
+                                      </span>
+                                    ))}
+                                  {admin.teachers_count === 0 && <span className="text-xs text-slate-600">لا يوجد مدرسون مخصصون</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Audit Logs Table */
+        <div className="glass-panel panel-content">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+            <h2 className="panel-title">
+              <Activity size={18} style={{ color: "#a78bfa" }} />
+              <span>سجل العمليات والرقابة الأمنية ({auditTotal})</span>
+            </h2>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-[rgba(8,12,20,0.5)] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-slate-300">
+                <Filter size={14} className="text-slate-400" />
+                <label className="text-slate-400">تصفية بالمسؤول:</label>
+                <select
+                  value={filterAdminId}
+                  onChange={e => {
+                    setFilterAdminId(e.target.value);
+                    loadAuditLogs(1, e.target.value);
+                  }}
+                  className="bg-transparent border-none text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="" className="bg-[#0f172a] text-white">الكل</option>
+                  {admins.map(a => (
+                    <option key={a.id} value={a.id} className="bg-[#0f172a] text-white">
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                className="btn btn-secondary flex items-center gap-1.5"
+                style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }}
+                onClick={() => loadAuditLogs(auditPage, filterAdminId)}
+                disabled={auditLoading}
+              >
+                <RefreshCw size={13} className={auditLoading ? "animate-spin" : ""} />
+                <span>تحديث</span>
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+
+          {auditLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-8 h-8 border-2 border-violet-500/20 border-t-violet-500 rounded-full animate-spin" />
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div className="text-center py-16 text-slate-500">
+              <Activity size={48} className="mx-auto mb-3 opacity-20" />
+              <p>لا توجد سجلات مطابقة حتى الآن.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-[rgba(8,12,20,0.4)]">
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>الوقت والتاريخ</th>
+                      <th>المسؤول</th>
+                      <th>نوع الإجراء</th>
+                      <th>الهدف / المورد</th>
+                      <th>عنوان IP</th>
+                      <th>التفاصيل</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map(log => {
+                      const isExpanded = expandedLogId === log._id;
+                      const hasDetails = !!log.old_data || !!log.new_data || !!log.details;
+                      return (
+                        <React.Fragment key={log._id}>
+                          <tr>
+                            <td className="text-xs text-slate-300 font-mono">
+                              {new Date(log.created_at).toLocaleString("ar-EG", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                            <td>
+                              <span className="font-semibold text-white">{log.admin_name || "مسؤول"}</span>
+                            </td>
+                            <td>{getActionBadge(log.action)}</td>
+                            <td>
+                              <span className="text-xs text-slate-300 font-mono">
+                                {log.resource_type} {log.resource_id ? `#${log.resource_id.slice(-6)}` : ""}
+                              </span>
+                            </td>
+                            <td className="text-xs text-slate-400 font-mono">
+                              {log.ip_address || "—"}
+                            </td>
+                            <td>
+                              {hasDetails ? (
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: "0.72rem", padding: "0.2rem 0.6rem" }}
+                                  onClick={() => setExpandedLogId(isExpanded ? null : log._id)}
+                                >
+                                  {isExpanded ? "إخفاء" : "عرض"}
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-600">—</span>
+                              )}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr key={`${log._id}-details`}>
+                              <td colSpan={6} style={{ background: "rgba(255,255,255,0.02)", padding: "1rem" }}>
+                                <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                                  {log.old_data && (
+                                    <div className="p-3 rounded-lg bg-red-950/20 border border-red-500/20">
+                                      <p className="text-red-400 font-bold mb-1">البيانات السابقة (Before):</p>
+                                      <pre className="text-slate-300 overflow-x-auto">{JSON.stringify(log.old_data, null, 2)}</pre>
+                                    </div>
+                                  )}
+                                  {log.new_data && (
+                                    <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/20">
+                                      <p className="text-emerald-400 font-bold mb-1">البيانات الجديدة (After):</p>
+                                      <pre className="text-slate-300 overflow-x-auto">{JSON.stringify(log.new_data, null, 2)}</pre>
+                                    </div>
+                                  )}
+                                  {log.details && (
+                                    <div className="col-span-2 p-3 rounded-lg bg-slate-900/50 border border-white/10">
+                                      <p className="text-slate-400 font-bold mb-1">ملاحظات الإجراء:</p>
+                                      <p className="text-slate-200">{log.details}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {auditTotalPages > 1 && (
+                <div className="flex justify-between items-center mt-4 text-xs text-slate-400">
+                  <span>إجمالي السجلات: {auditTotal}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                      disabled={auditPage <= 1}
+                      onClick={() => loadAuditLogs(auditPage - 1, filterAdminId)}
+                    >
+                      السابق
+                    </button>
+                    <span>صفحة {auditPage} من {auditTotalPages}</span>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                      disabled={auditPage >= auditTotalPages}
+                      onClick={() => loadAuditLogs(auditPage + 1, filterAdminId)}
+                    >
+                      التالي
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {showModal && (

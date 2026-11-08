@@ -69,8 +69,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <span className="text-xs text-slate-400 block mb-0.5">البريد الإلكتروني المعتمد:</span>
-                    <a href="mailto:loutfallaasfora@gmail.com" className="text-white hover:text-teal-400 font-mono text-sm">
-                      loutfallaasfora@gmail.com
+                    <a href="mailto:no-reply@alshariyaa.com" className="text-white hover:text-teal-400 font-mono text-sm">
+                      no-reply@alshariyaa.com
                     </a>
                   </div>
                 </div>
