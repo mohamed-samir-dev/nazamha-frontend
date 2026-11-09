@@ -145,7 +145,7 @@ export function LandingFooter({ lang = "ar" }: LandingFooterProps) {
         <div id="payment-security" className="pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-right space-y-1">
             <p className="text-xs font-semibold text-slate-300">
-              {isAr ? "وسائل الدفع المعتمدة والآمنة بالريال السعودي (SAR)" : "Secure Accepted Payment Methods in SAR"}
+              {isAr ? "وسائل الدفع والتحصيل المعتمدة والآمنة (السعودية ومصر)" : "Secure Accepted Payment Methods (SAR & EGP)"}
             </p>
             <p className="text-[11px] text-slate-500">
               {isAr

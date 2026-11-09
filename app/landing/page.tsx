@@ -81,6 +81,13 @@ export default function DedicatedLandingPage() {
     }, 900);
   };
 
+  // روابط الدفع الإلكتروني المباشرة عبر Polar بالريال السعودي
+  const saudiPaymentLinks: Record<string, string> = {
+    "starter-500": "https://polar.sh/checkout/polar_c_AUr7mUOzgeXbWWLZAbNnsK6mR9QbGx5xNRdMP2A0w0A", // باقة 500 ريال سنوياً
+    "pro-1000": "https://polar.sh/checkout/polar_c_H5r17qQoudk9lGUaWGUOEoWWC8HYlcWBWr5it4LFLWd",    // باقة 1000 ريال سنوياً
+    "centers-1299": "https://polar.sh/checkout/polar_c_HjoPcP6b7jCUHoohsTxjBmIYtPYyKFDd4G5Ms1GgZvd",// باقة 1299 ريال سنوياً
+  };
+
   // 3 Annual-Only Pricing Plans (500/1000/1299 SAR & 7000/14000/17000 EGP)
   const plans = [
     {
@@ -308,8 +315,8 @@ export default function DedicatedLandingPage() {
               <Sparkles className="w-4 h-4 text-teal-400" />
               <span>
                 {isAr
-                  ? "المنصة السحابية الأولى لإدارة التعليم والسناتر في المملكة 🇸🇦"
-                  : "Leading Cloud Platform for Tutors & Academies in KSA 🇸🇦"}
+                  ? "المنصة السحابية الأولى لإدارة التعليم والسناتر في السعودية ومصر 🇸🇦 🇪🇬"
+                  : "Leading Cloud Platform for Tutors & Academies in KSA & Egypt 🇸🇦 🇪🇬"}
               </span>
             </div>
 
@@ -337,8 +344,8 @@ export default function DedicatedLandingPage() {
             {/* Sub-headline */}
             <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-normal max-w-2xl mx-auto">
               {isAr
-                ? "منظومة سحابية متطورة للمعلمين والمراكز التعليمية: كروت باركود فورية، إشعارات واتساب تلقائية لأولياء الأمور، بنك أسئلة واختبارات بالذكاء الاصطناعي، ومتابعة كاملة للمصروفات والاشتراكات بالريال السعودي."
-                : "Advanced cloud suite for private educators & centers: instant QR cards, automated WhatsApp parent alerts, AI quiz bank, and tuition billing in SAR."}
+                ? "منظومة سحابية متطورة للمعلمين والمراكز التعليمية: كروت باركود فورية، إشعارات واتساب تلقائية لأولياء الأمور، بنك أسئلة واختبارات بالذكاء الاصطناعي، ومتابعة كاملة للمصروفات والاشتراكات بالريال السعودي والجنيه المصري."
+                : "Advanced cloud suite for private educators & centers: instant QR cards, automated WhatsApp parent alerts, AI quiz bank, and tuition billing in SAR & EGP."}
             </p>
 
             {/* CTA Buttons */}
@@ -467,27 +474,33 @@ export default function DedicatedLandingPage() {
                     </p>
                   </div>
 
-                  {/* Card 3: Billing & Revenue in SAR */}
+                  {/* Card 3: Billing & Revenue (SAR & EGP) */}
                   <div className="p-4 rounded-xl bg-white/[0.04] border border-white/10 space-y-3 relative overflow-hidden">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
                         <Receipt className="w-4 h-4 text-amber-400" />
-                        <span>{isAr ? "التحصيل المالي بالريال" : "Tuition & Billing in SAR"}</span>
+                        <span>{isAr ? "التحصيل المالي والاشتراكات" : "Tuition & Billing"}</span>
                       </div>
-                      <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono font-bold">SAR</span>
+                      <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-mono font-bold">
+                        {currency}
+                      </span>
                     </div>
 
                     <div className="bg-[#080c14] p-3 rounded-lg border border-amber-500/30 space-y-2 text-xs shadow-inner">
                       <div className="flex justify-between items-center text-slate-300">
-                        <span>{isAr ? "إيرادات الاشتراكات:" : "Monthly Tuition:"}</span>
-                        <span className="font-bold text-emerald-400 font-mono">14,800 SAR</span>
+                        <span>{isAr ? "إيرادات الاشتراكات:" : "Tuition Revenue:"}</span>
+                        <span className="font-bold text-emerald-400 font-mono">
+                          {currency === "SAR" ? "14,800 SAR" : "96,000 EGP"}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center text-slate-300">
                         <span>{isAr ? "مبيعات الكتب والمذكرات:" : "Booklets & Materials:"}</span>
-                        <span className="font-bold text-teal-400 font-mono">3,250 SAR</span>
+                        <span className="font-bold text-teal-400 font-mono">
+                          {currency === "SAR" ? "3,250 SAR" : "18,500 EGP"}
+                        </span>
                       </div>
                       <div className="pt-1.5 border-t border-white/10 flex justify-between items-center text-white font-bold">
-                        <span>{isAr ? "نسبة التحصيل الشهري:" : "Monthly Paid Ratio:"}</span>
+                        <span>{isAr ? "نسبة التحصيل:" : "Paid Ratio:"}</span>
                         <span className="text-emerald-400 font-mono">96%</span>
                       </div>
                     </div>
@@ -629,8 +642,8 @@ export default function DedicatedLandingPage() {
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
                 {isAr
-                  ? "إدارة شاملة للاشتراكات الشهرية ونظام الحصص، بيع وتوزيع المذكرات والكتب الدراسية، تتبع المخزون، وحساب رواتب المساعدين بالريال."
-                  : "Manage monthly subscriptions, study material inventory, assistant payroll, and detailed expense tracking in SAR."}
+                  ? "إدارة شاملة للاشتراكات ونظام الحصص، بيع وتوزيع المذكرات والكتب الدراسية، تتبع المخزون، وحساب رواتب المساعدين والمصروفات بدقة (بالريال والجنيه)."
+                  : "Manage tuition subscriptions, study material inventory, assistant payroll, and detailed expense tracking in SAR & EGP."}
               </p>
             </div>
 
@@ -923,24 +936,69 @@ export default function DedicatedLandingPage() {
 
                   {/* CTA Action Button */}
                   <div className="pt-6 border-t border-white/10 mt-6">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPlan(p.nameAr, p.nameEn)}
-                      className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
-                        isPopular
-                          ? "bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black shadow-teal-500/30"
-                          : p.colorTheme === "amber"
-                          ? "bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-amber-500/20"
-                          : "bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white border border-white/15"
-                      }`}
-                    >
-                      <span>{isAr ? "اختر هذه الخطة السنوية" : "Select This Annual Plan"}</span>
-                      {isAr ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-                    </button>
+                    {currency === "EGP" ? (
+                      // زر واتساب للمستخدمين بالجنيه المصري (مصر)
+                      <div>
+                        <a
+                          href={`https://wa.me/201012486445?text=${encodeURIComponent(
+                            isAr
+                              ? `السلام عليكم، أرغب في الاشتراك في ${p.nameAr} بقيمة ${p.priceEGP.toLocaleString()} جنيه مصري سنوياً. يرجى تزويدي بطرق الدفع وتفعيل الحساب فورياً.`
+                              : `Hello, I'd like to subscribe to the ${p.nameEn} for ${p.priceEGP.toLocaleString()} EGP/year. Please provide payment and activation details.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-3.5 px-4 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 bg-[#25D366] hover:bg-[#20ba59] text-slate-950 shadow-emerald-500/25"
+                        >
+                          <MessageSquare className="w-4 h-4 fill-slate-950" />
+                          <span>{isAr ? "تواصل عبر واتساب للاشتراك" : "Contact via WhatsApp"}</span>
+                        </a>
 
-                    <p className="text-[10px] text-center text-slate-400 mt-2">
-                      {isAr ? "ضمان استرداد 14 يوماً 100%" : "14-Day 100% Refund Guarantee"}
-                    </p>
+                        <p className="text-[10px] text-center text-emerald-400 font-medium mt-2 flex items-center justify-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          <span>{isAr ? "دفع سهل عبر فودافون كاش وإنستاباي" : "Pay via Vodafone Cash & InstaPay"}</span>
+                        </p>
+                      </div>
+                    ) : (
+                      // زر الدفع الإلكتروني المباشر بالريال السعودي (السعودية) عبر Polar
+                      <div>
+                        {saudiPaymentLinks[p.id] ? (
+                          <a
+                            href={saudiPaymentLinks[p.id]}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+                              isPopular
+                                ? "bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black shadow-teal-500/30"
+                                : p.colorTheme === "amber"
+                                ? "bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-amber-500/20"
+                                : "bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white border border-white/15"
+                            }`}
+                          >
+                            <span>{isAr ? "الدفع والاشتراك الآن" : "Pay & Subscribe Online"}</span>
+                            {isAr ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectPlan(p.nameAr, p.nameEn)}
+                            className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+                              isPopular
+                                ? "bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black shadow-teal-500/30"
+                                : p.colorTheme === "amber"
+                                ? "bg-amber-400 hover:bg-amber-300 text-slate-950 font-black shadow-amber-500/20"
+                                : "bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white border border-white/15"
+                            }`}
+                          >
+                            <span>{isAr ? "الدفع والاشتراك الآن" : "Pay & Subscribe Online"}</span>
+                            {isAr ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                          </button>
+                        )}
+
+                        <p className="text-[10px] text-center text-slate-400 mt-2">
+                          {isAr ? "دفع آمن وفوري عبر Polar • مدى، فيزا، ماستركارد، أبل باي" : "Instant & Secure via Polar • Mada, Visa, Mastercard, Apple Pay"}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -1046,7 +1104,7 @@ export default function DedicatedLandingPage() {
           {/* Payment Badges */}
           <div className="mt-10 text-center space-y-3">
             <p className="text-xs text-slate-400 font-medium">
-              {isAr ? "المدفوعات الإلكترونية آمنة ومعتمدة بالريال السعودي عبر:" : "Secure e-payments accepted in SAR via:"}
+              {isAr ? "وسائل الدفع والتحصيل المعتمدة والآمنة (السعودية ومصر):" : "Secure accepted payment & collection methods (KSA & Egypt):"}
             </p>
             <PaymentBadges lang={lang} />
           </div>
@@ -1231,7 +1289,7 @@ export default function DedicatedLandingPage() {
                           dir="ltr"
                           value={contactForm.phone}
                           onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
-                          placeholder="+966 5x xxx xxxx"
+                          placeholder={isAr ? "+966 5x... أو +20 10x..." : "+966 5x... / +20 10x..."}
                           className="w-full px-3.5 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 text-xs transition"
                         />
                       </div>
