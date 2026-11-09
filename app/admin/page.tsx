@@ -11,6 +11,7 @@ import {
   ClipboardCheck, Star
 } from "lucide-react";
 import { AuthService } from "@/lib/services/authService";
+import { SystemSettingsService } from "@/lib/services/systemSettingsService";
 import { api } from "@/lib/apiClient";
 import { Teacher } from "@/lib/types";
 import TeachersTable from "./_components/TeachersTable";
@@ -280,6 +281,8 @@ export default function AdminDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [featureModalTeacher, setFeatureModalTeacher] = useState<Teacher | null>(null);
   const [bannerMessage, setBannerMessage] = useState("");
   const [bannerType, setBannerType] = useState<"info" | "warning" | "success" | "danger">("info");
@@ -316,7 +319,7 @@ export default function AdminDashboard() {
           expiringSoon: 0,
           pendingApproval: 0,
         })),
-        api.get<{ maintenance_mode?: boolean }>("/settings").catch(() => null),
+        SystemSettingsService.getSettings(isRefresh).catch(() => null),
       ]);
 
       setTeachers((teachersData ?? []).map((t) => ({ ...t })));
@@ -360,8 +363,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, is_active: !current } : t))
       );
       showToast("تم تحديث حالة التفعيل.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -375,8 +378,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, has_bills_feature: !current } : t))
       );
       showToast("تم تحديث ميزة الفواتير.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -390,8 +393,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, has_attendance_feature: !current } : t))
       );
       showToast("تم تحديث ميزة الحضور.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -405,8 +408,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, is_center_mode: !current } : t))
       );
       showToast("تم تحديث نظام السنتر.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -420,8 +423,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, has_centers_feature: !current } : t))
       );
       showToast("تم تحديث ميزة إدارة السناتر.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -437,8 +440,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, subscription_expires_at: iso } : t))
       );
       showToast("تم تحديث تاريخ الانتهاء.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -454,8 +457,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, subscription_started_at: iso } : t))
       );
       showToast("تم تحديث تاريخ البداية.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -469,8 +472,8 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, subscription_price: price } : t))
       );
       showToast("تم تحديث سعر الاشتراك.");
-    } catch {
-      showToast("حدث خطأ.", "error");
+    } catch (err: any) {
+      showToast(err?.message || "حدث خطأ.", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -482,8 +485,27 @@ export default function AdminDashboard() {
         ? new Date(teacher.subscription_expires_at)
         : new Date();
     base.setFullYear(base.getFullYear() + 1);
-    await handleUpdateExpiration(teacher.id, base.toISOString().split("T")[0]);
-    showToast(`✓ تم تجديد اشتراك ${teacher.name} لسنة إضافية`);
+    const isoDate = base.toISOString();
+    setUpdatingId(teacher.id);
+    try {
+      await api.patch(`/teachers/${teacher.id}`, {
+        subscription_expires_at: isoDate,
+        is_active: true,
+      });
+      setTeachers((prev) =>
+        prev.map((t) =>
+          t.id === teacher.id
+            ? { ...t, subscription_expires_at: isoDate, is_active: true }
+            : t
+        )
+      );
+      showToast(`✓ تم تجديد اشتراك وتفعيل ${teacher.name} لسنة إضافية`);
+    } catch (err: any) {
+      showToast(err?.message || "فشل تجديد الاشتراك.", "error");
+    } finally {
+      setUpdatingId(null);
+    }
+
   };
 
   const handleUpdateBanner = async (
@@ -503,8 +525,8 @@ export default function AdminDashboard() {
         )
       );
       showToast(enabled ? `✓ تم تفعيل البانر لـ ${teacher.name}` : "تم إخفاء البانر");
-    } catch {
-      showToast("فشل تحديث البانر", "error");
+    } catch (err: any) {
+      showToast(err?.message || "فشل تحديث البانر", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -521,41 +543,43 @@ export default function AdminDashboard() {
         prev.map((t) => (t.id === teacherId ? { ...t, hidden_from_admin: res.hidden_from_admin } : t))
       );
       showToast(res.hidden_from_admin ? "تم إخفاء المدرس" : "تم إظهار المدرس");
-    } catch {
-      showToast("فشل تحديث الظهور", "error");
+    } catch (err: any) {
+      showToast(err?.message || "فشل تحديث الظهور", "error");
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const handleDeleteTeacher = async (teacher: Teacher) => {
-    if (
-      !confirm(
-        `تحذير: سيتم حذف حساب "${teacher.name}" وكل بياناته نهائياً. هل أنت متأكد؟`
-      )
-    )
-      return;
-    setUpdatingId(teacher.id);
+  const handleDeleteTeacher = (teacher: Teacher) => {
+    setTeacherToDelete(teacher);
+  };
+
+  const confirmDeleteTeacher = async () => {
+    if (!teacherToDelete) return;
+    setDeleteLoading(true);
     try {
-      await api.delete(`/teachers/${teacher.id}`);
-      setTeachers((prev) => prev.filter((t) => t.id !== teacher.id));
+      await api.delete(`/teachers/${teacherToDelete.id}`);
+      setTeachers((prev) => prev.filter((t) => t.id !== teacherToDelete.id));
       setStudentCounts((prev) => {
         const n = { ...prev };
-        delete n[teacher.id];
+        delete n[teacherToDelete.id];
         return n;
       });
       setGroupCounts((prev) => {
         const n = { ...prev };
-        delete n[teacher.id];
+        delete n[teacherToDelete.id];
         return n;
       });
-      showToast(`✓ تم حذف حساب ${teacher.name}`);
+      showToast(`✓ تم حذف حساب ${teacherToDelete.name}`);
+      setTeacherToDelete(null);
     } catch (err: unknown) {
       showToast((err as Error).message ?? "فشل حذف المعلم.", "error");
     } finally {
-      setUpdatingId(null);
+      setDeleteLoading(false);
     }
   };
+
+
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -986,7 +1010,7 @@ export default function AdminDashboard() {
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {teachers
                   .filter((t) => {
-                    if (!t.subscription_expires_at || t.is_super_admin) return false;
+                    if (!t.subscription_expires_at || t.is_super_admin || !t.is_active) return false;
                     const diff =
                       (new Date(t.subscription_expires_at).getTime() - now.getTime()) /
                       (1000 * 60 * 60 * 24);
@@ -1168,6 +1192,63 @@ export default function AdminDashboard() {
           onSetBannerMessage={setBannerMessage}
           onSetBannerType={setBannerType}
         />
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {teacherToDelete && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => e.target === e.currentTarget && !deleteLoading && setTeacherToDelete(null)}
+        >
+          <div
+            className="glass-panel panel-content"
+            style={{ width: "100%", maxWidth: 440, padding: "1.75rem" }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "0.875rem", marginBottom: "1.25rem" }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1px solid rgba(239,68,68,0.25)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <AlertTriangle size={20} style={{ color: "#f87171" }} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "0 0 0.375rem", color: "#fff" }}>
+                  حذف حساب المعلم
+                </h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
+                  سيتم نقل حساب <strong style={{ color: "#fff" }}>"{teacherToDelete.name}"</strong> وكافة بياناته إلى سلة المحذوفات وتعطيل دخوله. هل أنت متأكد؟
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "0.625rem", justifyContent: "flex-end" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setTeacherToDelete(null)}
+                disabled={deleteLoading}
+              >
+                إلغاء
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={confirmDeleteTeacher}
+                disabled={deleteLoading}
+                style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+              >
+                {deleteLoading && <RefreshCw size={14} style={{ animation: "spin 0.8s linear infinite" }} />}
+                {deleteLoading ? "جاري الحذف..." : "تأكيد الحذف"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Toast ── */}

@@ -8,13 +8,19 @@ import {
   Users, UserPlus, Shield, ArrowRight, Check, AlertCircle,
   X, Eye, EyeOff, Trash2, ToggleLeft, ToggleRight, Edit3,
   Calendar, BookOpen, ClipboardCheck, Settings, DollarSign,
-  Copy, Search,
+  Copy,
 } from "lucide-react";
 import Link from "next/link";
 
 function OnlineStatus({ lastSeenAt }: { lastSeenAt?: string }) {
-  if (!lastSeenAt) return <span className="text-xs text-slate-600">—</span>;
-  const diffMs = Date.now() - new Date(lastSeenAt).getTime();
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
+
+  if (!lastSeenAt || now === null) return <span className="text-xs text-slate-600">—</span>;
+  const diffMs = now - new Date(lastSeenAt).getTime();
   const diffMin = Math.floor(diffMs / 60_000);
   const isOnline = diffMin < 5;
   const isRecent = diffMin < 60;

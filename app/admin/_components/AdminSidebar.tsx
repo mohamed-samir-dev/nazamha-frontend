@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -39,13 +39,14 @@ interface Props {
 
 export default function AdminSidebar({ isSuperAdmin, hasCentersPermission, siteName }: Props) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [prevPathname, setPrevPathname] = useState(pathname);
 
-  // Close mobile menu on route change
-  useEffect(() => {
+  // Close mobile menu on route change during render
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   // Close on outside click
   useEffect(() => {

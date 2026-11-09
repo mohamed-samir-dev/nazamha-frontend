@@ -42,7 +42,7 @@ import { PaymentBadges } from "@/components/landing/PaymentBadges";
 
 export default function DedicatedLandingPage() {
   const [lang, setLang] = useState<"ar" | "en">("ar");
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [currency, setCurrency] = useState<"SAR" | "EGP">("SAR");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [selectedPlanFeedback, setSelectedPlanFeedback] = useState<string | null>(null);
   const [contactSubmitted, setContactSubmitted] = useState(false);
@@ -51,7 +51,7 @@ export default function DedicatedLandingPage() {
     name: "",
     phone: "",
     email: "",
-    plan: "باقة 1000 ريال (المحترف بالذكاء الاصطناعي - الأكثر طلباً)",
+    plan: "باقة 1000 ريال / 14,000 ج.م سنوياً (المحترف بالذكاء الاصطناعي - الأكثر طلباً)",
     notes: "",
   });
 
@@ -81,21 +81,20 @@ export default function DedicatedLandingPage() {
     }, 900);
   };
 
-  // 4 Pricing Plans Data (500 SAR, 699 SAR, 1000 SAR, 1299 SAR)
+  // 3 Annual-Only Pricing Plans (500/1000/1299 SAR & 7000/14000/17000 EGP)
   const plans = [
     {
       id: "starter-500",
-      priceMonthly: 500,
-      priceYearly: 4800,
-      savingsYearly: "1,200",
-      nameAr: "باقة 500 ريال (المعلم الأساسية)",
-      nameEn: "500 SAR Starter Plan",
+      priceSAR: 500,
+      priceEGP: 7000,
+      nameAr: "باقة 500 ريال / 7,000 ج.م سنوياً (المعلم الأساسية)",
+      nameEn: "500 SAR / 7,000 EGP Annual Starter Plan",
       badgeAr: "للمعلمين المستقلين",
       badgeEn: "For Individual Tutors",
       titleAr: "الأساسية (Starter)",
       titleEn: "Starter Plan",
-      descAr: "انطلاقة مثالية للمعلم المستقل: مسح كروت QR، رصد الحضور وتنظيم المجموعات بكل سهولة.",
-      descEn: "Ideal for individual tutors managing attendance and classes with high-speed QR scans.",
+      descAr: "انطلاقة مثالية للمعلم المستقل: مسح كروت QR، رصد الحضور والغياب وتنظيم المجموعات بكل سهولة طوال العام.",
+      descEn: "Ideal for individual tutors managing attendance and classes with high-speed QR scans for the full academic year.",
       icon: QrCode,
       colorTheme: "slate",
       popular: false,
@@ -105,7 +104,7 @@ export default function DedicatedLandingPage() {
         "توليد وطباعة كروت QR مخصصة للطلاب",
         "مسح فوري للحضور بالكاميرا (0.3 ثانية)",
         "رصد الغياب والتأخير وسجل الملاحظات",
-        "كشوف الدرجات والامتحانات الشهرية",
+        "كشوف الدرجات والامتحانات الدورية",
         "تسجيل الاشتراكات وسندات القبض",
         "تصدير تقارير Excel و PDF بنقرة زر",
         "دعم فني متجاوب عبر الواتساب",
@@ -116,8 +115,8 @@ export default function DedicatedLandingPage() {
         "Printable custom student QR ID cards",
         "Instant camera QR scan (0.3s)",
         "Attendance, absence & tardy logs",
-        "Monthly exam grades & scores",
-        "Basic subscription & payment receipts",
+        "Periodic exam grades & scores",
+        "Tuition records & payment receipts",
         "Export reports to Excel & PDF",
         "Fast responsive WhatsApp support",
       ],
@@ -131,59 +130,17 @@ export default function DedicatedLandingPage() {
       ],
     },
     {
-      id: "advanced-699",
-      priceMonthly: 699,
-      priceYearly: 6700,
-      savingsYearly: "1,688",
-      nameAr: "باقة 699 ريال (المعلم المتقدم)",
-      nameEn: "699 SAR Advanced Plus",
-      badgeAr: "أتمتة الواتساب الفورية",
-      badgeEn: "WhatsApp Automation",
-      titleAr: "المتقدم (Advanced Plus)",
-      titleEn: "Advanced Plus",
-      descAr: "تواصل آلي مباشر: إرسال إشعارات WhatsApp فورية لأولياء الأمور لحظة الحضور والغياب.",
-      descEn: "Instant parent communication: automated WhatsApp alerts upon student check-in & absence.",
-      icon: MessageSquare,
-      colorTheme: "emerald",
-      popular: false,
-      featuresAr: [
-        "حتى 400 طالب مسجل",
-        "مجموعات وفصول غير محدودة",
-        "إشعارات WhatsApp تلقائية وفورية للأهالي عند الحضور",
-        "تنبيهات فورية لولي الأمر في حال الغياب والتأخير",
-        "إرسال كشوف الدرجات الشهرية لولي الأمر بالواتساب",
-        "متابعة متأخرات الاشتراكات وإرسال تذكيرات الدفع",
-        "سجل بيع وتوزيع المذكرات والكتب الدراسية",
-        "تصدير شامل لجميع الكشوفات Excel و PDF",
-        "دعم فني سريع ذو أولوية",
-      ],
-      featuresEn: [
-        "Up to 400 registered students",
-        "Unlimited classes & groups",
-        "Auto WhatsApp alerts to parents on check-in",
-        "Instant absence & tardiness notifications",
-        "Send exam grades directly to parents via WhatsApp",
-        "Track overdue fees & automated payment reminders",
-        "Course books & booklet sales tracking",
-        "Comprehensive Excel & PDF exports",
-        "Priority technical support",
-      ],
-      excludedAr: ["صانع الاختبارات وبنوك الأسئلة بالذكاء الاصطناعي"],
-      excludedEn: ["AI exam & question bank generator"],
-    },
-    {
       id: "pro-1000",
-      priceMonthly: 1000,
-      priceYearly: 9600,
-      savingsYearly: "2,400",
-      nameAr: "باقة 1000 ريال (المحترف بالذكاء الاصطناعي - الأكثر طلباً)",
-      nameEn: "1000 SAR Pro AI Plan (Most Popular)",
+      priceSAR: 1000,
+      priceEGP: 14000,
+      nameAr: "باقة 1000 ريال / 14,000 ج.م سنوياً (المحترف بالذكاء الاصطناعي - الأكثر طلباً)",
+      nameEn: "1000 SAR / 14,000 EGP Annual Pro AI Plan (Most Popular)",
       badgeAr: "الخيار الأكثر طلباً وشعبية ⭐",
       badgeEn: "Most Popular Choice ⭐",
       titleAr: "المحترف بالذكاء الاصطناعي (Pro AI)",
       titleEn: "Pro AI Educator",
-      descAr: "المنظومة الأذكى والأشمل: بنك أسئلة واختبارات بالـ AI، واتساب غير محدود، وإدارة المساعدين.",
-      descEn: "The complete smart suite: AI exam generator, unlimited WhatsApp, assistant logins & deep analytics.",
+      descAr: "المنظومة الأذكى والأشمل: بنك أسئلة واختبارات بالـ AI، أتمتة واتساب كاملة للأهالي، وإدارة المساعدين.",
+      descEn: "The complete smart suite: AI exam generator, unlimited WhatsApp parent alerts, assistant logins & deep analytics.",
       icon: Sparkles,
       colorTheme: "teal",
       popular: true,
@@ -214,11 +171,10 @@ export default function DedicatedLandingPage() {
     },
     {
       id: "centers-1299",
-      priceMonthly: 1299,
-      priceYearly: 12400,
-      savingsYearly: "3,188",
-      nameAr: "باقة 1299 ريال (السناتر والأكاديميات الكبرى)",
-      nameEn: "1299 SAR Center & Enterprise",
+      priceSAR: 1299,
+      priceEGP: 17000,
+      nameAr: "باقة 1299 ريال / 17,000 ج.م سنوياً (السناتر والأكاديميات الكبرى)",
+      nameEn: "1299 SAR / 17,000 EGP Annual Center & Enterprise",
       badgeAr: "للمراكز والسناتر التعليمية 🏢",
       badgeEn: "For Centers & Academies 🏢",
       titleAr: "السناتر والأكاديميات (Enterprise)",
@@ -257,12 +213,16 @@ export default function DedicatedLandingPage() {
 
   const faqsAr = [
     {
-      q: "ما هي الخطط المتاحة وما أسعارها؟",
-      a: "تتوفر 4 خطط مرنة بالريال السعودي تلائم كافة الأحجام: باقة المعلم الأساسية (500 ر.س)، باقة المعلم المتقدم بأتمتة الواتساب (699 ر.س)، باقة المحترف بالذكاء الاصطناعي الأكثر طلباً (1000 ر.س)، وباقة السناتر والأكاديميات المتكاملة (1299 ر.س). ويمكنك توفير شهرين عند اختيار الاشتراك السنوي.",
+      q: "ما هي الخطط المتاحة وما أسعارها بالريال والجنيه؟",
+      a: "تتوفر 3 خطط باشتراك سنوي بالريال السعودي والجنيه المصري: باقة المعلم الأساسية (500 ر.س / 7,000 ج.م سنوياً)، باقة المحترف بالذكاء الاصطناعي الأكثر طلباً (1000 ر.س / 14,000 ج.م سنوياً)، وباقة السناتر والأكاديميات المتكاملة (1299 ر.س / 17,000 ج.م سنوياً). جميع الباقات تشمل تفعيل فوري وضمان استرداد 14 يوماً.",
     },
     {
-      q: "ما هي وسائل الدفع الإلكتروني المعتمدة بالريال السعودي؟",
-      a: "تقبل المنظومة بطاقات مدى (Mada)، وفيزا (Visa)، وماستركارد (Mastercard)، وأبل باي (Apple Pay). تتم جميع المعاملات عبر بوابات دفع آمنة ومشفرة 100% وفق معايير PCI-DSS العالمية.",
+      q: "هل الدفع سنوي فقط؟",
+      a: "نعم، الاشتراكات سنوية فقط تمنحك استقراراً كاملاً وراحة بال طوال العام الدراسي بدون الحاجة للتجديد الشهري، مع الحصول على التحديثات والدعم الفني المستمر.",
+    },
+    {
+      q: "ما هي وسائل الدفع الإلكتروني المعتمدة؟",
+      a: "تقبل المنظومة بطاقات مدى (Mada)، وفيزا (Visa)، وماستركارد (Mastercard)، وأبل باي (Apple Pay)، وإنستاباي (InstaPay)، ومحافظ فودافون كاش للمدفوعات بالجنيه المصري. تتم جميع المعاملات عبر بوابات دفع آمنة ومشفرة 100% وفق معايير PCI-DSS العالمية.",
     },
     {
       q: "هل يتوفر ضمان لاسترداد الأموال في حال لم تناسبني المنظومة؟",
@@ -273,23 +233,23 @@ export default function DedicatedLandingPage() {
       a: "لا تحتاج لأي أجهزة خاصة! كاميرا أي جوال (آيفون أو أندرويد) أو تابلت أو كاميرا اللابتوب تكفي تماماً وتقوم بمسح الكود في 0.3 ثانية فقط. كما يدعم النظام الماسحات الليزرية السريعة للسناتر الكبيرة.",
     },
     {
-      q: "كيف تعمل ميزة إرسال إشعارات الواتساب التلقائية لأولياء الأمور؟",
-      a: "بمجرد تمرير كود QR الخاص بالطالب على الكاميرا أثناء دخوله، يُرسل النظام تلقائياً وبشكل فوري رسالة WhatsApp لولي الأمر تفيد بوصوله ووقته. وفي حال غيابه، يُرسل تنبيه فوري تلقائياً دون أي تدخل يدوي منك.",
-    },
-    {
-      q: "هل تدعم باقة السناتر (1299 ر.س) إضافة أكثر من معلم وقاعة؟",
-      a: "نعم بالتأكيد! صُممت باقة 1299 ر.س خصيصاً للمراكز والسناتر والمعاهد، وتتيح إضافة عدد غير محدود من المعلمين، وتوزيع القاعات، وتحديد صلاحيات موظفي الاستقبال، مع احتساب نسب وأرباح كل معلم تلقائياً في تقارير مالية واضحة.",
+      q: "هل تدعم باقة السناتر (1299 ر.س / 17,000 ج.م سنوياً) إضافة أكثر من معلم وقاعة؟",
+      a: "نعم بالتأكيد! صُممت باقة السناتر خصيصاً للمراكز والسناتر والمعاهد، وتتيح إضافة عدد غير محدود من المعلمين، وتوزيع القاعات، وتحديد صلاحيات موظفي الاستقبال، مع احتساب نسب وأرباح كل معلم تلقائياً في تقارير مالية واضحة.",
     },
   ];
 
   const faqsEn = [
     {
-      q: "What plans are available and what are their prices?",
-      a: "We offer 4 tailored plans in SAR: Starter Plan (500 SAR), Advanced Plus with WhatsApp (699 SAR), Pro AI Most Popular (1000 SAR), and Centers & Enterprise (1299 SAR). You also save 2 months when choosing annual billing.",
+      q: "What plans are available and what are their prices in SAR and EGP?",
+      a: "We offer 3 comprehensive annual plans in SAR and EGP: Starter Plan (500 SAR / 7,000 EGP/year), Pro AI Plan Most Popular (1000 SAR / 14,000 EGP/year), and Centers & Enterprise (1299 SAR / 17,000 EGP/year). All plans include instant activation and a 14-day refund guarantee.",
     },
     {
-      q: "What payment methods are supported in SAR?",
-      a: "We support Mada, Visa, Mastercard, and Apple Pay. All transactions are 100% encrypted and fully compliant with global PCI-DSS security standards.",
+      q: "Are subscriptions billed annually only?",
+      a: "Yes, all subscriptions are billed annually to ensure seamless service and stability throughout the entire academic year without monthly renewal friction.",
+    },
+    {
+      q: "What payment methods are supported in SAR and EGP?",
+      a: "We support Mada, Visa, Mastercard, Apple Pay, InstaPay, and Vodafone Cash. All transactions are 100% encrypted and fully compliant with global PCI-DSS security standards.",
     },
     {
       q: "Is there a money-back refund guarantee?",
@@ -304,8 +264,8 @@ export default function DedicatedLandingPage() {
       a: "The instant a student's QR card is scanned at the door, the system automatically sends a WhatsApp alert to their parent confirming attendance and exact time. Instant absence alerts are dispatched as well.",
     },
     {
-      q: "Does the Centers Plan (1299 SAR) support multiple tutors and rooms?",
-      a: "Absolutely! The 1299 SAR plan is purpose-built for academies and multi-tutor centers: manage unlimited tutors, rooms, schedules, and front-desk staff permissions, with automated teacher profit split calculations.",
+      q: "Does the Centers Plan support multiple tutors and rooms?",
+      a: "Absolutely! The Centers & Enterprise plan (1299 SAR / 17,000 EGP per year) is purpose-built for academies and multi-tutor centers: manage unlimited tutors, rooms, schedules, and front-desk staff permissions, with automated teacher profit split calculations.",
     },
   ];
 
@@ -780,69 +740,76 @@ export default function DedicatedLandingPage() {
           <div className="text-center max-w-3xl mx-auto space-y-4 mb-14">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25 text-xs font-bold shadow-inner">
               <Award className="w-4 h-4 text-amber-400" />
-              <span>{isAr ? "خطط الأسعار الرسمية بالريال السعودي (SAR) 🇸🇦" : "Official Pricing Plans in Saudi Riyals (SAR) 🇸🇦"}</span>
+              <span>{isAr ? "خطط الأسعار بالريال السعودي (SAR) والجنيه المصري (EGP) 🇸🇦 🇪🇬" : "Pricing Plans in SAR & EGP 🇸🇦 🇪🇬"}</span>
             </div>
             
             <h2 className="text-3xl sm:text-5xl font-black text-white">
-              {isAr ? "أربع باقات واضحة تلائم كافة أحجام العمل التعليمي" : "Four Clear Plans for Every Educational Scale"}
+              {isAr ? "ثلاث باقات سنوية واضحة تلائم كافة أحجام العمل التعليمي" : "Three Annual Plans for Every Educational Scale"}
             </h2>
             
             <p className="text-sm text-slate-300 leading-relaxed max-w-2xl mx-auto">
               {isAr
-                ? "اختر الخطة المناسبة لحجم طلابك، مع ضمان ذهبي لاسترداد الأموال بنسبة 100% لمدة 14 يوماً وتفعيل فوري لحسابك."
-                : "Choose the plan that fits your student count. Includes an unconditional 100% 14-day money-back guarantee."}
+                ? "اشتراك سنوي شامل يمنحك استقراراً تاماً طوال العام الدراسي، مع ضمان ذهبي لاسترداد الأموال بنسبة 100% لمدة 14 يوماً وتفعيل فوري لحسابك."
+                : "Comprehensive annual subscription for seamless stability throughout the academic year. Includes 100% 14-day money-back guarantee."}
             </p>
 
-            {/* Monthly / Yearly Toggle */}
-            <div className="pt-4 flex items-center justify-center">
+            {/* Currency Switcher & Annual Badge */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
               <div className="p-1 rounded-2xl bg-[#0f172a] border border-white/10 inline-flex items-center gap-1 shadow-lg">
                 <button
                   type="button"
-                  onClick={() => setBillingCycle("monthly")}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    billingCycle === "monthly"
+                  onClick={() => setCurrency("SAR")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    currency === "SAR"
                       ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/25"
                       : "text-slate-300 hover:text-white"
                   }`}
                 >
-                  {isAr ? "الدفع الشهري" : "Monthly Billing"}
+                  <span>🇸🇦</span>
+                  <span>{isAr ? "بالريال السعودي (SAR)" : "Saudi Riyal (SAR)"}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setBillingCycle("yearly")}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                    billingCycle === "yearly"
+                  onClick={() => setCurrency("EGP")}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    currency === "EGP"
                       ? "bg-teal-500 text-slate-950 shadow-md shadow-teal-500/25"
                       : "text-slate-300 hover:text-white"
                   }`}
                 >
-                  <span>{isAr ? "الاشتراك السنوي" : "Annual Billing"}</span>
-                  <span className="bg-amber-400 text-slate-950 text-[10px] px-2 py-0.5 rounded-full font-black">
-                    {isAr ? "وفّر شهرين 🎁" : "Save 2 Months"}
-                  </span>
+                  <span>🇪🇬</span>
+                  <span>{isAr ? "بالجنيه المصري (EGP)" : "Egyptian Pound (EGP)"}</span>
                 </button>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-teal-500/10 border border-teal-500/25 text-xs text-teal-300 font-semibold shadow-inner">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>
+                  {isAr
+                    ? "اشتراك سنوي موحّد بدون تجديد شهري متكرر أو رسوم خفية"
+                    : "Annual subscription with zero monthly renewal friction"}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* 4 Plans Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 items-stretch">
+          {/* 3 Plans Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
             {plans.map((p) => {
               const IconComp = p.icon;
               const isPopular = p.popular;
-              const price = billingCycle === "monthly" ? p.priceMonthly : p.priceYearly;
+              const price = currency === "SAR" ? p.priceSAR : p.priceEGP;
+              const altPrice = currency === "SAR" ? p.priceEGP : p.priceSAR;
 
               return (
                 <div
                   key={p.id}
-                  className={`rounded-2xl p-6 flex flex-col justify-between transition-all relative ${
+                  className={`rounded-2xl p-6 sm:p-8 flex flex-col justify-between transition-all relative ${
                     isPopular
-                      ? "bg-gradient-to-b from-[#0f2334] via-[#0b1b28] to-[#08131e] border-2 border-teal-400 shadow-2xl shadow-teal-500/20 xl:-translate-y-2"
+                      ? "bg-gradient-to-b from-[#0f2334] via-[#0b1b28] to-[#08131e] border-2 border-teal-400 shadow-2xl shadow-teal-500/25 lg:-translate-y-2"
                       : p.colorTheme === "amber"
                       ? "bg-gradient-to-b from-[#19150c] to-[#0b1220] border border-amber-500/40 hover:border-amber-400/70"
-                      : p.colorTheme === "emerald"
-                      ? "bg-gradient-to-b from-[#071d18] to-[#0b1220] border border-emerald-500/30 hover:border-emerald-400/60"
                       : "bg-[#0b1220]/90 border border-white/10 hover:border-white/20"
                   }`}
                 >
@@ -862,8 +829,6 @@ export default function DedicatedLandingPage() {
                           className={`text-[11px] font-bold uppercase tracking-wider block mb-1 ${
                             p.colorTheme === "amber"
                               ? "text-amber-400"
-                              : p.colorTheme === "emerald"
-                              ? "text-emerald-400"
                               : "text-teal-400"
                           }`}
                         >
@@ -873,19 +838,17 @@ export default function DedicatedLandingPage() {
                       
                       <div className="flex items-center gap-2 mt-1">
                         <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                             isPopular
                               ? "bg-teal-400/20 text-teal-300"
                               : p.colorTheme === "amber"
                               ? "bg-amber-400/20 text-amber-300"
-                              : p.colorTheme === "emerald"
-                              ? "bg-emerald-400/20 text-emerald-300"
                               : "bg-white/10 text-slate-300"
                           }`}
                         >
                           <IconComp className="w-5 h-5" />
                         </div>
-                        <h3 className="text-xl font-black text-white leading-tight">
+                        <h3 className="text-2xl font-black text-white leading-tight">
                           {isAr ? p.titleAr : p.titleEn}
                         </h3>
                       </div>
@@ -896,35 +859,42 @@ export default function DedicatedLandingPage() {
                     </div>
 
                     {/* Price Block */}
-                    <div className="pt-4 pb-3 border-y border-white/10">
+                    <div className="pt-4 pb-3 border-y border-white/10 space-y-2">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-4xl font-black text-white font-mono tracking-tight">
+                        <span className="text-4xl sm:text-5xl font-black text-white font-mono tracking-tight">
                           {price.toLocaleString()}
                         </span>
                         <div>
-                          <span className="text-xs font-black text-amber-300 block font-mono">SAR</span>
-                          <span className="text-[11px] text-slate-400 block">
-                            {billingCycle === "monthly"
-                              ? isAr ? "ريال / شهرياً" : "SAR / Month"
-                              : isAr ? "ريال / سنوياً" : "SAR / Year"}
+                          <span className="text-xs font-black text-amber-300 block font-mono">
+                            {currency === "SAR" ? "SAR" : "EGP"}
+                          </span>
+                          <span className="text-[11px] text-slate-400 block font-medium">
+                            {currency === "SAR"
+                              ? isAr ? "ريال سعودي / سنوياً" : "SAR / Year"
+                              : isAr ? "جنيه مصري / سنوياً" : "EGP / Year"}
                           </span>
                         </div>
                       </div>
 
-                      {billingCycle === "yearly" && (
-                        <p className="text-[11px] text-emerald-400 font-semibold mt-1.5 flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{isAr ? `وفّرت ${p.savingsYearly} ريال سعودي سنوياً` : `Saved ${p.savingsYearly} SAR / Year`}</span>
-                        </p>
-                      )}
+                      {/* Dual currency indicator */}
+                      <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-white/5">
+                        <span className="font-semibold text-slate-300">
+                          {currency === "SAR"
+                            ? isAr ? `أو ${altPrice.toLocaleString()} جنيه مصري 🇪🇬` : `Or: ${altPrice.toLocaleString()} EGP 🇪🇬`
+                            : isAr ? `أو ${altPrice.toLocaleString()} ريال سعودي 🇸🇦` : `Or: ${altPrice.toLocaleString()} SAR 🇸🇦`}
+                        </span>
+                        <span className="text-[10px] text-teal-300 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20 font-bold">
+                          {isAr ? "سنوياً" : "Annual"}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Features List */}
                     <div className="space-y-2 pt-1">
                       <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        {isAr ? "المميزات المتضمنة:" : "Included Features:"}
+                        {isAr ? "المميزات المتضمنة في الخطة:" : "Included Features:"}
                       </p>
-                      <ul className="space-y-2 text-xs text-slate-300">
+                      <ul className="space-y-2.5 text-xs text-slate-300">
                         {(isAr ? p.featuresAr : p.featuresEn).map((f, i) => (
                           <li key={i} className="flex items-start gap-2">
                             <CheckCircle2
@@ -956,7 +926,7 @@ export default function DedicatedLandingPage() {
                     <button
                       type="button"
                       onClick={() => handleSelectPlan(p.nameAr, p.nameEn)}
-                      className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
+                      className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 ${
                         isPopular
                           ? "bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-black shadow-teal-500/30"
                           : p.colorTheme === "amber"
@@ -964,7 +934,7 @@ export default function DedicatedLandingPage() {
                           : "bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white border border-white/15"
                       }`}
                     >
-                      <span>{isAr ? "اختر هذه الخطة" : "Select This Plan"}</span>
+                      <span>{isAr ? "اختر هذه الخطة السنوية" : "Select This Annual Plan"}</span>
                       {isAr ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
                     </button>
 
@@ -978,10 +948,10 @@ export default function DedicatedLandingPage() {
           </div>
 
           {/* Quick Comparison Summary Table */}
-          <div className="mt-14 rounded-2xl bg-[#0b1220]/70 border border-white/10 p-5 sm:p-7 overflow-x-auto">
+          <div className="mt-14 max-w-5xl mx-auto rounded-2xl bg-[#0b1220]/70 border border-white/10 p-5 sm:p-7 overflow-x-auto">
             <div className="text-center mb-6">
               <h4 className="text-lg font-bold text-white">
-                {isAr ? "مقارنة سريعة بين الخطط الأربعة" : "Quick Plan Comparison Matrix"}
+                {isAr ? "مقارنة سريعة بين الخطط السنوية الثلاث" : "Quick Annual Plan Comparison Matrix"}
               </h4>
               <p className="text-xs text-slate-400 mt-1">
                 {isAr ? "اختر ما يناسب عدد طلابك ومستوى الأتمتة الذي تحتاجه" : "Choose the right tier for your student count and automation needs"}
@@ -992,23 +962,29 @@ export default function DedicatedLandingPage() {
               <thead>
                 <tr className="border-b border-white/10 text-slate-400">
                   <th className={`pb-3 font-bold ${isAr ? "text-right" : "text-left"}`}>{isAr ? "الميزة" : "Feature"}</th>
-                  <th className="pb-3 text-center font-bold text-slate-300">500 SAR</th>
-                  <th className="pb-3 text-center font-bold text-emerald-400">699 SAR</th>
-                  <th className="pb-3 text-center font-bold text-teal-400 bg-teal-500/10 rounded-t-lg">1000 SAR ⭐</th>
-                  <th className="pb-3 text-center font-bold text-amber-400">1299 SAR 🏢</th>
+                  <th className="pb-3 text-center font-bold text-slate-300">
+                    <div>500 SAR / 7,000 EGP</div>
+                    <span className="text-[10px] text-slate-400 font-normal">{isAr ? "سنوياً" : "Annual"}</span>
+                  </th>
+                  <th className="pb-3 text-center font-bold text-teal-400 bg-teal-500/10 rounded-t-lg">
+                    <div>1,000 SAR / 14,000 EGP ⭐</div>
+                    <span className="text-[10px] text-teal-300 font-normal">{isAr ? "الأكثر طلباً" : "Most Popular"}</span>
+                  </th>
+                  <th className="pb-3 text-center font-bold text-amber-400">
+                    <div>1,299 SAR / 17,000 EGP 🏢</div>
+                    <span className="text-[10px] text-amber-300 font-normal">{isAr ? "سنوياً" : "Annual"}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
                 <tr>
                   <td className={`py-3 font-medium ${isAr ? "text-right" : "text-left"}`}>{isAr ? "عدد الطلاب المسموح" : "Student Limit"}</td>
                   <td className="py-3 text-center font-mono">150</td>
-                  <td className="py-3 text-center font-mono">400</td>
                   <td className="py-3 text-center font-mono font-bold text-teal-300 bg-teal-500/10">1,000</td>
                   <td className="py-3 text-center font-bold text-amber-300">{isAr ? "غير محدود" : "Unlimited"}</td>
                 </tr>
                 <tr>
                   <td className={`py-3 font-medium ${isAr ? "text-right" : "text-left"}`}>{isAr ? "مسح كروت QR في 0.3 ثانية" : "0.3s QR Attendance"}</td>
-                  <td className="py-3 text-center text-emerald-400 font-bold">✓</td>
                   <td className="py-3 text-center text-emerald-400 font-bold">✓</td>
                   <td className="py-3 text-center text-emerald-400 font-bold bg-teal-500/10">✓</td>
                   <td className="py-3 text-center text-emerald-400 font-bold">✓</td>
@@ -1016,13 +992,11 @@ export default function DedicatedLandingPage() {
                 <tr>
                   <td className={`py-3 font-medium ${isAr ? "text-right" : "text-left"}`}>{isAr ? "أتمتة إشعارات الواتساب للأهالي" : "Auto WhatsApp Alerts"}</td>
                   <td className="py-3 text-center text-slate-600">—</td>
-                  <td className="py-3 text-center text-emerald-400 font-bold">✓ ({isAr ? "فوري" : "Instant"})</td>
                   <td className="py-3 text-center text-teal-300 font-bold bg-teal-500/10">✓ ({isAr ? "غير محدود" : "Unlimited"})</td>
                   <td className="py-3 text-center text-amber-300 font-bold">✓ ({isAr ? "باسم السنتر" : "Branded"})</td>
                 </tr>
                 <tr>
                   <td className={`py-3 font-medium ${isAr ? "text-right" : "text-left"}`}>{isAr ? "صانع الاختبارات بالذكاء الاصطناعي" : "AI Quiz Generator"}</td>
-                  <td className="py-3 text-center text-slate-600">—</td>
                   <td className="py-3 text-center text-slate-600">—</td>
                   <td className="py-3 text-center text-teal-300 font-bold bg-teal-500/10">✓</td>
                   <td className="py-3 text-center text-amber-300 font-bold">✓</td>
@@ -1030,13 +1004,11 @@ export default function DedicatedLandingPage() {
                 <tr>
                   <td className={`py-3 font-medium ${isAr ? "text-right" : "text-left"}`}>{isAr ? "إدارة مساعدين المعلم" : "Assistant Logins"}</td>
                   <td className="py-3 text-center text-slate-600">—</td>
-                  <td className="py-3 text-center text-slate-600">—</td>
                   <td className="py-3 text-center font-mono text-teal-300 bg-teal-500/10">{isAr ? "حتى 3 مساعدين" : "Up to 3"}</td>
                   <td className="py-3 text-center font-bold text-amber-300">{isAr ? "صلاحيات متعددة" : "Multi-Staff"}</td>
                 </tr>
                 <tr>
                   <td className={`py-3 font-medium ${isAr ? "text-right" : "text-left"}`}>{isAr ? "إدارة سنتر متعدد المعلمين والقاعات" : "Multi-Tutor Center"}</td>
-                  <td className="py-3 text-center text-slate-600">—</td>
                   <td className="py-3 text-center text-slate-600">—</td>
                   <td className="py-3 text-center text-slate-600 bg-teal-500/10">—</td>
                   <td className="py-3 text-center text-amber-300 font-bold">✓ ({isAr ? "سنتر متكامل" : "Full Academy"})</td>
@@ -1289,17 +1261,14 @@ export default function DedicatedLandingPage() {
                           onChange={(e) => setContactForm({ ...contactForm, plan: e.target.value })}
                           className="w-full px-3.5 py-2.5 rounded-lg bg-[#0b1220] border border-white/15 text-white focus:outline-none focus:border-teal-500 text-xs cursor-pointer"
                         >
-                          <option value="باقة 500 ريال (المعلم الأساسية)">
-                            {isAr ? "باقة 500 ريال (المعلم الأساسية - حتى 150 طالب)" : "500 SAR Starter Plan (Up to 150 students)"}
+                          <option value="باقة 500 ريال / 7,000 ج.م سنوياً (المعلم الأساسية)">
+                            {isAr ? "باقة 500 ريال / 7,000 ج.م سنوياً (المعلم الأساسية - حتى 150 طالب)" : "500 SAR / 7,000 EGP Annual Starter Plan (Up to 150 students)"}
                           </option>
-                          <option value="باقة 699 ريال (المعلم المتقدم)">
-                            {isAr ? "باقة 699 ريال (المعلم المتقدم + واتساب - حتى 400 طالب)" : "699 SAR Advanced Plus + WhatsApp (Up to 400 students)"}
+                          <option value="باقة 1000 ريال / 14,000 ج.م سنوياً (المحترف بالذكاء الاصطناعي - الأكثر طلباً)">
+                            {isAr ? "باقة 1000 ريال / 14,000 ج.م سنوياً (المحترف بالذكاء الاصطناعي - الأكثر طلباً ⭐)" : "1000 SAR / 14,000 EGP Annual Pro AI Plan (Most Popular ⭐)"}
                           </option>
-                          <option value="باقة 1000 ريال (المحترف بالذكاء الاصطناعي - الأكثر طلباً)">
-                            {isAr ? "باقة 1000 ريال (المحترف بالذكاء الاصطناعي - الأكثر طلباً ⭐)" : "1000 SAR Pro AI Plan (Most Popular ⭐)"}
-                          </option>
-                          <option value="باقة 1299 ريال (السناتر والأكاديميات الكبرى)">
-                            {isAr ? "باقة 1299 ريال (السناتر والأكاديميات الكبرى 🏢)" : "1299 SAR Center & Enterprise Plan 🏢"}
+                          <option value="باقة 1299 ريال / 17,000 ج.م سنوياً (السناتر والأكاديميات الكبرى)">
+                            {isAr ? "باقة 1299 ريال / 17,000 ج.م سنوياً (السناتر والأكاديميات الكبرى 🏢)" : "1299 SAR / 17,000 EGP Annual Center & Enterprise Plan 🏢"}
                           </option>
                           <option value="طلب مخصص لمجمع تعليمي أو سنتر ضخم">
                             {isAr ? "طلب مخصص لمجمع تعليمي أو سنتر ضخم" : "Custom Enterprise Request"}

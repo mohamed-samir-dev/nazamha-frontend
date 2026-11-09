@@ -1,4 +1,7 @@
 import { api } from "@/lib/apiClient";
+import { appCache } from "@/lib/appCache";
+
+const SETTINGS_CACHE_KEY = "system:settings";
 
 export interface SystemSettings {
   id?: number;
@@ -15,7 +18,12 @@ export interface SystemSettings {
 }
 
 export const SystemSettingsService = {
-  async getSettings(): Promise<SystemSettings | null> {
+  async getSettings(forceRefresh = false): Promise<SystemSettings | null> {
+    if (!forceRefresh) {
+      const cached = appCache.get<SystemSettings>(SETTINGS_CACHE_KEY);
+      if (cached) return cached;
+    }
+
     const data = await api.get<SystemSettings>("/settings").catch(() => null);
     if (!data) return null;
 
@@ -40,10 +48,12 @@ export const SystemSettingsService = {
       settings.site_favicon = parts[1];
     }
 
+    appCache.set(SETTINGS_CACHE_KEY, settings, 2 * 60 * 1000);
     return settings;
   },
 
   async updateSettings(settings: Partial<SystemSettings>): Promise<void> {
+    appCache.invalidate(SETTINGS_CACHE_KEY);
     let finalSiteName = settings.site_name || "إدارة السناتر والمعلمين";
     if (settings.sidebar_name && settings.sidebar_name !== settings.site_name) {
       finalSiteName += "|||SIDEBAR|||" + settings.sidebar_name;

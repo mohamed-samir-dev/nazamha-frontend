@@ -12,8 +12,6 @@ import {
   AlertCircle,
   XCircle,
   RefreshCw,
-  ExternalLink,
-  Mail,
   UserCheck,
   UserX,
   Shield,

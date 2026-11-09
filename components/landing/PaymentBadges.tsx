@@ -32,6 +32,18 @@ export function PaymentBadges({ className = "", lang = "ar" }: { className?: str
         {isAr ? "أبل باي" : "Apple Pay"}
       </div>
 
+      {/* InstaPay */}
+      <div className="flex items-center justify-center px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-teal-500/40 transition-all text-xs font-semibold text-slate-200">
+        <span className="w-2 h-2 rounded-full bg-purple-400 ml-1.5 mr-1.5"></span>
+        {isAr ? "إنستاباي (InstaPay)" : "InstaPay"}
+      </div>
+
+      {/* Vodafone Cash */}
+      <div className="flex items-center justify-center px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-teal-500/40 transition-all text-xs font-semibold text-slate-200">
+        <span className="w-2 h-2 rounded-full bg-rose-500 ml-1.5 mr-1.5"></span>
+        {isAr ? "فودافون كاش ومحافظ إلكترونية" : "Vodafone Cash & Wallets"}
+      </div>
+
       {/* PCI-DSS */}
       <div className="flex items-center justify-center px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-xs font-semibold text-teal-300">
         <svg className="w-3.5 h-3.5 ml-1 mr-1 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

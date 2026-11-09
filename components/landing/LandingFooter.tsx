@@ -27,8 +27,8 @@ export function LandingFooter({ lang = "ar" }: LandingFooterProps) {
             </Link>
             <p className="text-sm text-slate-400 leading-relaxed">
               {isAr
-                ? "المنصة السحابية المتكاملة لإدارة الطلاب والسناتر التعليمية، تسجيل الحضور الفوري بـ QR، أتمتة إشعارات الواتساب، وإدارة الفواتير والاشتراكات بالريال السعودي."
-                : "The cloud platform for student & academy management, instant QR attendance, automated WhatsApp parent alerts, and billing in SAR."}
+                ? "المنصة السحابية المتكاملة لإدارة الطلاب والسناتر التعليمية، تسجيل الحضور الفوري بـ QR، أتمتة إشعارات الواتساب، وإدارة الفواتير والاشتراكات بالريال السعودي والجنيه المصري."
+                : "The cloud platform for student & academy management, instant QR attendance, automated WhatsApp parent alerts, and billing in SAR & EGP."}
             </p>
             <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 w-fit">
               <ShieldCheck className="w-4 h-4" />
@@ -49,7 +49,7 @@ export function LandingFooter({ lang = "ar" }: LandingFooterProps) {
               </li>
               <li>
                 <Link href="/landing#pricing" className="hover:text-teal-400 transition-colors">
-                  {isAr ? "خطط الأسعار (بالريال السعودي)" : "Pricing (in SAR)"}
+                  {isAr ? "خطط الأسعار (بالريال والجنيه)" : "Pricing (in SAR & EGP)"}
                 </Link>
               </li>
               <li>

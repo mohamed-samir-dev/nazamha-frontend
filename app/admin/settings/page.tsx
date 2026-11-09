@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Settings, Globe, EyeOff, AlertTriangle, MessageSquare,
+  Settings, Globe, AlertTriangle, MessageSquare,
   QrCode, Check, AlertCircle, RefreshCw, Shield, Lock,
   Save, X
 } from "lucide-react";
@@ -175,7 +175,6 @@ export default function AdminSettingsPage() {
     site_name: "",
     site_logo: "",
   });
-  const [isDirty, setIsDirty] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // Danger zone
@@ -220,20 +219,17 @@ export default function AdminSettingsPage() {
     };
   }, [loadData]);
 
-  // Track dirty state
-  useEffect(() => {
-    const dirty =
-      settings.site_name !== savedSettings.site_name ||
-      settings.sidebar_name !== savedSettings.sidebar_name ||
-      settings.site_logo !== savedSettings.site_logo ||
-      settings.hide_sidebar_name !== savedSettings.hide_sidebar_name ||
-      settings.maintenance_mode !== savedSettings.maintenance_mode ||
-      settings.maintenance_message !== savedSettings.maintenance_message ||
-      settings.welcome_message !== savedSettings.welcome_message ||
-      settings.welcome_message_enabled !== savedSettings.welcome_message_enabled ||
-      settings.qr_header_type !== savedSettings.qr_header_type;
-    setIsDirty(dirty);
-  }, [settings, savedSettings]);
+    // Pure derived dirty state
+  const isDirty =
+    settings.site_name !== savedSettings.site_name ||
+    settings.sidebar_name !== savedSettings.sidebar_name ||
+    settings.site_logo !== savedSettings.site_logo ||
+    settings.hide_sidebar_name !== savedSettings.hide_sidebar_name ||
+    settings.maintenance_mode !== savedSettings.maintenance_mode ||
+    settings.maintenance_message !== savedSettings.maintenance_message ||
+    settings.welcome_message !== savedSettings.welcome_message ||
+    settings.welcome_message_enabled !== savedSettings.welcome_message_enabled ||
+    settings.qr_header_type !== savedSettings.qr_header_type;
 
   const update = useCallback(<K extends keyof SystemSettings>(key: K, value: SystemSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -245,7 +241,6 @@ export default function AdminSettingsPage() {
     try {
       await SystemSettingsService.updateSettings(settings);
       setSavedSettings({ ...settings });
-      setIsDirty(false);
       showToast("تم حفظ الإعدادات بنجاح");
     } catch {
       showToast("فشل حفظ الإعدادات. حاول مرة أخرى.", "error");
@@ -256,7 +251,6 @@ export default function AdminSettingsPage() {
 
   const handleDiscard = () => {
     setSettings({ ...savedSettings });
-    setIsDirty(false);
   };
 
   const handleToggleMaintenance = async (enable: boolean) => {
@@ -266,7 +260,6 @@ export default function AdminSettingsPage() {
       await SystemSettingsService.updateSettings(updated);
       setSettings(updated);
       setSavedSettings(updated);
-      setIsDirty(false);
       showToast(enable ? "تم تفعيل وضع الصيانة" : "تم إلغاء وضع الصيانة");
     } catch {
       showToast("فشل تحديث وضع الصيانة", "error");

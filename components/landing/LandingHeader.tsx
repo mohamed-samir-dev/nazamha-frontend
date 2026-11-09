@@ -19,7 +19,7 @@ export function LandingHeader({ lang = "ar", onToggleLang }: LandingHeaderProps)
     brandDesc: isAr ? "منظومة المعلمين والمراكز التعليمية" : "Smart Platform for Tutors & Academies",
     features: isAr ? "المميزات" : "Features",
     pricing: isAr ? "الأسعار" : "Pricing",
-    pricingBadge: isAr ? "بالريال (SAR)" : "In SAR",
+    pricingBadge: isAr ? "بالريال والجنيه" : "SAR / EGP",
     howItWorks: isAr ? "كيف يعمل؟" : "How it Works",
     faq: isAr ? "الأسئلة الشائعة" : "FAQ",
     contact: isAr ? "تواصل معنا" : "Contact Us",
@@ -166,7 +166,7 @@ export function LandingHeader({ lang = "ar", onToggleLang }: LandingHeaderProps)
               className="px-3 py-2 rounded-lg hover:bg-white/5 flex items-center justify-between"
             >
               <span>{t.pricing}</span>
-              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono">SAR</span>
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono">SAR / EGP</span>
             </Link>
             <Link
               href="/landing#how-it-works"

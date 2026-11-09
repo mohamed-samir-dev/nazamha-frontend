@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Settings, Calendar, ToggleLeft, ToggleRight,
   Trash2, Phone, Eye, EyeOff, Users,
-  Search, RefreshCw, DollarSign, Check, Copy
+  Search, RefreshCw, DollarSign, Check, Copy, X
 } from "lucide-react";
 import { Teacher } from "@/lib/types";
 
@@ -38,7 +38,7 @@ export default function TeachersTable({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const copyCode = (id: string, code: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(code);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
@@ -48,10 +48,12 @@ export default function TeachersTable({
   const now = new Date();
 
   const filtered = teachers.filter((t) => {
+    const q = search.trim().toLowerCase();
     const matchSearch =
-      !search ||
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      (t.email || "").toLowerCase().includes(search.toLowerCase());
+      !q ||
+      t.name.toLowerCase().includes(q) ||
+      (t.email || "").toLowerCase().includes(q) ||
+      (t.teacherCode || "").toLowerCase().includes(q);
 
     const isExpired = t.subscription_expires_at ? new Date(t.subscription_expires_at) < now : false;
     const isNew = !t.is_active && !t.subscription_started_at;
@@ -67,8 +69,15 @@ export default function TeachersTable({
 
   const counts = {
     all: teachers.length,
-    active: teachers.filter((t) => t.is_active && t.subscription_expires_at && new Date(t.subscription_expires_at) >= now).length,
-    expired: teachers.filter((t) => !t.is_active || (t.subscription_expires_at ? new Date(t.subscription_expires_at) < now : false)).length,
+    active: teachers.filter((t) => {
+      const isExpired = t.subscription_expires_at ? new Date(t.subscription_expires_at) < now : false;
+      return t.is_active && !isExpired;
+    }).length,
+    expired: teachers.filter((t) => {
+      const isExpired = t.subscription_expires_at ? new Date(t.subscription_expires_at) < now : false;
+      const isNew = !t.is_active && !t.subscription_started_at;
+      return isExpired || (!t.is_active && !isNew);
+    }).length,
     pending: teachers.filter((t) => !t.is_active && !t.subscription_started_at).length,
   };
 
@@ -78,6 +87,15 @@ export default function TeachersTable({
     { key: "expired", label: "منتهي / معطل", color: "#ef4444" },
     { key: "pending", label: "مراجعة", color: "#f59e0b" },
   ];
+
+  const handleCommitPrice = (teacherId: string, currentPrice: number) => {
+    if (!editingPrice || editingPrice.id !== teacherId) return;
+    const p = Number(editingPrice.val);
+    if (!isNaN(p) && p >= 0 && p !== currentPrice) {
+      onUpdatePrice(teacherId, p);
+    }
+    setEditingPrice(null);
+  };
 
   return (
     <div className="glass-panel panel-content">
@@ -92,7 +110,6 @@ export default function TeachersTable({
             <p className="text-xs text-slate-500">الاشتراكات والصلاحيات والأسعار</p>
           </div>
         </div>
-
       </div>
 
       {/* Search + Filter Tabs */}
@@ -106,6 +123,17 @@ export default function TeachersTable({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="text-slate-400 hover:text-white transition-colors"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}
+              title="مسح البحث"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {TABS.map((tab) => (
@@ -128,7 +156,7 @@ export default function TeachersTable({
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-[rgba(8,12,20,0.4)]">
-        <table className="report-table">
+        <table className="report-table min-w-[960px]">
           <thead>
             <tr>
               <th>المعلم</th>
@@ -147,8 +175,8 @@ export default function TeachersTable({
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={isSuperAdmin ? 11 : 10} className="text-center py-10 text-slate-600">
-                  لا توجد نتائج
+                <td colSpan={isSuperAdmin ? 11 : 10} className="text-center py-10 text-slate-400">
+                  {search ? `لا توجد نتائج مطابقة للبحث "${search}"` : "لا توجد نتائج في هذا القسم"}
                 </td>
               </tr>
             )}
@@ -172,12 +200,13 @@ export default function TeachersTable({
                         {teacher.is_admin && <span className="private-badge" style={{ fontSize: "0.6rem", padding: "1px 5px" }}>مدير</span>}
                         {teacher.phone && (
                           <a href={`https://wa.me/${teacher.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer"
-                            className="w-6 h-6 rounded-full flex items-center justify-center bg-teal-500/15 text-teal-400 hover:bg-teal-500 hover:text-black transition-all">
+                            className="w-6 h-6 rounded-full flex items-center justify-center bg-teal-500/15 text-teal-400 hover:bg-teal-500 hover:text-black transition-all"
+                            title="محادثة واتساب">
                             <Phone size={11} />
                           </a>
                         )}
                       </div>
-                      <span className="text-xs text-slate-500 monospace">{teacher.email || "—"}</span>
+                      <span className="text-xs text-slate-400 monospace">{teacher.email || "—"}</span>
                       {teacher.teacherCode && (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/25 font-bold tracking-wide select-all" dir="ltr">
@@ -214,23 +243,31 @@ export default function TeachersTable({
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
+                          min="0"
+                          step="1"
                           className="search-input"
-                          style={{ width: "80px", padding: "4px 8px", fontSize: "0.82rem" }}
+                          style={{ width: "84px", padding: "4px 8px", fontSize: "0.82rem" }}
                           value={editingPrice.val}
                           onChange={(e) => setEditingPrice({ id: teacher.id, val: e.target.value })}
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              onUpdatePrice(teacher.id, Number(editingPrice.val));
-                              setEditingPrice(null);
+                              handleCommitPrice(teacher.id, teacher.subscription_price || 0);
                             }
                             if (e.key === "Escape") setEditingPrice(null);
+                          }}
+                          onBlur={() => {
+                            handleCommitPrice(teacher.id, teacher.subscription_price || 0);
                           }}
                         />
                         <button
                           className="w-6 h-6 rounded flex items-center justify-center bg-teal-500/20 text-teal-400 hover:bg-teal-500 hover:text-black transition-all"
                           style={{ border: "none", cursor: "pointer" }}
-                          onClick={() => { onUpdatePrice(teacher.id, Number(editingPrice.val)); setEditingPrice(null); }}
+                          onMouseDown={(e) => {
+                            // Prevent blur before click executes
+                            e.preventDefault();
+                            handleCommitPrice(teacher.id, teacher.subscription_price || 0);
+                          }}
                         >
                           <Check size={12} />
                         </button>
@@ -246,7 +283,7 @@ export default function TeachersTable({
                         <span className="font-mono font-bold text-emerald-400 text-sm group-hover:text-emerald-300 transition-colors">
                           {(teacher.subscription_price || 0).toLocaleString("ar-EG")}
                         </span>
-                        <span className="text-xs text-slate-600">ج</span>
+                        <span className="text-xs text-slate-500">ج</span>
                       </button>
                     )}
                   </td>
@@ -281,7 +318,7 @@ export default function TeachersTable({
                   {/* Start Date */}
                   <td>
                     <div className="flex items-center gap-1.5">
-                      <Calendar size={13} className="text-slate-600" />
+                      <Calendar size={13} className="text-slate-500" />
                       <input type="date" className="search-input" value={formattedStart} disabled={isUpdating}
                         onChange={(e) => onUpdateStartDate(teacher.id, e.target.value)}
                         style={{ padding: "4px 8px", fontSize: "0.82rem", width: "130px" }} />
@@ -310,7 +347,7 @@ export default function TeachersTable({
                         style={{ fontSize: "0.75rem", padding: "0.3rem 0.65rem", background: "rgba(20,184,166,0.08)", borderColor: "rgba(20,184,166,0.2)", color: "#5eead4" }}
                         onClick={() => onRenewYear(teacher)}
                         disabled={isUpdating}
-                        title="تجديد الاشتراك سنة من اليوم"
+                        title="تجديد الاشتراك سنة من اليوم وتفعيل الحساب"
                       >
                         <RefreshCw size={12} />+سنة
                       </button>
@@ -329,17 +366,17 @@ export default function TeachersTable({
                         >
                           {teacher.hidden_from_admin ? <><Eye size={12} style={{ marginLeft: 3 }} />إظهار</> : <><EyeOff size={12} style={{ marginLeft: 3 }} />إخفاء</>}
                         </button>
-                      ) : <span className="text-xs text-slate-600">محمي</span>}
+                      ) : <span className="text-xs text-slate-500">محمي</span>}
                     </td>
                   )}
 
                   {/* Delete */}
                   <td>
                     {!teacher.is_super_admin ? (
-                      <button className="btn-icon" onClick={() => onDeleteTeacher(teacher)} disabled={isUpdating} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                      <button className="btn-icon" onClick={() => onDeleteTeacher(teacher)} disabled={isUpdating} style={{ background: "none", border: "none", cursor: "pointer" }} title="حذف حساب المعلم">
                         <Trash2 size={15} className="color-danger" />
                       </button>
-                    ) : <span className="text-xs text-slate-600">محمي</span>}
+                    ) : <span className="text-xs text-slate-500">محمي</span>}
                   </td>
                 </tr>
               );
